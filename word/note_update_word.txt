@@ -1,0 +1,2 @@
+02th3
+update 3.4: delete các useCase (dk tài khoản kh, cập nhật thông tin cá nhân, đổi mật khẩu, khôi phục mật khẩu,xem thông tin sản phẩm, xem hóa đơn, in hóa đơn, xem thông tin nhân viên, thêm nhân viên, xem thông tin nhân viên, cập nhật thông tin nhà cung cấp). Chưa căn chỉnh lại word. chưa chỉnh sửa use case nhập thêm lô hàng
