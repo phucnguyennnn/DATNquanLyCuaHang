@@ -40,14 +40,16 @@ const LoginPage = () => {
     setError("");
     try {
       const response = await axios.post(
-        "http:///auth/login",
+        "http://localhost:8000/api/auth/login",
         {
           username: email,
           password: password,
         }
       );
-      localStorage.setItem("authToken", response.data.data.token);
-      localStorage.setItem("ID", response.data.data.userInfo.internalId);
+      // localStorage.setItem("authToken", response.data.data.token);
+      // localStorage.setItem("ID", response.data.data.userInfo.internalId);
+      localStorage.setItem("authToken", response.data.accessToken);
+      localStorage.setItem("userID", response.data._id); // Giữ lại ID người dùng
       navigate("/dashboard");
     } catch (err) {
       setError("Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
