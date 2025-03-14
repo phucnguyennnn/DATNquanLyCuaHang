@@ -10,4 +10,6 @@ router.put('/:id', batchController.updateBatch);
 
 router.delete('/:id', batchController.deleteBatch);
 
+router.get('/:id', batchController.getBatchById);
+
 module.exports = router;
