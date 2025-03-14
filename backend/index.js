@@ -9,7 +9,8 @@ const productRouter = require('./routers/productRouter');
 const categoryRouter = require('./routers/categoryRouter');
 const batchRouter = require('./routers/batchRouter');
 const supplierRouter = require('./routers/supplierRouter');
-
+const purchaseOrderRouter = require('./routers/purchaseOrderRouter');
+const goodReceiptRouter = require('./routers/goodReceiptRouter');
 
 dotenv.config();
 
@@ -51,4 +52,6 @@ app.use('/api/products', productRouter);
 app.use('/api/categories', categoryRouter);
 app.use('/api/batches', batchRouter);
 app.use('/api/suppliers', supplierRouter);
+app.use('/api/purchaseOrder', purchaseOrderRouter);
+app.use('/api/goodReceipt', goodReceiptRouter);
 
