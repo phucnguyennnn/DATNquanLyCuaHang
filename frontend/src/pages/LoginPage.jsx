@@ -35,7 +35,7 @@ const LoginPage = () => {
   const isMobile = useMediaQuery("(max-width:600px)");
 
   const handleLogin = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); 
     setLoading(true);
     setError("");
     try {
@@ -50,7 +50,8 @@ const LoginPage = () => {
       // localStorage.setItem("ID", response.data.data.userInfo.internalId);
       localStorage.setItem("authToken", response.data.accessToken);
       localStorage.setItem("userID", response.data._id); // Giữ lại ID người dùng
-      navigate("/dashboard");
+      localStorage.setItem("isAdmin", response.data.isAdmin); // Lưu thông tin người dùng
+      navigate("/homepage");
     } catch (err) {
       setError("Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
     } finally {
