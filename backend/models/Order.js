@@ -1,17 +1,25 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
-    // customerId: {
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     ref: 'Customer',
-    //     required: true
-    // },
-    // total_amount: { type: Number, required: true },
-    // employeeId: {
-    //     type: mongoose.Schema.Types.ObjectId,
-    //     ref: 'Employee',
-    //     required: true
-    // },
+    orderDetailID: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "OrderDetail",
+        required: true
+    },
+    customer: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Customer",
+        default: null  // Có thể không có khách hàng
+    },
+    totalAmount: {
+        type: Number,
+        required: true
+    },
+    employeeID: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Account",
+        required: true
+    }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Order', orderSchema);
+module.exports = mongoose.model("Order", orderSchema);
