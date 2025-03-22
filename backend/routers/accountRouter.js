@@ -4,7 +4,7 @@ const middlewareController = require('../middlewares/middelwareController');
 
 
 // Get all account
-router.get('/', middlewareController.verifyToken, accountController.getAllAccount);
+router.get('/', accountController.getAllAccount);
 
 // delete account
 router.delete('/:id', middlewareController.verifyTokenAndAuthorization, accountController.deleteAccount);

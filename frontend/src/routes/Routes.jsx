@@ -12,6 +12,7 @@ import GoodReceipt from "../pages/GoodReceipt";
 import AddToInventoy from "../pages/AddToInventory";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
+import ListUser from "../pages/ListUser";
 const useAuth = () => {
   const [isLoggedIn, setIsLoggedIn] = React.useState(false);
 
@@ -42,6 +43,7 @@ const AppRouter = () => {
         <Route path="/addtoinventory/*" element={<AddToInventoy />} />
         <Route path="/homepage/*" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/listuser" element={<ListUser />} />
 
         {/* <Route path="/dashboard/*" element={isLoggedIn ? <Dashboard/> : <Navigate to="/" />} /> */}
         <Route path="*" element={<Page404 />} />

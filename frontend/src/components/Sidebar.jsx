@@ -3,25 +3,44 @@ import {Drawer,List,ListItem,ListItemButton,ListItemIcon,ListItemText,Divider,Co
 import {Home,ShoppingCart,Settings,AccountCircle,Logout,Warehouse,ExpandLess,ExpandMore,Description,AddBox,Inventory,RecentActors} from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { jwtDecode } from 'jwt-decode';
 
 const drawerWidth = 240;
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const [openInventory, setOpenInventory] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  const isAdmin = localStorage.getItem("isAdmin") === "true" || false;
-
- const handleLogout = async () => {
+  useEffect(() => {
+    const token = localStorage.getItem("authToken");
+    if (token) {
+      try {
+        const decodedToken = jwtDecode(token);
+        console.log("Decoded Token:", decodedToken); // In ra để kiểm tra
+        
+        // Kiểm tra role và thiết lập isAdmin
+        if (decodedToken.role === "admin") {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (error) {
+        console.error("Lỗi giải mã token:", error);
+        localStorage.removeItem("authToken"); // Xóa token nếu không hợp lệ
+        navigate("/login"); // Chuyển hướng đến trang đăng nhập
+      }
+    }
+  }, [navigate]);
+const handleLogout = async () => {
   try {
     const token = localStorage.getItem("authToken");
-
+    
     // Kiểm tra token
-    if (token) {
-      console.log("tìm thấy token", token);
+    if (!token) {
+      console.log("Không tìm thấy token");
       navigate("/login");
-    }else{
-      console.log("Không tìm thấy Token: ");
+      return;
     }
 
     // Gửi yêu cầu logout
@@ -31,29 +50,27 @@ const Sidebar = () => {
       {
         headers: {
           token: `Bearer ${token}`,
-          // "X-CSRF-TOKEN": csrfToken, // Bỏ comment nếu cần gửi CSRF token
         },
-        withCredentials: true, 
+        withCredentials: true,
       }
     );
 
+    // Xử lý phản hồi thành công
     if (response.status === 200) {
+      // Xóa tất cả thông tin người dùng khỏi localStorage
       localStorage.removeItem("authToken");
-      localStorage.removeItem("userID");
-      localStorage.removeItem("isAdmin");
+      
       console.log("Đăng xuất thành công!");
       navigate("/login");
     } else {
       console.error("Đăng xuất thất bại với mã lỗi:", response.status);
     }
   } catch (error) {
-    
     console.error("Lỗi đăng xuất:", error.response?.data || error.message);
 
+    // Xử lý lỗi 403 (Forbidden)
     if (error.response?.status === 403) {
       localStorage.removeItem("authToken");
-      localStorage.removeItem("userID");
-      localStorage.removeItem("isAdmin");
       navigate("/login");
     }
   }
@@ -120,11 +137,11 @@ const Sidebar = () => {
         </Collapse>
       {/* list user */}
       {isAdmin && (
-          <ListItemButton onClick={() => navigate("/users")}>
+          <ListItemButton onClick={() => navigate("/listuser")}>
             <ListItemIcon>
               <RecentActors />
             </ListItemIcon>
-            <ListItemText primary="List User" />
+            <ListItemText primary="List Account" />
           </ListItemButton>
         )}
         {/* Settings */}

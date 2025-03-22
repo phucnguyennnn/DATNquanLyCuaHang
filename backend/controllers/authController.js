@@ -12,6 +12,8 @@ const authController = {
             const newAccount = new Account({
                 username: req.body.username,
                 password: hashedPassword,
+                role: req.body.role || 'customer',
+
             });
             // Lưu account vào database
             const account = await newAccount.save();
@@ -22,13 +24,13 @@ const authController = {
     },
     // Generate access token
     generateAccessToken: (account) => {
-        return jwt.sign({ id: account.id, isAdmin: account.isAdmin },
+        return jwt.sign({ id: account.id, role: account.role },
             process.env.JWT_SECRET, { expiresIn: '5m' }
         );
     },
     // Generate refresh token   
     generateRefreshToken: (account) => {
-        return jwt.sign({ id: account.id, isAdmin: account.isAdmin },
+        return jwt.sign({ id: account.id, role: account.role },
             process.env.JWT_REFRESH_SECRET, { expiresIn: '365d' }
         );
     },

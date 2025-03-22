@@ -49,8 +49,11 @@ const LoginPage = () => {
       // localStorage.setItem("authToken", response.data.data.token);
       // localStorage.setItem("ID", response.data.data.userInfo.internalId);
       localStorage.setItem("authToken", response.data.accessToken);
-      localStorage.setItem("userID", response.data._id); // Giữ lại ID người dùng
-      localStorage.setItem("isAdmin", response.data.isAdmin); // Lưu thông tin người dùng
+      localStorage.setItem("role", response.data.role); // Lưu role
+
+     // const decodedToken = jwtDecode(response.data.accessToken);
+     // console.log("Thông tin người dùng:", decodedToken);
+
       navigate("/homepage");
     } catch (err) {
       setError("Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");

@@ -11,12 +11,11 @@ const accountSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
-    isAdmin: {
-        type: Boolean,
-        default: false,
+    role: {
+        type: String,
+        enum: ['admin', 'employee', 'customer'], // Giới hạn các giá trị hợp lệ
+        default: 'customer', // Mặc định là 'customer'
     },
-
-
 }, { timestamps: true });
 
 module.exports = mongoose.model('Account', accountSchema);
