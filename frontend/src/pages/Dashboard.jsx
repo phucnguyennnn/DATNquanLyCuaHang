@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box, Typography, Button, TextField, MenuItem, Select, InputLabel, FormControl,
-  Table, TableHead, TableBody, TableRow, TableCell, IconButton, Checkbox, FormControlLabel,
-  Paper, Stack, TableContainer, useMediaQuery, useTheme
+  IconButton, Checkbox, FormControlLabel, Paper, Stack, useMediaQuery, useTheme, Grid
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -15,7 +14,7 @@ const CreatePurchaseOrder = () => {
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [orderItems, setOrderItems] = useState([]);
-  const [sendEmail, setSendEmail] = useState(true); 
+  const [sendEmail, setSendEmail] = useState(true);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -24,15 +23,29 @@ const CreatePurchaseOrder = () => {
     axios.get('http://localhost:8000/api/suppliers')
       .then(res => setSuppliers(res.data))
       .catch(err => console.error(err));
-
-    axios.get('http://localhost:8000/api/products')
-      .then(res => setProducts(res.data))
-      .catch(err => console.error(err));
   }, []);
+
+  useEffect(() => {
+    if (selectedSupplier) {
+      fetchProductsBySupplier(selectedSupplier);
+      setOrderItems([]);
+    } else {
+      setProducts([]);
+      setOrderItems([]);
+    }
+  }, [selectedSupplier]);
+
+  const fetchProductsBySupplier = async (supplierId) => {
+    try {
+      const response = await axios.get(`http://localhost:8000/api/suppliers/${supplierId}/products`);
+      setProducts(response.data.products);
+    } catch (error) {
+      console.error('Lỗi khi lấy danh sách sản phẩm:', error);
+    }
+  };
 
   const handleAddItem = () => {
     if (!selectedProduct || quantity <= 0) return;
-
     const product = products.find(p => p._id === selectedProduct);
     if (!product) return;
 
@@ -72,7 +85,7 @@ const CreatePurchaseOrder = () => {
           quantity,
           price
         })),
-        sendEmail, // Gửi email nếu được chọn
+        sendEmail,
       };
 
       await axios.post('http://localhost:8000/api/purchaseOrder/', payload);
@@ -86,7 +99,7 @@ const CreatePurchaseOrder = () => {
   };
 
   return (
-    <Box sx={{ maxWidth: 900, mx: 'auto', p: 4 }}>
+    <Box sx={{ maxWidth: 900, mx: 'auto', p: 4, height: '100vh', overflowY: 'auto' }}>
       <Typography variant="h4" mb={4} fontWeight="bold">
         Tạo phiếu đặt mua hàng
       </Typography>
@@ -132,7 +145,7 @@ const CreatePurchaseOrder = () => {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={handleAddItem}
-              sx={{ height: '56px', width:"150px" }}
+              sx={{ height: '56px', width: "150px" }}
             >
               Thêm
             </Button>
@@ -141,33 +154,40 @@ const CreatePurchaseOrder = () => {
       </Paper>
 
       {orderItems.length > 0 && (
-        <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Tên sản phẩm</TableCell>
-                  <TableCell>Số lượng</TableCell>
-                  <TableCell>Giá</TableCell>
-                  <TableCell>Xóa</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {orderItems.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{item.quantity}</TableCell>
-                    <TableCell>{item.price.toLocaleString()} VND</TableCell>
-                    <TableCell>
+        <Paper elevation={3} sx={{ p: 3, mb: 4, flexGrow: 1 }}>
+          <Typography variant="h6" gutterBottom>
+            Danh sách sản phẩm đã chọn
+          </Typography>
+
+          <Box
+            sx={{
+              maxHeight: 300,
+              overflowY: 'auto',
+              border: '1px solid #ccc',
+              borderRadius: 2,
+              p: 2,
+            }}
+          >
+            <Grid container spacing={2}>
+              {orderItems.map((item, index) => (
+                <Grid item xs={12} key={index}>
+                  <Grid container alignItems="center" justifyContent="space-between">
+                    <Grid item xs={6}>
+                      <Typography>{item.name}</Typography>
+                    </Grid>
+                    <Grid item xs={3}>
+                      <Typography>Số lượng: {item.quantity}</Typography>
+                    </Grid>
+                    <Grid item xs={3} sx={{ textAlign: 'right' }}>
                       <IconButton onClick={() => handleRemoveItem(item.productId)}>
                         <DeleteIcon color="error" />
                       </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                    </Grid>
+                  </Grid>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
         </Paper>
       )}
 

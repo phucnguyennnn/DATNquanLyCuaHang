@@ -4,13 +4,13 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
 const authRouter = require('./routers/authRouter');
-const accountRouter = require('./routers/accountRouter');
 const productRouter = require('./routers/productRouter');
 const categoryRouter = require('./routers/categoryRouter');
 const batchRouter = require('./routers/batchRouter');
 const supplierRouter = require('./routers/supplierRouter');
 const purchaseOrderRouter = require('./routers/purchaseOrderRouter');
 const goodReceiptRouter = require('./routers/goodReceiptRouter');
+const userRouter = require('./routers/userRouter');
 
 dotenv.config();
 
@@ -46,7 +46,7 @@ app.listen(8000, () => {
 
 //Routes
 app.use('/api/auth', authRouter);
-app.use('/api/account', accountRouter);
+app.use('/api/user', userRouter);
 app.use('/api/products', productRouter);
 app.use('/api/categories', categoryRouter);
 app.use('/api/batches', batchRouter);

@@ -24,7 +24,7 @@ import { useNavigate } from "react-router-dom";
 
 const LoginPage = () => {
   const [darkMode, setDarkMode] = useState(false);
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
@@ -35,23 +35,29 @@ const LoginPage = () => {
   const isMobile = useMediaQuery("(max-width:600px)");
 
   const handleLogin = async (e) => {
-    e.preventDefault(); 
+    e.preventDefault();
     setLoading(true);
     setError("");
     try {
       const response = await axios.post(
         "http://localhost:8000/api/auth/login",
         {
-          username: email,
+          username: username,
           password: password,
         }
       );
-      // localStorage.setItem("authToken", response.data.data.token);
-      // localStorage.setItem("ID", response.data.data.userInfo.internalId);
+
+      // Lưu thông tin người dùng vào localStorage
       localStorage.setItem("authToken", response.data.accessToken);
-      localStorage.setItem("userID", response.data._id); // Giữ lại ID người dùng
-      localStorage.setItem("isAdmin", response.data.isAdmin); // Lưu thông tin người dùng
-      navigate("/homepage");
+      localStorage.setItem("userID", response.data._id);
+      localStorage.setItem("userRole", response.data.role);
+
+      // Kiểm tra userRole và chuyển hướng phù hợp
+      if (response.data.role === "customer") {
+        navigate("/products");
+      } else {
+        navigate("/homepage");
+      }
     } catch (err) {
       setError("Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
     } finally {
@@ -97,7 +103,7 @@ const LoginPage = () => {
           color="primary"
           textAlign="center"
         >
-          Retail Shop Manager
+          Retail Shop
         </Typography>
 
         {error && (
@@ -108,12 +114,12 @@ const LoginPage = () => {
 
         <Box component="form" onSubmit={handleLogin} width="100%">
           <TextField
-            label="Email"
+            label="Username"
             variant="outlined"
             fullWidth
             margin="normal"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
           />
           <TextField
             label="Password"
@@ -157,24 +163,31 @@ const LoginPage = () => {
             {loading ? "Đang đăng nhập..." : "Đăng nhập"}
           </Button>
         </Box>
-
         <Stack direction="row" justifyContent="space-between" width="100%">
           <Link
-            href="#"
+            href="#" 
             variant="body2"
             sx={{
               color: "text.secondary",
               "&:hover": { color: "primary.main" },
             }}
+            onClick={(e) => {
+              e.preventDefault(); 
+              navigate("/forgot-password"); 
+            }}
           >
             Quên mật khẩu?
           </Link>
           <Link
-            href="#"
+            href="#"  
             variant="body2"
             sx={{
               color: "text.secondary",
               "&:hover": { color: "primary.main" },
+            }}
+            onClick={(e) => {
+              e.preventDefault(); 
+              navigate("/register");
             }}
           >
             Tạo tài khoản

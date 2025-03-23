@@ -1,8 +1,16 @@
 #root {
-  max-width: 1280px;
+  max-width: 100%; /* Đảm bảo chiều rộng tối đa */
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+  height: 100vh; /* Chiếm toàn bộ chiều cao màn hình */
+  overflow: hidden; /* Ngăn cuộn toàn bộ trang */
+}
+
+/* Thêm vào file CSS của bạn */
+.table-container {
+  max-height: 300px; /* Chiều cao tối đa */
+  overflow: auto; /* Kích hoạt thanh cuộn */
 }
 
 .logo {
