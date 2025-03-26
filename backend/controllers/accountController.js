@@ -1,26 +1,27 @@
 const Account = require('../models/Account');
 
 const accountController = {
-    // Get all account
+
     getAllAccount: async (req, res) => {
         try {
-            const account = await Account.find();
-            res.status(200).json(account);
+            const accounts = await Account.find();
+            res.status(200).json(accounts);
         } catch (error) {
-            return res.status(500).json({ error: error.message });
+            res.status(500).json({ message: "Lỗi máy chủ" });
         }
     },
-    // Delete account
+
+
     deleteAccount: async (req, res) => {
         try {
             const { id } = req.params;
             const account = await Account.findByIdAndDelete(id);
             if (!account) {
-                return res.status(404).json({ error: 'Account not found' });
+                return res.status(404).json({ message: "Không tìm thấy tài khoản" });
             }
-            res.status(200).json({ message: 'Account deleted' });
+            res.status(200).json({ message: "Tài khoản đã được xóa" });
         } catch (error) {
-            return res.status(500).json({ error: error.message });
+            res.status(500).json({ message: "Lỗi máy chủ" });
         }
     },
 };

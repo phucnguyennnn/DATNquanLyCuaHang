@@ -31,11 +31,11 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  
+
   const isMobile = useMediaQuery("(max-width:600px)");
 
   const handleLogin = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); 
     setLoading(true);
     setError("");
     try {
@@ -49,8 +49,12 @@ const LoginPage = () => {
       // localStorage.setItem("authToken", response.data.data.token);
       // localStorage.setItem("ID", response.data.data.userInfo.internalId);
       localStorage.setItem("authToken", response.data.accessToken);
-      localStorage.setItem("userID", response.data._id); // Giữ lại ID người dùng
-      navigate("/dashboard");
+      localStorage.setItem("role", response.data.role); // Lưu role
+
+     // const decodedToken = jwtDecode(response.data.accessToken);
+     // console.log("Thông tin người dùng:", decodedToken);
+
+      navigate("/homepage");
     } catch (err) {
       setError("Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
     } finally {
@@ -90,7 +94,12 @@ const LoginPage = () => {
           </IconButton>
         </Box>
 
-        <Typography variant="h4" fontWeight="bold" color="primary" textAlign="center">
+        <Typography
+          variant="h4"
+          fontWeight="bold"
+          color="primary"
+          textAlign="center"
+        >
           Retail Shop Manager
         </Typography>
 
@@ -128,14 +137,24 @@ const LoginPage = () => {
             }}
           />
           <FormControlLabel
-            control={<Checkbox checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />}
+            control={
+              <Checkbox
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+            }
             label="Nhớ tài khoản"
           />
           <Button
             type="submit"
             variant="contained"
             fullWidth
-            sx={{ mt: 2, bgcolor: "primary.main", color: "white", "&:hover": { bgcolor: "primary.dark" } }}
+            sx={{
+              mt: 2,
+              bgcolor: "primary.main",
+              color: "white",
+              "&:hover": { bgcolor: "primary.dark" },
+            }}
             disabled={loading}
           >
             {loading ? "Đang đăng nhập..." : "Đăng nhập"}
@@ -143,10 +162,24 @@ const LoginPage = () => {
         </Box>
 
         <Stack direction="row" justifyContent="space-between" width="100%">
-          <Link href="#" variant="body2" sx={{ color: "text.secondary", "&:hover": { color: "primary.main" } }}>
+          <Link
+            href="#"
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              "&:hover": { color: "primary.main" },
+            }}
+          >
             Quên mật khẩu?
           </Link>
-          <Link href="#" variant="body2" sx={{ color: "text.secondary", "&:hover": { color: "primary.main" } }}>
+          <Link
+            href="#"
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              "&:hover": { color: "primary.main" },
+            }}
+          >
             Tạo tài khoản
           </Link>
         </Stack>

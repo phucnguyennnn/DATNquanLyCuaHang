@@ -1,30 +1,44 @@
 const jwt = require('jsonwebtoken');
 
 const middlewareController = {
-    // dung de xac thuc token
+    // Xác thực token
     verifyToken: (req, res, next) => {
-        const authHeader = req.headers.token;
+        const authHeader = req.headers.token; // Sử dụng tiêu đề "Authorization"
         if (authHeader) {
-            const token = authHeader.split(" ")[1];
+            const token = authHeader.split(" ")[1]; // Lấy token từ "Bearer <token>"
             jwt.verify(token, process.env.JWT_SECRET, (err, account) => {
-                if (err) res.status(403).json("Token is not valid!");
-                req.account = account;
+                if (err) {
+                    return res.status(403).json({ message: "Token không hợp lệ" });
+                }
+                req.account = account; // Lưu thông tin tài khoản vào req.account
                 next();
             });
         } else {
-            return res.status(401).json("You are not authenticated!");
+            return res.status(401).json({ message: "Bạn chưa được xác thực" });
         }
     },
-    verifyTokenAndAuthorization: (req, res, next) => {
+
+    // Kiểm tra quyền admin
+    verifyTokenAndAdmin: (req, res, next) => {
         middlewareController.verifyToken(req, res, () => {
-            console.log("Account Info:", req.account); // Kiểm tra dữ liệu token
-            if (req.account.id == req.params.id || req.account.isAdmin) {
-                next();
+            if (req.account.isAdmin) {
+                next(); // Cho phép tiếp tục nếu là admin
             } else {
-                res.status(403).json("You are not allowed to do that!");
+                return res.status(403).json({ message: "Bạn không có quyền truy cập" });
             }
         });
-    }
+    },
+
+    // Kiểm tra quyền tài khoản hoặc admin
+    verifyTokenAndAuthorization: (req, res, next) => {
+        middlewareController.verifyToken(req, res, () => {
+            if (req.account.id === req.params.id || req.account.isAdmin) {
+                next(); // Cho phép tiếp tục nếu là chính tài khoản hoặc admin
+            } else {
+                return res.status(403).json({ message: "Bạn không có quyền thực hiện hành động này" });
+            }
+        });
+    },
 };
 
 module.exports = middlewareController;

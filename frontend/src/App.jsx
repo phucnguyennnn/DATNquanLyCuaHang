@@ -17,7 +17,8 @@ function App() {
         <Route
           path="/"
           element={
-            isAuthenticated ? <Navigate to="/dashboard" /> : <LoginPage />
+            // isAuthenticated ? <Navigate to="/dashboard" /> : <LoginPage />
+            isAuthenticated ? <Navigate to="/homepage" /> : <LoginPage />
           }
         />
         <Route
