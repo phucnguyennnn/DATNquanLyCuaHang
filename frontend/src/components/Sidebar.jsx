@@ -59,6 +59,7 @@ const handleLogout = async () => {
     if (response.status === 200) {
       // Xóa tất cả thông tin người dùng khỏi localStorage
       localStorage.removeItem("authToken");
+      localStorage.removeItem("role");
       
       console.log("Đăng xuất thành công!");
       navigate("/login");

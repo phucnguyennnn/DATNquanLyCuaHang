@@ -50,7 +50,6 @@ const LoginPage = () => {
       // localStorage.setItem("ID", response.data.data.userInfo.internalId);
       localStorage.setItem("authToken", response.data.accessToken);
       localStorage.setItem("role", response.data.role); // Lưu role
-
      // const decodedToken = jwtDecode(response.data.accessToken);
      // console.log("Thông tin người dùng:", decodedToken);
 
