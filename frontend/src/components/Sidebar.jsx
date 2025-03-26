@@ -31,7 +31,6 @@ import {
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { jwtDecode } from 'jwt-decode';
 
 const drawerWidth = 240;
 
@@ -52,38 +51,6 @@ const Sidebar = () => {
       } else {
         console.log("Không tìm thấy Token.");
       }
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    const token = localStorage.getItem("authToken");
-    if (token) {
-      try {
-        const decodedToken = jwtDecode(token);
-        console.log("Decoded Token:", decodedToken); // In ra để kiểm tra
-        
-        // Kiểm tra role và thiết lập isAdmin
-        if (decodedToken.role === "admin") {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
-      } catch (error) {
-        console.error("Lỗi giải mã token:", error);
-        localStorage.removeItem("authToken"); // Xóa token nếu không hợp lệ
-        navigate("/login"); // Chuyển hướng đến trang đăng nhập
-      }
-    }
-  }, [navigate]);
-const handleLogout = async () => {
-  try {
-    const token = localStorage.getItem("authToken");
-    
-    // Kiểm tra token
-    if (!token) {
-      console.log("Không tìm thấy token");
-      navigate("/login");
-      return;
-    }
 
       const response = await axios.post(
         "http://localhost:8000/api/auth/logout",
@@ -95,17 +62,6 @@ const handleLogout = async () => {
           withCredentials: true,
         }
       );
-    // Gửi yêu cầu logout
-    const response = await axios.post(
-      "http://localhost:8000/api/auth/logout",
-      {},
-      {
-        headers: {
-          token: `Bearer ${token}`,
-        },
-        withCredentials: true,
-      }
-    );
 
       if (response.status === 200) {
         localStorage.removeItem("authToken");
@@ -139,27 +95,6 @@ const handleLogout = async () => {
     setOpenLogoutDialog(false);
     handleLogout();
   };
-    // Xử lý phản hồi thành công
-    if (response.status === 200) {
-      // Xóa tất cả thông tin người dùng khỏi localStorage
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("role");
-      
-      console.log("Đăng xuất thành công!");
-      navigate("/login");
-    } else {
-      console.error("Đăng xuất thất bại với mã lỗi:", response.status);
-    }
-  } catch (error) {
-    console.error("Lỗi đăng xuất:", error.response?.data || error.message);
-
-    // Xử lý lỗi 403 (Forbidden)
-    if (error.response?.status === 403) {
-      localStorage.removeItem("authToken");
-      navigate("/login");
-    }
-  }
-};
 
   return (
     <>
@@ -269,45 +204,6 @@ const handleLogout = async () => {
               </ListItemIcon>
               <ListItemText primary="Settings" />
             </ListItemButton>
-        {/* Inventory - Menu con */}
-        <Collapse in={openInventory} timeout="auto" unmountOnExit>
-          <List component="div" disablePadding>
-            <ListItemButton sx={{ pl: 4 }} onClick={() => navigate("/dashboard")}>
-              <ListItemIcon>
-                <Description />
-              </ListItemIcon>
-              <ListItemText primary="Tạo phiếu đặt hàng" />
-            </ListItemButton>
-            <ListItemButton sx={{ pl: 4 }} onClick={() => navigate("/inventory/add-shipment")}>
-              <ListItemIcon>
-                <AddBox />
-              </ListItemIcon>
-              <ListItemText primary="Thêm lô hàng" />
-            </ListItemButton>
-            <ListItemButton sx={{ pl: 4 }} onClick={() => navigate("/inventory/receipt")}>
-              <ListItemIcon>
-                <Inventory />
-              </ListItemIcon>
-              <ListItemText primary="Tạo phiếu nhập kho" />
-            </ListItemButton>
-          </List>
-        </Collapse>
-      {/* list user */}
-      {isAdmin && (
-          <ListItemButton onClick={() => navigate("/listuser")}>
-            <ListItemIcon>
-              <RecentActors />
-            </ListItemIcon>
-            <ListItemText primary="List Account" />
-          </ListItemButton>
-        )}
-        {/* Settings */}
-        <ListItemButton onClick={() => navigate("/settings")}>
-          <ListItemIcon>
-            <Settings />
-          </ListItemIcon>
-          <ListItemText primary="Settings" />
-        </ListItemButton>
 
             {/* Profile - Hiển thị cho tất cả các role */}
             <ListItemButton onClick={() => navigate("/profile")}>
