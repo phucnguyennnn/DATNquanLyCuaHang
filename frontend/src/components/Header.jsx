@@ -7,7 +7,7 @@ const Header = ({ onLogout }) => {
     <AppBar position="sticky">
       <Toolbar>
         <Typography variant="h6" sx={{ flexGrow: 1 }}>
-          Admin Dashboardss111
+          Admin Dashboard
         </Typography>
         <IconButton color="inherit" onClick={onLogout}>
           <Logout />

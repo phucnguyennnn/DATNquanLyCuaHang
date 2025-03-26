@@ -83,8 +83,7 @@ const sendOrderEmail = async (toEmail, order, supplierName) => {
 
     const itemsListHtml = order.items.map((item, idx) => {
       const productName = item.productId?.name || 'Không rõ';
-      const price = item.price?.toLocaleString() || 0;
-      return `<li>Sản phẩm ${idx + 1}: ${productName} - SL: ${item.quantity} - Giá: ${price} VND</li>`;
+      return `<li>Sản phẩm ${idx + 1}: ${productName} - Số lượng: ${item.quantity} </li>`;
     }).join('');
 
     const mailOptions = {
@@ -95,7 +94,6 @@ const sendOrderEmail = async (toEmail, order, supplierName) => {
         <p>Chào ${supplierName},</p>
         <p>Bạn có một phiếu đặt hàng mới từ hệ thống:</p>
         <ul>${itemsListHtml}</ul>
-        <p><strong>Tổng giá trị:</strong> ${order.totalPrice.toLocaleString()} VND</p>
         <p>Trân trọng,<br/>Phòng Vật tư</p>
       `,
     };

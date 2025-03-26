@@ -12,7 +12,13 @@ import GoodReceipt from "../pages/GoodReceipt";
 import AddToInventoy from "../pages/AddToInventory";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
-import ListUser from "../pages/ListUser";
+import Products from "../pages/Products";
+import Settings from "../pages/Settings";
+import Profile from "../pages/Profile";
+import Provider from "../pages/Provider";
+import RegisterPage from "../pages/Register";
+import ForgotPassword from "../pages/ForgotPassword";
+import User from "../pages/User";
 const useAuth = () => {
   const [isLoggedIn, setIsLoggedIn] = React.useState(false);
 
@@ -38,13 +44,20 @@ const AppRouter = () => {
           path="/"
           element={isLoggedIn ? <Navigate to="/ " /> : <App />}
         />
-        <Route path="/dashboard/*" element={<Dashboard />} />
-        <Route path="/goodreceipt/*" element={<GoodReceipt />} />
-        <Route path="/addtoinventory/*" element={<AddToInventoy />} />
-        <Route path="/homepage/*" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/listuser" element={<ListUser />} />
-
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/homepage/*" element={<HomePage />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/provider" element={<Provider />} />
+        <Route path="/users" element={<User />} />
+        <Route path="/inventory/purchase-order/*" element={<Dashboard />} />
+        <Route path="/inventory/receipt/*" element={<GoodReceipt />} />
+        <Route path="/inventory/add-shipment" element={<AddToInventoy />} />
+       
+     
         {/* <Route path="/dashboard/*" element={isLoggedIn ? <Dashboard/> : <Navigate to="/" />} /> */}
         <Route path="*" element={<Page404 />} />
       </Routes>
