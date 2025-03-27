@@ -15,7 +15,7 @@ import LoginPage from "../pages/LoginPage";
 import Products from "../pages/Products";
 import Settings from "../pages/Settings";
 import Profile from "../pages/Profile";
-import Provider from "../pages/Provider";
+import Supplier from "../pages/Supplier";
 import RegisterPage from "../pages/Register";
 import ForgotPassword from "../pages/ForgotPassword";
 import User from "../pages/User";
@@ -51,7 +51,7 @@ const AppRouter = () => {
         <Route path="/products" element={<Products />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/profile" element={<Profile />} />
-        <Route path="/provider" element={<Provider />} />
+        <Route path="/supplier" element={<Supplier />} />
         <Route path="/users" element={<User />} />
         <Route path="/inventory/purchase-order/*" element={<Dashboard />} />
         <Route path="/inventory/receipt/*" element={<GoodReceipt />} />

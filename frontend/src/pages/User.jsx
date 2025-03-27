@@ -13,25 +13,25 @@ import {
   Box,
 } from '@mui/material';
 
-const ListAccounts = () => {
-  const [accounts, setAccounts] = useState([]);
+const ListUsers = () => {
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const fetchAccounts = async () => {
+    const fetchUsers = async () => {
       try {
         const response = await axios.get('http://localhost:8000/api/user');
-        setAccounts(response.data);
+        setUsers(response.data);
       } catch (err) {
-        setError('Không thể tải danh sách tài khoản');
+        setError('Không thể tải danh sách người dùng');
         console.error(err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAccounts();
+    fetchUsers();
   }, []);
 
   if (loading) {
@@ -53,24 +53,32 @@ const ListAccounts = () => {
   return (
     <TableContainer component={Paper} sx={{ mt: 4 }}>
       <Typography variant="h4" align="center" gutterBottom>
-        Danh Sách Tài Khoản
+        Danh Sách Người Dùng
       </Typography>
       <Table>
         <TableHead>
           <TableRow>
             <TableCell>ID</TableCell>
-            <TableCell>Username</TableCell>
-            <TableCell>Role</TableCell>
+            <TableCell>User name</TableCell>
+            <TableCell>Họ và tên</TableCell>
+            <TableCell>Email</TableCell>
+            <TableCell>Phone</TableCell>
+            <TableCell>Địa Chỉ</TableCell>
+            <TableCell>Vai trò</TableCell>
             <TableCell>Ngày Tạo</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {accounts.map((account) => (
-            <TableRow key={account._id}>
-              <TableCell>{account._id}</TableCell>
-              <TableCell>{account.username}</TableCell>
-              <TableCell>{account.role}</TableCell>
-              <TableCell>{new Date(account.createdAt).toLocaleDateString()}</TableCell>
+          {users.map((user) => (
+            <TableRow key={user._id}>
+              <TableCell>{user._id}</TableCell>
+              <TableCell>{user.username}</TableCell>
+              <TableCell>{user.fullName}</TableCell>
+              <TableCell>{user.email}</TableCell>
+              <TableCell>{user.phone}</TableCell>
+              <TableCell>{user.address}</TableCell>
+              <TableCell>{user.role}</TableCell>
+              <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -79,4 +87,4 @@ const ListAccounts = () => {
   );
 };
 
-export default ListAccounts;
+export default ListUsers;

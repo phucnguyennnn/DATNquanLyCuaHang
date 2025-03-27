@@ -121,7 +121,7 @@ const Sidebar = () => {
               <ListItemIcon>
                 <Home />
               </ListItemIcon>
-              <ListItemText primary="Home" />
+              <ListItemText primary="Trang chủ" />
             </ListItemButton>
 
             {/* Products - Hiển thị cho tất cả các role */}
@@ -129,17 +129,17 @@ const Sidebar = () => {
               <ListItemIcon>
                 <ShoppingCart />
               </ListItemIcon>
-              <ListItemText primary="Products" />
+              <ListItemText primary="Sản phẩm" />
             </ListItemButton>
 
             {/* Inventory và các mục con - Hiển thị cho admin và staff */}
-            {(role === "admin" || role === "staff") && (
+            {(role === "admin" || role === "employee") && (
               <>
                 <ListItemButton onClick={() => setOpenInventory(!openInventory)}>
                   <ListItemIcon>
                     <Warehouse />
                   </ListItemIcon>
-                  <ListItemText primary="Inventory" />
+                  <ListItemText primary="Kho hàng" />
                   {openInventory ? <ExpandLess /> : <ExpandMore />}
                 </ListItemButton>
 
@@ -183,7 +183,7 @@ const Sidebar = () => {
                 <ListItemIcon>
                   <BusinessCenter />
                 </ListItemIcon>
-                <ListItemText primary="Providers" />
+                <ListItemText primary="Nhà cung cấp" />
               </ListItemButton>
             )}
 
@@ -193,7 +193,7 @@ const Sidebar = () => {
                 <ListItemIcon>
                   <RecentActors />
                 </ListItemIcon>
-                <ListItemText primary="List User" />
+                <ListItemText primary="DS tài khoản" />
               </ListItemButton>
             )}
 
@@ -202,7 +202,7 @@ const Sidebar = () => {
               <ListItemIcon>
                 <Settings />
               </ListItemIcon>
-              <ListItemText primary="Settings" />
+              <ListItemText primary="Cài đặt" />
             </ListItemButton>
 
             {/* Profile - Hiển thị cho tất cả các role */}
@@ -210,7 +210,7 @@ const Sidebar = () => {
               <ListItemIcon>
                 <AccountCircle />
               </ListItemIcon>
-              <ListItemText primary="Profile" />
+              <ListItemText primary="Hồ sơ" />
             </ListItemButton>
           </List>
 
@@ -224,7 +224,7 @@ const Sidebar = () => {
               <ListItemIcon>
                 <Logout />
               </ListItemIcon>
-              <ListItemText primary="Logout" />
+              <ListItemText primary="Đăng xuất" />
             </ListItemButton>
           </List>
         </Box>

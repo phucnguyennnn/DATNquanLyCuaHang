@@ -2,7 +2,7 @@ import React from 'react'
 
 const Provider = () => {
   return (
-    <div>Provider</div>
+    <div>Supplier</div>
   )
 }
 
