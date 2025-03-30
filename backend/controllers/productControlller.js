@@ -2,6 +2,7 @@ const Product = require('../models/Product');
 const Category = require('../models/Category');
 const cloudinary = require('../config/cloudinary');
 const Supplier = require('../models/Supplier');
+const Inventory = require('../models/Inventory');
 
 // Tạo sản phẩm mới
 exports.createProduct = async (req, res) => {
@@ -41,8 +42,8 @@ exports.createProduct = async (req, res) => {
         await newProduct.save();
         if (suppliers && suppliers.length > 0) {
             await Supplier.updateMany(
-                { _id: { $in: suppliers } }, 
-                { $push: { products: newProduct._id } } 
+                { _id: { $in: suppliers } },
+                { $push: { products: newProduct._id } }
             );
         }
 
@@ -51,30 +52,59 @@ exports.createProduct = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
-// Lấy tất cả sản phẩm
+
+// Lấy tất cả sản phẩm và kèm theo thông tin tồn kho
 exports.getAllProducts = async (req, res) => {
     try {
         const products = await Product.find()
             .populate('categoryId', 'name')
             .populate('suppliers', 'name');
-        res.status(200).json(products);
+
+        // Lấy số lượng tồn kho cho mỗi sản phẩm
+        const productListWithStock = await Promise.all(products.map(async (product) => {
+            const inventory = await Inventory.findOne({ productId: product._id });
+            return {
+                ...product.toObject(), // Chuyển đổi sản phẩm thành object để có thể merge thêm thông tin
+                warehouse_stock: inventory ? inventory.warehouse_stock : 0,
+                shelf_stock: inventory ? inventory.shelf_stock : 0,
+                total_stock: inventory ? inventory.total_stock : 0
+            };
+        }));
+
+        res.status(200).json(productListWithStock);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
 
-// Lấy sản phẩm theo ID
+
+
+
+// Lấy sản phẩm theo ID và kèm theo thông tin tồn kho
 exports.getProductById = async (req, res) => {
     try {
         const product = await Product.findById(req.params.id)
             .populate('categoryId', 'name')
             .populate('suppliers', 'name');
+
         if (!product) return res.status(404).json({ message: 'Sản phẩm không tồn tại' });
-        res.status(200).json(product);
+
+        // Lấy thông tin tồn kho
+        const inventory = await Inventory.findOne({ productId: product._id });
+
+        const productWithStock = {
+            ...product.toObject(),
+            warehouse_stock: inventory ? inventory.warehouse_stock : 0,
+            shelf_stock: inventory ? inventory.shelf_stock : 0,
+            total_stock: inventory ? inventory.total_stock : 0
+        };
+
+        res.status(200).json(productWithStock);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
+
 
 // Cập nhật sản phẩm
 exports.updateProduct = async (req, res) => {
@@ -135,3 +165,53 @@ exports.deleteProduct = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+// Trừ tồn kho khi bán sản phẩm
+exports.deductInventoryOnSale = async (req, res) => {
+    try {
+        const { productId, quantity } = req.body;
+
+        // Kiểm tra tồn kho
+        const inventory = await Inventory.findOne({ productId });
+        if (!inventory) return res.status(404).json({ message: 'Không tìm thấy thông tin tồn kho' });
+
+        // Kiểm tra xem có đủ hàng trên kệ và kho để bán không
+        if (inventory.shelf_stock < quantity) {
+            // Nếu không đủ hàng trên kệ, lấy thêm từ kho
+            const remainingQuantity = quantity - inventory.shelf_stock;
+            if (inventory.warehouse_stock < remainingQuantity) {
+                return res.status(400).json({ message: 'Tồn kho không đủ' });
+            }
+
+            // Cập nhật tồn kho (giảm hàng trên kệ và kho)
+            inventory.shelf_stock = 0; // Đã bán hết trên kệ
+            inventory.warehouse_stock -= remainingQuantity; // Lấy thêm từ kho
+            inventory.total_stock -= quantity; // Tổng số lượng giảm
+        } else {
+            // Nếu đủ hàng trên kệ, chỉ giảm trên kệ
+            inventory.shelf_stock -= quantity;
+            inventory.total_stock -= quantity;
+        }
+
+        await inventory.save(); // Lưu lại thông tin tồn kho
+        res.status(200).json({ message: 'Trừ tồn kho thành công', inventory });
+    } catch (error) {
+        console.error('Error in deductInventoryOnSale:', error);
+        res.status(500).json({ message: 'Lỗi hệ thống' });
+    }
+};
+
+// Hàm bán sản phẩm và trừ tồn kho
+exports.sellProduct = async (req, res) => {
+    try {
+        const { productId, quantity } = req.body;
+
+        // Gọi hàm trừ tồn kho khi bán sản phẩm
+        await this.deductInventoryOnSale(req, res);
+
+        // Xử lý các logic khác như tạo hóa đơn, thông báo thành công, v.v.
+        res.status(200).json({ message: 'Bán hàng thành công' });
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi khi bán sản phẩm' });
+    }
+};
+

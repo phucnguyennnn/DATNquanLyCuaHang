@@ -8,17 +8,17 @@ const purchaseOrderSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'completed'], 
+        enum: ['pending', 'completed'],
         default: 'pending'
     },
     items: [{
         productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
         quantity: { type: Number, required: true },
-        price: { type: Number, required: false } 
+        price: { type: Number, required: true }
     }],
     totalPrice: {
         type: Number,
-        required: false
+        required: true
     },
     orderDate: {
         type: Date,
