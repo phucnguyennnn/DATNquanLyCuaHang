@@ -1,4 +1,4 @@
-const Batch = require('../models/Batch');
+const Batch = require('..//models/Batch');
 const Supplier = require('../models/Supplier');
 const Product = require('../models/Product');
 
