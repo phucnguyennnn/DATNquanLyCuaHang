@@ -129,7 +129,7 @@ const Sidebar = () => {
               <ListItemIcon>
                 <ShoppingCart />
               </ListItemIcon>
-              <ListItemText primary="Sản phẩm" />
+              <ListItemText primary="Quản lý sản phẩm" />
             </ListItemButton>
 
             {/* Inventory và các mục con - Hiển thị cho admin và staff */}
@@ -193,7 +193,7 @@ const Sidebar = () => {
                 <ListItemIcon>
                   <RecentActors />
                 </ListItemIcon>
-                <ListItemText primary="DS tài khoản" />
+                <ListItemText primary="Nhân viên" />
               </ListItemButton>
             )}
 

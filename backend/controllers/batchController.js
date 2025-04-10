@@ -29,15 +29,10 @@ exports.createBatch = async (req, res) => {
             expiry_day,
             quantity,
             status,
-            supplierId: {
-                _id: supplier._id,
-                name: supplier.name,
-            },
-            productId: {
-                _id: product._id,
-                name: product.name,
-            },
+            supplier: supplier._id,
+            product: product._id
         });
+        
 
         await newBatch.save();
         product.batches.push(newBatch._id);

@@ -12,13 +12,14 @@ import GoodReceipt from "../pages/GoodReceipt";
 import AddToInventoy from "../pages/AddToInventory";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
-import Products from "../pages/Products";
 import Settings from "../pages/Settings";
 import Profile from "../pages/Profile";
 import Supplier from "../pages/Supplier";
 import RegisterPage from "../pages/Register";
 import ForgotPassword from "../pages/ForgotPassword";
 import User from "../pages/User";
+import ProductManager from "../pages/ProductManager";
+import ProductsPage from "../pages/ProductsPage";
 const useAuth = () => {
   const [isLoggedIn, setIsLoggedIn] = React.useState(false);
 
@@ -48,7 +49,8 @@ const AppRouter = () => {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/homepage/*" element={<HomePage />} />
-        <Route path="/products" element={<Products />} />
+        <Route path="/products_manager" element={<ProductManager />} />
+        <Route path="/products_page" element={<ProductsPage />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/supplier" element={<Supplier />} />
