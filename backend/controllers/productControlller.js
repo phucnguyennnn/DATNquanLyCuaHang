@@ -1,217 +1,289 @@
-const Product = require('../models/Product');
-const Category = require('../models/Category');
-const cloudinary = require('../config/cloudinary');
-const Supplier = require('../models/Supplier');
-const Inventory = require('../models/Inventory');
+const Product = require("../models/Product");
+const Category = require("../models/Category");
+const Supplier = require("../models/Supplier");
+const { isValidObjectId } = require("mongoose");
 
-// Tạo sản phẩm mới
+// Create a new product
 exports.createProduct = async (req, res) => {
     try {
-        const { name, categoryName, description, price, SKU, unit, batch, suppliers } = req.body;
-
-        // Kiểm tra danh mục
-        const category = await Category.findOne({ name: categoryName });
-        if (!category) return res.status(400).json({ message: 'Danh mục không tồn tại' });
-
-        // Kiểm tra SKU trùng lặp
-        const existingProduct = await Product.findOne({ SKU });
-        if (existingProduct) return res.status(400).json({ message: 'SKU đã tồn tại' });
-
-        // Xử lý upload ảnh
-        let imageUrls = [];
-        if (req.files && req.files.length > 0) {
-            for (const file of req.files) {
-                const result = await cloudinary.uploader.upload(file.path, { folder: 'product_images' });
-                imageUrls.push(result.secure_url);
-            }
+      const {
+        name,
+        category,
+        description,
+        price,
+        SKU,
+        unit,
+        status = "active",
+      } = req.body;
+  
+      if (!name || !category || !price || !SKU || !unit) {
+        return res.status(400).json({ message: "Missing required fields." });
+      }
+  
+      if (!isValidObjectId(category)) {
+        return res.status(400).json({ message: "Invalid category ID." });
+      }
+  
+      const categoryExists = await Category.findById(category);
+      if (!categoryExists) {
+        return res.status(404).json({ message: "Category not found." });
+      }
+  
+      // Parse suppliers from form-data or JSON
+      let suppliers = [];
+      try {
+        suppliers = req.body.suppliers
+          ? typeof req.body.suppliers === "string"
+            ? JSON.parse(req.body.suppliers)
+            : req.body.suppliers
+          : [];
+      } catch (e) {
+        console.error("Error parsing suppliers:", e);
+        return res.status(400).json({ message: "Invalid suppliers format." });
+      }
+  
+      // Validate and process suppliers
+      const validSuppliers = [];
+      for (const s of suppliers) {
+        if (!s.supplier || !isValidObjectId(s.supplier)) {
+          continue;
         }
-
-        // Tạo sản phẩm mới
-        const newProduct = new Product({
-            name,
-            categoryId: category._id,
-            description,
-            price,
-            SKU,
-            unit,
-            image: imageUrls,
-            batch,
-            suppliers
+  
+        const supplierExists = await Supplier.findById(s.supplier);
+        if (!supplierExists) {
+          continue;
+        }
+  
+        validSuppliers.push({
+          supplier: s.supplier,
+          importPrice: Number(s.importPrice) || 0,
         });
-
-        await newProduct.save();
-        if (suppliers && suppliers.length > 0) {
-            await Supplier.updateMany(
-                { _id: { $in: suppliers } },
-                { $push: { products: newProduct._id } }
-            );
-        }
-
-        res.status(201).json(newProduct);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-// Lấy tất cả sản phẩm và kèm theo thông tin tồn kho
-exports.getAllProducts = async (req, res) => {
-    try {
-        const products = await Product.find()
-            .populate('categoryId', 'name')
-            .populate('suppliers', 'name');
-
-        // Lấy số lượng tồn kho cho mỗi sản phẩm
-        const productListWithStock = await Promise.all(products.map(async (product) => {
-            const inventory = await Inventory.findOne({ productId: product._id });
-            return {
-                ...product.toObject(), // Chuyển đổi sản phẩm thành object để có thể merge thêm thông tin
-                warehouse_stock: inventory ? inventory.warehouse_stock : 0,
-                shelf_stock: inventory ? inventory.shelf_stock : 0,
-                total_stock: inventory ? inventory.total_stock : 0
-            };
-        }));
-
-        res.status(200).json(productListWithStock);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-
-
-
-// Lấy sản phẩm theo ID và kèm theo thông tin tồn kho
-exports.getProductById = async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.id)
-            .populate('categoryId', 'name')
-            .populate('suppliers', 'name');
-
-        if (!product) return res.status(404).json({ message: 'Sản phẩm không tồn tại' });
-
-        // Lấy thông tin tồn kho
-        const inventory = await Inventory.findOne({ productId: product._id });
-
-        const productWithStock = {
-            ...product.toObject(),
-            warehouse_stock: inventory ? inventory.warehouse_stock : 0,
-            shelf_stock: inventory ? inventory.shelf_stock : 0,
-            total_stock: inventory ? inventory.total_stock : 0
-        };
-
-        res.status(200).json(productWithStock);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-
-// Cập nhật sản phẩm
-exports.updateProduct = async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (!product) return res.status(404).json({ message: 'Sản phẩm không tồn tại' });
-
-        // Xử lý ảnh cũ
-        if (req.files && req.files.length > 0) {
-            // Xóa ảnh cũ trên Cloudinary
-            if (product.image && product.image.length > 0) {
-                for (const imageUrl of product.image) {
-                    const publicId = imageUrl.split('/').pop().split('.')[0];
-                    await cloudinary.uploader.destroy(`product_images/${publicId}`);
-                }
-            }
-
-            // Upload ảnh mới
-            let imageUrls = [];
-            for (const file of req.files) {
-                const result = await cloudinary.uploader.upload(file.path, { folder: 'product_images' });
-                imageUrls.push(result.secure_url);
-            }
-            product.image = imageUrls;
-        }
-
-        // Cập nhật thông tin sản phẩm
-        const updatedProduct = await Product.findByIdAndUpdate(
-            req.params.id,
-            { ...req.body, image: product.image },
-            { new: true }
+      }
+  
+      const imageUrls = req.files?.map((file) => file.path) || [];
+  
+      const newProduct = new Product({
+        name,
+        category,
+        description,
+        price,
+        SKU,
+        unit,
+        images: imageUrls,
+        suppliers: validSuppliers,
+        status,
+      });
+  
+      await newProduct.save();
+  
+      // Update suppliers with this product
+      if (validSuppliers.length > 0) {
+        const supplierIds = validSuppliers.map((s) => s.supplier);
+        await Supplier.updateMany(
+          { _id: { $in: supplierIds } },
+          { $addToSet: { products: newProduct._id } }
         );
-
-        res.status(200).json(updatedProduct);
+      }
+  
+      return res.status(201).json({
+        message: "Product created successfully.",
+        product: newProduct,
+      });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+      console.error("Create product error:", error);
+      return res.status(500).json({ message: "Internal server error." });
     }
+  };
+  
+  // Update a product
+  exports.updateProduct = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, category, description, price, SKU, unit, status } = req.body;
+  
+      if (!isValidObjectId(id)) {
+        return res.status(400).json({ message: "Invalid product ID." });
+      }
+  
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found." });
+      }
+  
+      // Parse suppliers from form-data or JSON
+      let suppliers = [];
+      try {
+        suppliers = req.body.suppliers
+          ? typeof req.body.suppliers === "string"
+            ? JSON.parse(req.body.suppliers)
+            : req.body.suppliers
+          : [];
+      } catch (e) {
+        console.error("Error parsing suppliers:", e);
+        return res.status(400).json({ message: "Invalid suppliers format." });
+      }
+  
+      // Process category if provided
+      if (category) {
+        if (!isValidObjectId(category)) {
+          return res.status(400).json({ message: "Invalid category ID." });
+        }
+  
+        const categoryExists = await Category.findById(category);
+        if (!categoryExists) {
+          return res.status(404).json({ message: "Category not found." });
+        }
+        product.category = category;
+      }
+  
+      // Process images
+      const imageUrls = req.files?.map((file) => file.path) || [];
+      if (imageUrls.length > 0) {
+        product.images = [...product.images, ...imageUrls];
+      }
+  
+      // Update basic fields
+      if (name) product.name = name;
+      if (description) product.description = description;
+      if (price) product.price = price;
+      if (SKU) product.SKU = SKU;
+      if (unit) product.unit = unit;
+      if (status) product.status = status;
+  
+      // Process suppliers
+      const validSuppliers = [];
+      const newSupplierIds = [];
+  
+      for (const s of suppliers) {
+        if (!s.supplier || !isValidObjectId(s.supplier)) {
+          continue;
+        }
+  
+        const supplierExists = await Supplier.findById(s.supplier);
+        if (!supplierExists) {
+          continue;
+        }
+  
+        validSuppliers.push({
+          supplier: s.supplier,
+          importPrice: Number(s.importPrice) || 0,
+        });
+        newSupplierIds.push(s.supplier);
+      }
+  
+      // Get old supplier IDs for comparison
+      const oldSupplierIds = product.suppliers.map((s) => s.supplier.toString());
+  
+      // Update product's suppliers
+      product.suppliers = validSuppliers;
+  
+      // Determine which suppliers to add/remove
+      const suppliersToAdd = newSupplierIds.filter(
+        (id) => !oldSupplierIds.includes(id)
+      );
+      const suppliersToRemove = oldSupplierIds.filter(
+        (id) => !newSupplierIds.includes(id)
+      );
+  
+      // Update suppliers' product lists
+      if (suppliersToAdd.length > 0) {
+        await Supplier.updateMany(
+          { _id: { $in: suppliersToAdd } },
+          { $addToSet: { products: product._id } }
+        );
+      }
+  
+      if (suppliersToRemove.length > 0) {
+        await Supplier.updateMany(
+          { _id: { $in: suppliersToRemove } },
+          { $pull: { products: product._id } }
+        );
+      }
+  
+      await product.save();
+      return res.status(200).json({ message: "Product updated.", product });
+    } catch (error) {
+      console.error("Update product error:", error);
+      return res.status(500).json({ message: "Internal server error." });
+    }
+  };
+  
+// Get all products (both active and inactive)
+exports.getAll = async (req, res) => {
+  try {
+    const products = await Product.find()
+      .populate("category")
+
+      .populate("suppliers.supplier", "name contact");
+
+    return res.status(200).json(products);
+  } catch (error) {
+    console.error("Get all products error:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+// Get all products (active only)
+exports.getAllProducts = async (req, res) => {
+  try {
+    const products = await Product.find({ status: "active" })
+      .populate("category")
+
+      .populate("suppliers.supplier", "name contact");
+
+    return res.status(200).json(products);
+  } catch (error) {
+    console.error("Get products error:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
 };
 
-// Xóa sản phẩm
+// Get a product by ID (if active)
+exports.getProductById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid product ID." });
+    }
+
+    const product = await Product.findOne({ _id: id, status: "active" })
+      .populate("category", "name")
+      .populate("suppliers.supplier", "name contact");
+
+    if (!product) {
+      return res
+        .status(404)
+        .json({ message: "Product not found or inactive." });
+    }
+
+    return res.status(200).json(product);
+  } catch (error) {
+    console.error("Get product error:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
 exports.deleteProduct = async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (!product) return res.status(404).json({ message: 'Sản phẩm không tồn tại' });
+  try {
+    const { id } = req.params;
 
-        // Xóa ảnh trên Cloudinary
-        if (product.image && product.image.length > 0) {
-            for (const imageUrl of product.image) {
-                const publicId = imageUrl.split('/').pop().split('.')[0];
-                await cloudinary.uploader.destroy(`product_images/${publicId}`);
-            }
-        }
-
-        // Xóa sản phẩm
-        await Product.findByIdAndDelete(req.params.id);
-        res.status(200).json({ message: 'Xóa sản phẩm thành công' });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid product ID." });
     }
-};
-// Trừ tồn kho khi bán sản phẩm
-exports.deductInventoryOnSale = async (req, res) => {
-    try {
-        const { productId, quantity } = req.body;
 
-        // Kiểm tra tồn kho
-        const inventory = await Inventory.findOne({ productId });
-        if (!inventory) return res.status(404).json({ message: 'Không tìm thấy thông tin tồn kho' });
-
-        // Kiểm tra xem có đủ hàng trên kệ và kho để bán không
-        if (inventory.shelf_stock < quantity) {
-            // Nếu không đủ hàng trên kệ, lấy thêm từ kho
-            const remainingQuantity = quantity - inventory.shelf_stock;
-            if (inventory.warehouse_stock < remainingQuantity) {
-                return res.status(400).json({ message: 'Tồn kho không đủ' });
-            }
-
-            // Cập nhật tồn kho (giảm hàng trên kệ và kho)
-            inventory.shelf_stock = 0; // Đã bán hết trên kệ
-            inventory.warehouse_stock -= remainingQuantity; // Lấy thêm từ kho
-            inventory.total_stock -= quantity; // Tổng số lượng giảm
-        } else {
-            // Nếu đủ hàng trên kệ, chỉ giảm trên kệ
-            inventory.shelf_stock -= quantity;
-            inventory.total_stock -= quantity;
-        }
-
-        await inventory.save(); // Lưu lại thông tin tồn kho
-        res.status(200).json({ message: 'Trừ tồn kho thành công', inventory });
-    } catch (error) {
-        console.error('Error in deductInventoryOnSale:', error);
-        res.status(500).json({ message: 'Lỗi hệ thống' });
+    const product = await Product.findById(id);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found." });
     }
+
+    product.status = "inactive";
+    await product.save();
+
+    return res
+      .status(200)
+      .json({ message: "Product has been marked as inactive." });
+  } catch (error) {
+    console.error("Delete product error:", error);
+    return res.status(500).json({ message: "Internal server error." });
+  }
 };
-
-// Hàm bán sản phẩm và trừ tồn kho
-exports.sellProduct = async (req, res) => {
-    try {
-        const { productId, quantity } = req.body;
-
-        // Gọi hàm trừ tồn kho khi bán sản phẩm
-        await this.deductInventoryOnSale(req, res);
-
-        // Xử lý các logic khác như tạo hóa đơn, thông báo thành công, v.v.
-        res.status(200).json({ message: 'Bán hàng thành công' });
-    } catch (error) {
-        res.status(500).json({ message: 'Lỗi khi bán sản phẩm' });
-    }
-};
-

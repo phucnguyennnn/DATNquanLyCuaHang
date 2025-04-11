@@ -1,55 +1,62 @@
 const Supplier = require('../models/Supplier');
 const Product = require('../models/Product');
 
-// Tạo nhà cung cấp
 const createSupplier = async (req, res) => {
     try {
-        const { name, description, address, contact, products } = req.body;
-
-        // Kiểm tra nhà cung cấp đã tồn tại chưa
-        const existingSupplier = await Supplier.findOne({ name });
-        if (existingSupplier) {
-            return res.status(400).json({ message: 'Nhà cung cấp đã tồn tại' });
+      const { name, description, address, contact, products = [] } = req.body;
+  
+      if (!name) {
+        return res.status(400).json({ message: 'Name is required.' });
+      }
+  
+      const existing = await Supplier.findOne({ name });
+      if (existing) {
+        return res.status(400).json({ message: 'Supplier already exists.' });
+      }
+  
+      // Validate product IDs
+      const validProductIds = products.filter(id => isValidObjectId(id));
+      const existingProducts = await Product.find({ _id: { $in: validProductIds } });
+  
+      if (existingProducts.length !== validProductIds.length) {
+        return res.status(400).json({ message: 'One or more products not found.' });
+      }
+  
+      const newSupplier = new Supplier({
+        name,
+        description,
+        address,
+        contact,
+        products: validProductIds,
+      });
+  
+      await newSupplier.save();
+  
+      // Update suppliers field in each product
+      await Promise.all(existingProducts.map(async (product) => {
+        const alreadyLinked = product.suppliers.find(s => s.supplier.toString() === newSupplier._id.toString());
+        if (!alreadyLinked) {
+          product.suppliers.push({ supplier: newSupplier._id, importPrice: 0 }); // default importPrice = 0
+          await product.save();
         }
-
-        // Tạo nhà cung cấp mới
-        const newSupplier = new Supplier({ name, description, address, contact });
-
-        // Nếu có sản phẩm, thêm vào danh sách sản phẩm của nhà cung cấp
-        if (products && products.length > 0) {
-            // Kiểm tra xem các sản phẩm có tồn tại không
-            const existingProducts = await Product.find({ _id: { $in: products } });
-            if (existingProducts.length !== products.length) {
-                return res.status(400).json({ message: 'Một hoặc nhiều sản phẩm không tồn tại' });
-            }
-            newSupplier.products = products;
-        }
-
-        await newSupplier.save();
-
-        // Cập nhật danh sách nhà cung cấp trong sản phẩm
-        if (products && products.length > 0) {
-            await Product.updateMany(
-                { _id: { $in: products } }, // Tìm các sản phẩm có ID trong danh sách
-                { $push: { suppliers: newSupplier._id } } // Thêm ID nhà cung cấp vào danh sách nhà cung cấp của sản phẩm
-            );
-        }
-
-        res.status(201).json(newSupplier);
+      }));
+  
+      return res.status(201).json({ message: 'Supplier created.', supplier: newSupplier });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+      console.error('Create supplier error:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
     }
-};
-
-// Lấy tất cả nhà cung cấp
-const getAllSuppliers = async (req, res) => {
+  };
+  
+  const getAllSuppliers = async (req, res) => {
     try {
-        const suppliers = await Supplier.find().populate('products', 'name'); // Populate để lấy thông tin sản phẩm
-        res.status(200).json(suppliers);
+      const suppliers = await Supplier.find().populate('products', 'name');
+      return res.status(200).json(suppliers);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+      console.error('Get suppliers error:', error);
+      return res.status(500).json({ message: 'Internal server error.' });
     }
-};
+  };
 
 // Lấy nhà cung cấp theo ID
 const getSupplierById = async (req, res) => {
