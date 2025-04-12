@@ -125,7 +125,7 @@ const Sidebar = () => {
             </ListItemButton>
 
             {/* Products - Hiển thị cho tất cả các role */}
-            <ListItemButton onClick={() => navigate("/products")}>
+            <ListItemButton onClick={() => navigate("/products_manager")}>
               <ListItemIcon>
                 <ShoppingCart />
               </ListItemIcon>
