@@ -11,6 +11,8 @@ const supplierRouter = require('./routers/supplierRouter');
 const purchaseOrderRouter = require('./routers/purchaseOrderRouter');
 const goodReceiptRouter = require('./routers/goodReceiptRouter');
 const userRouter = require('./routers/userRouter');
+const cartRouter = require('./routers/cartRouter');
+const session = require('express-session');
 
 dotenv.config();
 
@@ -38,6 +40,16 @@ app.use(cors({
 
 
 app.use(cookieParser());
+app.use(session({
+    secret: 'your-secret-key', // Thay bằng secret key mạnh của bạn
+    resave: false,
+    saveUninitialized: true,
+    cookie: { 
+      secure: false, // Đặt thành true nếu dùng HTTPS
+      maxAge: 24 * 60 * 60 * 1000 // 24 giờ
+    }
+  }));
+  
 app.use(express.json());
 
 app.listen(8000, () => {
@@ -53,4 +65,4 @@ app.use('/api/batches', batchRouter);
 app.use('/api/suppliers', supplierRouter);
 app.use('/api/purchaseOrder', purchaseOrderRouter);
 app.use('/api/goodReceipt', goodReceiptRouter);
-
+app.use('/api/cart', cartRouter);

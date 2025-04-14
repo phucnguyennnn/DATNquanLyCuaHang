@@ -1,152 +1,238 @@
 const Supplier = require('../models/Supplier');
 const Product = require('../models/Product');
+const mongoose = require('mongoose');
+
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 const createSupplier = async (req, res) => {
     try {
-      const { name, description, address, contact, products = [] } = req.body;
-  
-      if (!name) {
-        return res.status(400).json({ message: 'Name is required.' });
-      }
-  
-      const existing = await Supplier.findOne({ name });
-      if (existing) {
-        return res.status(400).json({ message: 'Supplier already exists.' });
-      }
-  
-      // Validate product IDs
-      const validProductIds = products.filter(id => isValidObjectId(id));
-      const existingProducts = await Product.find({ _id: { $in: validProductIds } });
-  
-      if (existingProducts.length !== validProductIds.length) {
-        return res.status(400).json({ message: 'One or more products not found.' });
-      }
-  
-      const newSupplier = new Supplier({
-        name,
-        description,
-        address,
-        contact,
-        products: validProductIds,
-      });
-  
-      await newSupplier.save();
-  
-      // Update suppliers field in each product
-      await Promise.all(existingProducts.map(async (product) => {
-        const alreadyLinked = product.suppliers.find(s => s.supplier.toString() === newSupplier._id.toString());
-        if (!alreadyLinked) {
-          product.suppliers.push({ supplier: newSupplier._id, importPrice: 0 }); // default importPrice = 0
-          await product.save();
-        }
-      }));
-  
-      return res.status(201).json({ message: 'Supplier created.', supplier: newSupplier });
-    } catch (error) {
-      console.error('Create supplier error:', error);
-      return res.status(500).json({ message: 'Internal server error.' });
-    }
-  };
-  
-  const getAllSuppliers = async (req, res) => {
-    try {
-      const suppliers = await Supplier.find().populate('products', 'name');
-      return res.status(200).json(suppliers);
-    } catch (error) {
-      console.error('Get suppliers error:', error);
-      return res.status(500).json({ message: 'Internal server error.' });
-    }
-  };
+        const { name, description, company, taxId, address, contact, paymentTerms, bankDetails, isActive } = req.body;
 
-// Lấy nhà cung cấp theo ID
+        if (!name) {
+            return res.status(400).json({ message: 'Name is required.' });
+        }
+
+        const existingSupplier = await Supplier.findOne({ name });
+        if (existingSupplier) {
+            return res.status(400).json({ message: 'Supplier with this name already exists.' });
+        }
+
+        const newSupplier = new Supplier({
+            name,
+            description,
+            company,
+            taxId,
+            address,
+            contact,
+            paymentTerms,
+            bankDetails,
+            isActive: isActive !== undefined ? isActive : true
+        });
+
+        await newSupplier.save();
+
+        return res.status(201).json({
+            message: 'Supplier created successfully.',
+            supplier: newSupplier
+        });
+    } catch (error) {
+        console.error('Create supplier error:', error);
+        return res.status(500).json({ 
+            message: 'Internal server error.',
+            error: error.message 
+        });
+    }
+};
+
+const getAllSuppliers = async (req, res) => {
+    try {
+        const { active, search } = req.query;
+        let query = {};
+
+        if (active !== undefined) {
+            query.isActive = active === 'true';
+        }
+
+        if (search) {
+            query.$text = { $search: search };
+        }
+
+        const suppliers = await Supplier.find(query)
+            .select('-__v')
+            .sort({ name: 1 });
+
+        return res.status(200).json(suppliers);
+    } catch (error) {
+        console.error('Get suppliers error:', error);
+        return res.status(500).json({ 
+            message: 'Internal server error.',
+            error: error.message 
+        });
+    }
+};
+
 const getSupplierById = async (req, res) => {
     try {
-        const supplier = await Supplier.findById(req.params.id).populate('products', 'name'); // Populate để lấy thông tin sản phẩm
-        if (!supplier) {
-            return res.status(404).json({ message: 'Nhà cung cấp không tồn tại' });
+        if (!isValidObjectId(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid supplier ID format.' });
         }
-        res.status(200).json(supplier);
+
+        const supplier = await Supplier.findById(req.params.id)
+            .populate({
+                path: 'products',
+                select: 'name SKU price active',
+                match: { active: true }
+            });
+
+        if (!supplier) {
+            return res.status(404).json({ message: 'Supplier not found.' });
+        }
+
+        return res.status(200).json(supplier);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Get supplier by ID error:', error);
+        return res.status(500).json({ 
+            message: 'Internal server error.',
+            error: error.message 
+        });
     }
 };
 
-// Cập nhật nhà cung cấp
 const updateSupplier = async (req, res) => {
     try {
-        const { products } = req.body;
-
-        // Kiểm tra nhà cung cấp có tồn tại không
-        const supplier = await Supplier.findById(req.params.id);
-        if (!supplier) {
-            return res.status(404).json({ message: 'Nhà cung cấp không tồn tại' });
+        if (!isValidObjectId(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid supplier ID format.' });
         }
 
-        // Nếu có sản phẩm, kiểm tra và cập nhật danh sách sản phẩm
-        if (products && products.length > 0) {
-            const existingProducts = await Product.find({ _id: { $in: products } });
-            if (existingProducts.length !== products.length) {
-                return res.status(400).json({ message: 'Một hoặc nhiều sản phẩm không tồn tại' });
+        const { name, ...updateData } = req.body;
+
+        if (name) {
+            const existingSupplier = await Supplier.findOne({ name, _id: { $ne: req.params.id } });
+            if (existingSupplier) {
+                return res.status(400).json({ message: 'Supplier with this name already exists.' });
             }
-            supplier.products = products;
+            updateData.name = name;
         }
 
-        // Cập nhật thông tin nhà cung cấp
         const updatedSupplier = await Supplier.findByIdAndUpdate(
             req.params.id,
-            { ...req.body, products: supplier.products },
-            { new: true }
+            updateData,
+            { new: true, runValidators: true }
         );
 
-        res.status(200).json(updatedSupplier);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-// Xóa nhà cung cấp
-const deleteSupplier = async (req, res) => {
-    try {
-        const supplier = await Supplier.findById(req.params.id);
-        if (!supplier) return res.status(404).json({ message: 'Nhà cung cấp không tồn tại' });
-
-        // Xóa nhà cung cấp khỏi các sản phẩm liên quan
-        await Product.updateMany(
-            { suppliers: req.params.id },
-            { $pull: { suppliers: req.params.id } }
-        );
-
-        await Supplier.findByIdAndDelete(req.params.id);
-        res.status(200).json({ message: 'Nhà cung cấp đã được xóa thành công' });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-// Lấy danh sách sản phẩm của một nhà cung cấp cụ thể
-const getProductsBySupplierId = async (req, res) => {
-    try {
-        const supplierId = req.params.supplierId;
-
-        // Tìm nhà cung cấp và populate danh sách sản phẩm
-        const supplier = await Supplier.findById(supplierId).populate('products');
-        if (!supplier) {
-            return res.status(404).json({ message: 'Nhà cung cấp không tồn tại' });
+        if (!updatedSupplier) {
+            return res.status(404).json({ message: 'Supplier not found.' });
         }
 
-        // Trả về danh sách sản phẩm của nhà cung cấp
-        res.status(200).json({ products: supplier.products });
+        return res.status(200).json({
+            message: 'Supplier updated successfully.',
+            supplier: updatedSupplier
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Update supplier error:', error);
+        return res.status(500).json({ 
+            message: 'Internal server error.',
+            error: error.message 
+        });
     }
 };
 
-// Export các hàm controller
+const toggleSupplierStatus = async (req, res) => {
+    try {
+        if (!isValidObjectId(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid supplier ID format.' });
+        }
+
+        const supplier = await Supplier.findById(req.params.id);
+        if (!supplier) {
+            return res.status(404).json({ message: 'Supplier not found.' });
+        }
+
+        supplier.isActive = !supplier.isActive;
+        await supplier.save();
+
+        return res.status(200).json({
+            message: `Supplier ${supplier.isActive ? 'activated' : 'deactivated'} successfully.`,
+            supplier
+        });
+    } catch (error) {
+        console.error('Toggle supplier status error:', error);
+        return res.status(500).json({ 
+            message: 'Internal server error.',
+            error: error.message 
+        });
+    }
+};
+
+const deleteSupplier = async (req, res) => {
+    try {
+        if (!isValidObjectId(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid supplier ID format.' });
+        }
+
+        const productsWithSupplier = await Product.countDocuments({
+            'suppliers.supplier': req.params.id
+        });
+
+        if (productsWithSupplier > 0) {
+            return res.status(400).json({ 
+                message: 'Cannot delete supplier. There are products associated with this supplier.',
+                associatedProductsCount: productsWithSupplier
+            });
+        }
+
+        const deletedSupplier = await Supplier.findByIdAndDelete(req.params.id);
+        if (!deletedSupplier) {
+            return res.status(404).json({ message: 'Supplier not found.' });
+        }
+
+        return res.status(200).json({
+            message: 'Supplier deleted successfully.',
+            supplier: deletedSupplier
+        });
+    } catch (error) {
+        console.error('Delete supplier error:', error);
+        return res.status(500).json({ 
+            message: 'Internal server error.',
+            error: error.message 
+        });
+    }
+};
+
+const getProductsBySupplier = async (req, res) => {
+    try {
+        if (!isValidObjectId(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid supplier ID format.' });
+        }
+
+        const supplier = await Supplier.findById(req.params.id);
+        if (!supplier) {
+            return res.status(404).json({ message: 'Supplier not found.' });
+        }
+
+        const products = await Product.find({ 'suppliers.supplier': req.params.id })
+            .select('name SKU price active category')
+            .populate('category', 'name');
+
+        return res.status(200).json({
+            count: products.length,
+            products
+        });
+    } catch (error) {
+        console.error('Get products by supplier error:', error);
+        return res.status(500).json({ 
+            message: 'Internal server error.',
+            error: error.message 
+        });
+    }
+};
+
 module.exports = {
     createSupplier,
     getAllSuppliers,
     getSupplierById,
     updateSupplier,
+    toggleSupplierStatus,
     deleteSupplier,
-    getProductsBySupplierId
+    getProductsBySupplier
 };
