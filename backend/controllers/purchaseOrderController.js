@@ -1,4 +1,3 @@
-// controllers/purchaseOrderController.js
 const PurchaseOrder = require('../models/PurchaseOrder');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
@@ -12,7 +11,20 @@ const purchaseOrderController = {
         return res.status(400).json({ message: 'Vui lòng cung cấp supplierId và danh sách sản phẩm.' });
       }
 
-      const totalPrice = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+      // Kiểm tra dữ liệu từng item
+      for (let item of items) {
+        const requiredFields = ['productId', 'quantity', 'unit', 'conversionRate', 'unitPrice'];
+        for (let field of requiredFields) {
+          if (!item[field]) {
+            return res.status(400).json({ message: `Thiếu thông tin '${field}' cho một sản phẩm.` });
+          }
+        }
+      }
+
+      // Tính tổng tiền dựa trên unitPrice
+      const totalPrice = items.reduce((sum, item) => {
+        return sum + item.quantity * item.unitPrice;
+      }, 0);
 
       const order = new PurchaseOrder({
         supplierId,
@@ -83,7 +95,14 @@ const sendOrderEmail = async (toEmail, order, supplierName) => {
 
     const itemsListHtml = order.items.map((item, idx) => {
       const productName = item.productId?.name || 'Không rõ';
-      return `<li>Sản phẩm ${idx + 1}: ${productName} - Số lượng: ${item.quantity} </li>`;
+      return `
+        <li>
+          Sản phẩm ${idx + 1}: ${productName}<br/>
+          Số lượng: ${item.quantity} ${item.unit}<br/>
+          Giá mỗi ${item.unit}: ${item.unitPrice.toLocaleString()} đ<br/>
+          Quy đổi: 1 ${item.unit} = ${item.conversionRate} đơn vị nhỏ
+        </li>
+      `;
     }).join('');
 
     const mailOptions = {
@@ -94,6 +113,7 @@ const sendOrderEmail = async (toEmail, order, supplierName) => {
         <p>Chào ${supplierName},</p>
         <p>Bạn có một phiếu đặt hàng mới từ hệ thống:</p>
         <ul>${itemsListHtml}</ul>
+        <p>Tổng tiền: <strong>${order.totalPrice.toLocaleString()} đ</strong></p>
         <p>Trân trọng,<br/>Phòng Vật tư</p>
       `,
     };

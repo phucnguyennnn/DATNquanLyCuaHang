@@ -6,8 +6,10 @@ import {
   Routes,
   Navigate,
 } from "react-router-dom";
-import Dashboard from "./pages/Dashboard";
 import LoginPage from "./pages/LoginPage";
+import HomePage from "./pages/HomePage";
+
+
 
 function App() {
   const isAuthenticated = !!localStorage.getItem("authToken");
@@ -17,13 +19,12 @@ function App() {
         <Route
           path="/"
           element={
-            // isAuthenticated ? <Navigate to="/dashboard" /> : <LoginPage />
             isAuthenticated ? <Navigate to="/homepage" /> : <LoginPage />
           }
         />
         <Route
-          path="/dashboard"
-          element={isAuthenticated ? <Dashboard /> : <Navigate to="/" />}
+          path="/homepage/*"
+          element={isAuthenticated ? <HomePage /> : <Navigate to="/" />}
         />
       </Routes>
     </>

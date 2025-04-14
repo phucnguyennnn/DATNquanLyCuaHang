@@ -47,10 +47,6 @@ const HomePage = () => {
   return (
     <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <CssBaseline />
-
-      {/* Sidebar */}
-      <Sidebar onLogout={handleLogout} />
-
       {/* Main Content */}
       <Box
         component="main"
