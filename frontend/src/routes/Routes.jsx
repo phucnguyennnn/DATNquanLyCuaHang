@@ -20,6 +20,9 @@ import User from "../pages/User";
 import PurchaseOrder from "../pages/PurchaseOrder";
 import GoodReceipt from "../pages/GoodReceipt";
 import AddToInventoy from "../pages/AddToInventory";
+import Cart from "../pages/Cart";
+import ProductPage from "../pages/ProductsPage";
+import CartPage from "../pages/Cart";
 
 const useAuth = () => {
   const [isLoggedIn, setIsLoggedIn] = React.useState(false);
@@ -54,7 +57,7 @@ const AppRouter = () => {
           <Route index element={<HomePage />} />
           <Route path="homepage" element={<HomePage />} />
           <Route path="products_manager" element={<ProductManager />} />
-          <Route path="products_page" element={<ProductsPage />} />
+          <Route path="products_page" element={<ProductPage />} />
           <Route path="settings" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
           <Route path="supplier" element={<Supplier />} />
@@ -62,6 +65,7 @@ const AppRouter = () => {
           <Route path="inventory/purchase-order" element={<PurchaseOrder />} />
           <Route path="inventory/receipt" element={<GoodReceipt />} />
           <Route path="inventory/add-shipment" element={<AddToInventoy />} />
+          <Route path="cart_page" element={<CartPage />} />
         </Route>
         
         {/* 404 page */}

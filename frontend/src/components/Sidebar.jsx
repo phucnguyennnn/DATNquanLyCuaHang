@@ -179,7 +179,7 @@ const Sidebar = () => {
 
             {/* Providers - Chỉ hiển thị cho admin */}
             {role === "admin" && (
-              <ListItemButton onClick={() => navigate("/supplier")}>
+              <ListItemButton onClick={() => navigate("/products_page")}>
                 <ListItemIcon>
                   <BusinessCenter />
                 </ListItemIcon>
