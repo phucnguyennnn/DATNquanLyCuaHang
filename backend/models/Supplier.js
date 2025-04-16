@@ -58,7 +58,7 @@ const supplierSchema = new mongoose.Schema({
     email: String
   },
   paymentTerms: {
-    type: Number, // in days
+    type: Number,
     default: 30,
     min: 0
   },
@@ -82,21 +82,45 @@ const supplierSchema = new mongoose.Schema({
     type: String,
     trim: true,
     maxlength: [1000, 'Notes cannot exceed 1000 characters']
-  }
+  },
+  suppliedProducts: [{
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product',
+      required: true
+    },
+    importPrice: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    minOrderQuantity: {
+      type: Number,
+      min: 1,
+      default: 1
+    },
+    leadTime: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
+    isPrimary: {
+      type: Boolean,
+      default: false
+    }
+  }]
 }, { 
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
 
-// Virtual for products supplied by this supplier
 supplierSchema.virtual('products', {
   ref: 'Product',
   localField: '_id',
   foreignField: 'suppliers.supplier'
 });
 
-// Indexes for better performance
 supplierSchema.index({ name: 'text', description: 'text', 'contact.email': 1 });
 supplierSchema.index({ isActive: 1 });
 supplierSchema.index({ rating: -1 });

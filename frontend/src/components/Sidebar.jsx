@@ -135,7 +135,9 @@ const Sidebar = () => {
             {/* Inventory và các mục con - Hiển thị cho admin và staff */}
             {(role === "admin" || role === "employee") && (
               <>
-                <ListItemButton onClick={() => setOpenInventory(!openInventory)}>
+                <ListItemButton
+                  onClick={() => setOpenInventory(!openInventory)}
+                >
                   <ListItemIcon>
                     <Warehouse />
                   </ListItemIcon>
@@ -183,10 +185,28 @@ const Sidebar = () => {
                 <ListItemIcon>
                   <BusinessCenter />
                 </ListItemIcon>
-                <ListItemText primary="Nhà cung cấp" />
+                <ListItemText primary="Giao diện sản phẩm khách hàng" />
               </ListItemButton>
             )}
 
+            {/* List User - Chỉ hiển thị cho admin */}
+            {role === "admin" && (
+              <ListItemButton onClick={() => navigate("/categories")}>
+                <ListItemIcon>
+                  <RecentActors />
+                </ListItemIcon>
+                <ListItemText primary="Danh mục hàng hóa" />
+              </ListItemButton>
+            )}
+            {/* List User - Chỉ hiển thị cho admin */}
+            {role === "admin" && (
+              <ListItemButton onClick={() => navigate("/suppliers")}>
+                <ListItemIcon>
+                  <RecentActors />
+                </ListItemIcon>
+                <ListItemText primary="Nhà cung cấp" />
+              </ListItemButton>
+            )}
             {/* List User - Chỉ hiển thị cho admin */}
             {role === "admin" && (
               <ListItemButton onClick={() => navigate("/users")}>
@@ -196,7 +216,6 @@ const Sidebar = () => {
                 <ListItemText primary="Nhân viên" />
               </ListItemButton>
             )}
-
             {/* Settings - Hiển thị cho tất cả các role */}
             <ListItemButton onClick={() => navigate("/settings")}>
               <ListItemIcon>
@@ -213,10 +232,8 @@ const Sidebar = () => {
               <ListItemText primary="Hồ sơ" />
             </ListItemButton>
           </List>
-
           {/* Phần đẩy nút Logout xuống dưới cùng */}
           <Box sx={{ flexGrow: 1 }} /> {/* Chiếm hết không gian còn lại */}
-
           {/* Nút Logout */}
           <List>
             <Divider />
