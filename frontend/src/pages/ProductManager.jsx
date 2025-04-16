@@ -74,17 +74,28 @@ const ProductManager = () => {
   });
   const [imagePreviews, setImagePreviews] = useState([]);
   const [selectedImages, setSelectedImages] = useState([]);
+  const token = localStorage.getItem("authToken");
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [productsRes, categoriesRes, suppliersRes] = await Promise.all([
-          axios.get("http://localhost:8000/api/products/product/all"),
-          axios.get("http://localhost:8000/api/categories"),
-          axios.get("http://localhost:8000/api/suppliers"),
+          axios.get("http://localhost:8000/api/products", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get("http://localhost:8000/api/categories", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get("http://localhost:8000/api/suppliers", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
         ]);
 
-        setProducts(productsRes.data);
+        // Log dữ liệu trả về để kiểm tra
+        console.log("Products API response:", productsRes.data);
+
+        // Đảm bảo dữ liệu là mảng trước khi gán
+        setProducts(Array.isArray(productsRes.data.data) ? productsRes.data.data : []);
         setCategories(categoriesRes.data);
         setSuppliers(suppliersRes.data);
         setIsLoading(false);
@@ -332,7 +343,7 @@ const ProductManager = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {products.map((product, index) => (
+            {Array.isArray(products) && products.map((product, index) => (
               <TableRow key={product._id}>
                 <TableCell>{index + 1}</TableCell>
                 <TableCell>{product.category_name}</TableCell>
