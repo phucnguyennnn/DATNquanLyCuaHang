@@ -15,7 +15,6 @@ import ProductManager from "../pages/ProductManager";
 import ProductsPage from "../pages/ProductsPage";
 import Settings from "../pages/Settings";
 import Profile from "../pages/Profile";
-import Supplier from "../pages/Supplier";
 import User from "../pages/User";
 import PurchaseOrder from "../pages/PurchaseOrder";
 import GoodReceipt from "../pages/GoodReceipt";
@@ -23,6 +22,8 @@ import AddToInventoy from "../pages/AddToInventory";
 import Cart from "../pages/Cart";
 import ProductPage from "../pages/ProductsPage";
 import CartPage from "../pages/Cart";
+import CategoryPage from "../pages/CategoryPage";
+import SupplierPage from "../pages/SupplierPage";
 
 const useAuth = () => {
   const [isLoggedIn, setIsLoggedIn] = React.useState(false);
@@ -60,12 +61,13 @@ const AppRouter = () => {
           <Route path="products_page" element={<ProductPage />} />
           <Route path="settings" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
-          <Route path="supplier" element={<Supplier />} />
+          <Route path="suppliers" element={<SupplierPage />} />
           <Route path="users" element={<User />} />
           <Route path="inventory/purchase-order" element={<PurchaseOrder />} />
           <Route path="inventory/receipt" element={<GoodReceipt />} />
           <Route path="inventory/add-shipment" element={<AddToInventoy />} />
           <Route path="cart_page" element={<CartPage />} />
+          <Route path="categories" element={<CategoryPage />} />
         </Route>
         
         {/* 404 page */}

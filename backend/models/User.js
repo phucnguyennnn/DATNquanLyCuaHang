@@ -86,22 +86,15 @@ const userSchema = new mongoose.Schema({
 // Hook pre-save duy nhất để hash password và cập nhật passwordChangedAt
 userSchema.pre('save', async function(next) {
     if (!this.isModified('password')) return next();
-
+    
     try {
-        const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
-        
-        // Chỉ cập nhật passwordChangedAt nếu không phải là user mới
-        if (!this.isNew) {
-            this.passwordChangedAt = Date.now() - 1000; // Trừ 1 giây để đảm bảo token tạo sau
-        }
-        
-        next();
+      const salt = await bcrypt.genSalt(10);
+      this.password = await bcrypt.hash(this.password, salt);
+      next();
     } catch (error) {
-        next(error);
+      next(error);
     }
-});
-
+  });
 // Generate JWT token
 userSchema.methods.generateAuthToken = function() {
     return jwt.sign(

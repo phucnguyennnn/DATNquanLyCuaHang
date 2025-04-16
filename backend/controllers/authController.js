@@ -111,86 +111,87 @@ const authController = {
       res.status(500).json({ error: "Lỗi hệ thống" });
     }
   },
- 
-createEmployee: async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Không có quyền thực hiện' });
-    }
-
-    const { username, fullName, email, phone, role } = req.body;
-
-    // Validate email
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: 'Email không hợp lệ' });
-    }
-
-    // Kiểm tra user tồn tại
-    const existingUser = await User.findOne({ $or: [{ username }, { email }] });
-    if (existingUser) {
-      return res.status(400).json({ 
-        error: existingUser.username === username 
-          ? 'Username đã tồn tại' 
-          : 'Email đã tồn tại'
-      });
-    }
-
-    // Tạo mật khẩu
-    const randomPassword = crypto.randomBytes(8).toString('hex');
-    const hashedPassword = await bcrypt.hash(randomPassword, 10);
-
-    // Tạo user mới
-    const newUser = new User({
-      username,
-      password: hashedPassword,
-      fullName,
-      email,
-      phone,
-      role: role || 'employee',
-      isActive: true
-    });
-
-    const savedUser = await newUser.save();
-
-    // Gửi email
+  createEmployee: async (req, res) => {
     try {
-      const emailContent = `
-        <h2>Thông tin tài khoản</h2>
-        <p>Xin chào ${fullName},</p>
-        <p>Tài khoản nhân viên của bạn đã được tạo:</p>
-        <ul>
-          <li><strong>Username:</strong> ${username}</li>
-          <li><strong>Mật khẩu tạm thời:</strong> ${randomPassword}</li>
-        </ul>
-        <p>Vui lòng đổi mật khẩu ngay sau khi đăng nhập.</p>
-      `;
-
-      await sendEmail({
-        to: email.trim(),
-        subject: 'Tài khoản nhân viên đã được tạo',
-        html: emailContent
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Không có quyền thực hiện' });
+      }
+  
+      const { username, fullName, email, phone, role } = req.body;
+  
+      // Validate email
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'Email không hợp lệ' });
+      }
+  
+      // Kiểm tra user tồn tại
+      const existingUser = await User.findOne({ $or: [{ username }, { email }] });
+      if (existingUser) {
+        return res.status(400).json({ 
+          error: existingUser.username === username 
+            ? 'Username đã tồn tại' 
+            : 'Email đã tồn tại'
+        });
+      }
+  
+      // Tạo mật khẩu
+      const randomPassword = crypto.randomBytes(8).toString('hex');
+      const salt = await bcrypt.genSalt(10); // Thêm salt
+      const hashedPassword = await bcrypt.hash(randomPassword, salt); // Hash với salt
+  
+      // Tạo user mới
+      const newUser = new User({
+        username,
+        password: randomPassword, 
+        fullName,
+        email,
+        phone,
+        role: role || 'employee',
+        isActive: true,
+        emailVerified: true // Thêm trường này để không cần xác thực email
       });
-
-    } catch (emailError) {
-      console.error('Failed to send email:', emailError);
+  
+      const savedUser = await newUser.save();
+  
+      // Gửi email
+      try {
+        const emailContent = `
+          <h2>Thông tin tài khoản</h2>
+          <p>Xin chào ${fullName},</p>
+          <p>Tài khoản nhân viên của bạn đã được tạo:</p>
+          <ul>
+            <li><strong>Username:</strong> ${username}</li>
+            <li><strong>Mật khẩu tạm thời:</strong> ${randomPassword}</li>
+          </ul>
+          <p>Vui lòng đổi mật khẩu ngay sau khi đăng nhập.</p>
+        `;
+  
+        await sendEmail({
+          to: email.trim(),
+          subject: 'Tài khoản nhân viên đã được tạo',
+          html: emailContent
+        });
+  
+      } catch (emailError) {
+        console.error('Failed to send email:', emailError);
+        const { password: _, ...userInfo } = savedUser._doc;
+        return res.status(201).json({
+          ...userInfo,
+          warning: 'Tài khoản đã được tạo nhưng không thể gửi email'
+        });
+      }
+  
       const { password: _, ...userInfo } = savedUser._doc;
-      return res.status(201).json({
-        ...userInfo,
-        warning: 'Tài khoản đã được tạo nhưng không thể gửi email'
+      res.status(201).json(userInfo);
+  
+    } catch (error) {
+      console.error('Error in createEmployee:', error);
+      res.status(500).json({ 
+        error: 'Lỗi hệ thống',
+        details: error.message 
       });
     }
-
-    const { password: _, ...userInfo } = savedUser._doc;
-    res.status(201).json(userInfo);
-
-  } catch (error) {
-    console.error('Error in createEmployee:', error);
-    res.status(500).json({ 
-      error: 'Lỗi hệ thống',
-      details: error.message 
-    });
-  }
-},
+  },
   // Yêu cầu reset mật khẩu (gửi OTP)
   requestPasswordReset: async (req, res) => {
     try {
@@ -287,7 +288,6 @@ createEmployee: async (req, res) => {
       { expiresIn: "7d" }
     );
   },
-
   loginUser: async (req, res) => {
     try {
       const { username, password } = req.body;
@@ -297,10 +297,12 @@ createEmployee: async (req, res) => {
         return res.status(400).json({ error: "Tên đăng nhập không tồn tại" });
       if (!user.isActive)
         return res.status(403).json({ error: "Tài khoản đã bị vô hiệu hóa" });
-
-      const validPassword = await user.comparePassword(password);
-      if (!validPassword)
-        return res.status(400).json({ error: "Mật khẩu không chính xác" });
+      if (!user.emailVerified && user.role !== 'customer') // Thêm điều kiện này
+        return res.status(403).json({ error: "Tài khoản chưa được xác thực" });
+        const validPassword = await user.comparePassword(password);
+        if (!validPassword) {
+          return res.status(400).json({ error: "Mật khẩu không chính xác" });
+        }
 
       const accessToken = authController.generateAccessToken(user);
       const refreshToken = authController.generateRefreshToken(user);
@@ -324,7 +326,6 @@ createEmployee: async (req, res) => {
       res.status(500).json({ error: "Lỗi hệ thống" });
     }
   },
-
   requestRefreshToken: async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) return res.status(401).json({ error: "Không xác thực" });
