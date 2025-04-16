@@ -25,19 +25,22 @@ import CartPage from "../pages/Cart";
 import CategoryPage from "../pages/CategoryPage";
 import SupplierPage from "../pages/SupplierPage";
 
+
 const useAuth = () => {
-  const [isLoggedIn, setIsLoggedIn] = React.useState(false);
+  const [isLoggedIn, setIsLoggedIn] = React.useState(() => !!localStorage.getItem("authToken"));
 
   React.useEffect(() => {
-    const checkLogin = () => {
-      const authToken = localStorage.getItem("authToken");
-      setIsLoggedIn(!!authToken);
+    const handleStorageChange = () => {
+      setIsLoggedIn(!!localStorage.getItem("authToken"));
     };
-    checkLogin();
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
   return isLoggedIn;
 };
+
 
 const AppRouter = () => {
   const isLoggedIn = useAuth();

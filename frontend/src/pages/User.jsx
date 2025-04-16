@@ -18,10 +18,15 @@ const ListUsers = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+   useEffect(() => {
     const fetchUsers = async () => {
+      const token = localStorage.getItem('authToken');
       try {
-        const response = await axios.get('http://localhost:8000/api/user');
+        const response = await axios.get('http://localhost:8000/api/user', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
         setUsers(response.data);
       } catch (err) {
         setError('Không thể tải danh sách người dùng');

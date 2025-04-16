@@ -39,17 +39,43 @@ const ProductManagement = () => {
     baseURL: 'http://localhost:8000/api',
     headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
   });
+// <<<<<<< Duong
+// =======
+//   const [imagePreviews, setImagePreviews] = useState([]);
+//   const [selectedImages, setSelectedImages] = useState([]);
+//   const token = localStorage.getItem("authToken");
+// >>>>>>> main
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [productsRes, categoriesRes, suppliersRes] = await Promise.all([
-          api.get('/products'),
-          api.get('/categories'),
-          api.get('/suppliers')
-        ]);
-        setProducts(productsRes.data.data);
-        setCategories(categoriesRes.data.data);
+// <<<<<<< Duong
+//           api.get('/products'),
+//           api.get('/categories'),
+//           api.get('/suppliers')
+//         ]);
+//         setProducts(productsRes.data.data);
+//         setCategories(categoriesRes.data.data);
+// =======
+//           axios.get("http://localhost:8000/api/products", {
+//             headers: { Authorization: `Bearer ${token}` },
+//           }),
+//           axios.get("http://localhost:8000/api/categories", {
+//             headers: { Authorization: `Bearer ${token}` },
+//           }),
+//           axios.get("http://localhost:8000/api/suppliers", {
+//             headers: { Authorization: `Bearer ${token}` },
+//           }),
+//         ]);
+
+//         // Log dữ liệu trả về để kiểm tra
+//         console.log("Products API response:", productsRes.data);
+
+//         // Đảm bảo dữ liệu là mảng trước khi gán
+//         setProducts(Array.isArray(productsRes.data.data) ? productsRes.data.data : []);
+//         setCategories(categoriesRes.data);
+// >>>>>>> main
         setSuppliers(suppliersRes.data);
         setLoading(false);
       } catch (error) {
@@ -142,42 +168,75 @@ const ProductManagement = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {categories.map(category => (
-              <React.Fragment key={category._id}>
-                <TableRow sx={{ backgroundColor: '#e8eaf6', cursor: 'pointer' }} onClick={() => toggleCategory(category._id)}>
-                  <TableCell colSpan={6}>
-                    <Box display="flex" alignItems="center">
-                      {openCategories[category._id] ? <ExpandLess /> : <ExpandMore />}
-                      <Typography variant="h6">{category.name}</Typography>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell colSpan={6} sx={{ p: 0 }}>
-                    <Collapse in={openCategories[category._id]}>
-                      <Table>
-                        <TableBody>
-                          {filteredProducts.filter(p => p.category._id === category._id).map(product => (
-                            <TableRow key={product._id}>
-                              <TableCell>{product.name}</TableCell>
-                              <TableCell>{product.SKU}</TableCell>
-                              <TableCell>${product.price}</TableCell>
-                              <TableCell>{product.category.name}</TableCell>
-                              <TableCell>
-                                {product.suppliers.map(s => s.supplier.name).join(', ')}
-                              </TableCell>
-                              <TableCell>
-                                <IconButton onClick={() => handleEdit(product)}><Edit color="primary" /></IconButton>
-                                <IconButton onClick={() => handleDelete(product._id)}><Delete color="error" /></IconButton>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </Collapse>
-                  </TableCell>
-                </TableRow>
-              </React.Fragment>
+// <<<<<<< Duong
+//             {categories.map(category => (
+//               <React.Fragment key={category._id}>
+//                 <TableRow sx={{ backgroundColor: '#e8eaf6', cursor: 'pointer' }} onClick={() => toggleCategory(category._id)}>
+//                   <TableCell colSpan={6}>
+//                     <Box display="flex" alignItems="center">
+//                       {openCategories[category._id] ? <ExpandLess /> : <ExpandMore />}
+//                       <Typography variant="h6">{category.name}</Typography>
+//                     </Box>
+//                   </TableCell>
+//                 </TableRow>
+//                 <TableRow>
+//                   <TableCell colSpan={6} sx={{ p: 0 }}>
+//                     <Collapse in={openCategories[category._id]}>
+//                       <Table>
+//                         <TableBody>
+//                           {filteredProducts.filter(p => p.category._id === category._id).map(product => (
+//                             <TableRow key={product._id}>
+//                               <TableCell>{product.name}</TableCell>
+//                               <TableCell>{product.SKU}</TableCell>
+//                               <TableCell>${product.price}</TableCell>
+//                               <TableCell>{product.category.name}</TableCell>
+//                               <TableCell>
+//                                 {product.suppliers.map(s => s.supplier.name).join(', ')}
+//                               </TableCell>
+//                               <TableCell>
+//                                 <IconButton onClick={() => handleEdit(product)}><Edit color="primary" /></IconButton>
+//                                 <IconButton onClick={() => handleDelete(product._id)}><Delete color="error" /></IconButton>
+//                               </TableCell>
+//                             </TableRow>
+//                           ))}
+//                         </TableBody>
+//                       </Table>
+//                     </Collapse>
+//                   </TableCell>
+//                 </TableRow>
+//               </React.Fragment>
+// =======
+//             {Array.isArray(products) && products.map((product, index) => (
+//               <TableRow key={product._id}>
+//                 <TableCell>{index + 1}</TableCell>
+//                 <TableCell>{product.category_name}</TableCell>
+//                 <TableCell>
+//                   {product.category?.category_name || "N/A"}
+//                 </TableCell>
+//                 <TableCell>{product.price.toLocaleString()} VND</TableCell>
+//                 <TableCell>{product.SKU}</TableCell>
+//                 <TableCell>{product.unit}</TableCell>
+//                 <TableCell>
+//                   <Chip
+//                     label={
+//                       product.status === "active"
+//                         ? "Hoạt động"
+//                         : "Không hoạt động"
+//                     }
+//                     color={product.status === "active" ? "success" : "error"}
+//                     size="small"
+//                   />
+//                 </TableCell>
+//                 <TableCell>
+//                   <IconButton onClick={() => handleOpenEditDialog(product)}>
+//                     <EditIcon color="primary" />
+//                   </IconButton>
+//                   <IconButton onClick={() => handleDeleteProduct(product._id)}>
+//                     <DeleteIcon color="error" />
+//                   </IconButton>
+//                 </TableCell>
+//               </TableRow>
+// >>>>>>> main
             ))}
           </TableBody>
         </Table>
