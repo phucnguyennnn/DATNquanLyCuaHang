@@ -55,10 +55,7 @@ const LoginPage = () => {
       // Kiểm tra userRole và chuyển hướng phù hợp
       if (response.data.role === "customer") {
         navigate("/products_page");
-      } 
-      if (response.data.role === "admin") {
-        navigate("/homepage");
-      }else {
+      } else {
         navigate("/homepage");
       }
     } catch (err) {

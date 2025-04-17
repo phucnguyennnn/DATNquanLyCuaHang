@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const productController = require('../controllers/productControlller');
 const upload = require('../middlewares/upload');
-const { protect, restrictTo } = require('../middlewares/authmiddleware');
+const { protect, restrictTo } = require('../middlewares/authMiddleware');
 
 // Public routes
 router.get('/', productController.getAllProducts);
