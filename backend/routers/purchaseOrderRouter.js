@@ -1,26 +1,15 @@
-const purchaseOrderController = require("../controllers/purchaseOrderController");
-const middlewareController = require("../middlewares/middelwareController");
-const router = require("express").Router();
+const express = require('express');
+const router = express.Router();
+const purchaseOrderController = require('../controllers/purchaseOrderController');
+const { protect, restrictTo } = require('../middlewares/authMiddleware');
 
-// Tạo phiếu đặt mua
-router.post(
-  "/",
-  //middlewareController.verifyToken,
-  purchaseOrderController.createPurchaseOrder
-);
+const adminProtect = [protect, restrictTo('admin')];
 
-// Lấy tất cả phiếu đặt mua
-router.get(
-  "/",
- // middlewareController.verifyToken,
-  purchaseOrderController.getAllPurchaseOrders
-);
-
-// Lấy chi tiết phiếu đặt mua theo ID
-router.get(
-  "/:id",
- // middlewareController.verifyToken,
-  purchaseOrderController.getPurchaseOrderById
-);
+router.post('/', adminProtect, purchaseOrderController.createPurchaseOrder);
+router.get('/', adminProtect, purchaseOrderController.getAllPurchaseOrders);
+router.get('/:id', adminProtect, purchaseOrderController.getPurchaseOrderById);
+router.put('/:id', adminProtect, purchaseOrderController.updatePurchaseOrder);
+router.delete('/:id', adminProtect, purchaseOrderController.deletePurchaseOrder);
+router.post('/:id/resend-email', adminProtect, purchaseOrderController.resendPurchaseOrderEmail);
 
 module.exports = router;
