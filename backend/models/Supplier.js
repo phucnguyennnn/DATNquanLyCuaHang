@@ -107,6 +107,16 @@ const supplierSchema = new mongoose.Schema({
     isPrimary: {
       type: Boolean,
       default: false
+    },
+    unit: {
+      type: String,
+      required: true,
+      enum: ['thùng', 'bao', 'chai', 'lọ', 'hộp', 'gói', 'cái', 'kg', 'liter']
+    },
+    conversionRate: {
+      type: Number,
+      required: true,
+      min: 1
     }
   }]
 }, { 
