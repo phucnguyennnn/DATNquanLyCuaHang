@@ -1,123 +1,151 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Box,
-  Typography,
-  Paper,
-  Stack,
-  Button,
-  Divider,
-  Chip,
-  useMediaQuery,
-  useTheme
-} from '@mui/material';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  TextField,
+  Button,
+  Box,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+} from '@mui/material';
 
-const ConfirmGoodReceipt = () => {
-  const [receipts, setReceipts] = useState([]);
-  const [loading, setLoading] = useState(false);
+const ConfirmGoodReceiptPage = () => {
+  const [goodReceipts, setGoodReceipts] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [openDialog, setOpenDialog] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
-  const [createdBatches, setCreatedBatches] = useState([]);
-
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  const fetchReceipts = async () => {
-    try {
-      const res = await axios.get('http://localhost:8000/api/goodReceipt');
-      const pending = res.data.filter((r) => r.status !== 'received');
-      setReceipts(pending);
-    } catch (error) {
-      console.error('Fetch error:', error);
-    }
-  };
 
   useEffect(() => {
-    fetchReceipts();
+    const fetchGoodReceipts = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        const response = await axios.get('http://localhost:8000/api/goodReceipt', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setGoodReceipts(response.data.filter((receipt) => receipt.status === 'draft'));
+      } catch (error) {
+        console.error('Lỗi khi lấy phiếu nhập kho:', error);
+      }
+    };
+
+    fetchGoodReceipts();
   }, []);
 
-  const handleConfirm = async (receiptId) => {
+  const handleConfirm = async () => {
     try {
-      setLoading(true);
-      const res = await axios.patch(`http://localhost:8000/api/goodReceipt/confirm/${receiptId}`);
-      alert('Xác nhận thành công! Lô hàng đã được chuyển vào kho.');
-      setCreatedBatches(res.data.batches);
-      setSelectedReceipt(receiptId);
-      fetchReceipts(); // cập nhật danh sách
+      const token = localStorage.getItem('authToken');
+      await axios.patch(
+        `http://localhost:8000/api/goodReceipt/confirm/${selectedReceipt._id}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      alert('Xác nhận nhập kho thành công.');
+      setOpenDialog(false);
+      window.location.reload();
     } catch (error) {
-      console.error(error);
-      alert('Xác nhận thất bại!');
-    } finally {
-      setLoading(false);
+      console.error('Lỗi khi xác nhận nhập kho:', error);
+      alert('Xác nhận nhập kho thất bại.');
     }
   };
 
+  const handleOpenDialog = (receipt) => {
+    setSelectedReceipt(receipt);
+    setOpenDialog(true);
+  };
+
+  const filteredGoodReceipts = goodReceipts.filter((receipt) =>
+    receipt.supplier.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <Box sx={{ p: 4 }}>
-      <Typography variant="h5" gutterBottom fontWeight="bold">
-        Xác nhận chuyển lô hàng từ phiếu nhập kho vào kho hàng
-      </Typography>
-
-      <Stack spacing={3}>
-        <Box
-          sx={{
-            maxHeight: '500px', // Giới hạn chiều cao của Box
-            overflowY: 'auto', // Thêm cuộn dọc nếu cần
-            mb: 4, // Thêm khoảng cách dưới
-          }}
-        >
-          {receipts.map((receipt) => (
-            <Paper key={receipt._id} sx={{ p: 2, mb: 2, border: '1px solid #ddd' }}>
-              <Stack direction={isMobile ? 'column' : 'row'} justifyContent="space-between" alignItems="center" spacing={2}>
-                <Box>
-                  <Typography fontWeight="bold">Phiếu nhập: {receipt._id}</Typography>
-                  <Typography>Nhà cung cấp: {receipt.supplierId?.name}</Typography>
-                  <Typography>Số mặt hàng: {receipt.items.length}</Typography>
-                  <Chip
-                    label={receipt.status}
-                    color={receipt.status === 'completed' ? 'warning' : 'default'}
-                    size="small"
-                    sx={{ mt: 1 }}
-                  />
-                </Box>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  disabled={loading}
-                  onClick={() => handleConfirm(receipt._id)}
-                  size="large"
-                >
-                  {loading && selectedReceipt === receipt._id
-                    ? 'Đang xác nhận...'
-                    : 'Xác nhận nhập kho'}
-                </Button>
-              </Stack>
-            </Paper>
-          ))}
-        </Box>
-      </Stack>
-
-      {/* Danh sách lô hàng được tạo */}
-      {createdBatches.length > 0 && (
-        <Box mt={5}>
-          <Divider />
-          <Typography variant="h6" mt={3} mb={2} fontWeight="bold">
-            Danh sách lô hàng được tạo:
-          </Typography>
-          <Stack spacing={2}>
-            {createdBatches.map((batch) => (
-              <Paper key={batch._id} sx={{ p: 2, backgroundColor: '#f1f8e9' }}>
-                <Typography fontWeight="bold">Lô hàng: {batch._id}</Typography>
-                <Typography>Sản phẩm: {batch.productId}</Typography>
-                <Typography>Số lượng: {batch.quantity}</Typography>
-                <Typography>Ngày sản xuất: {batch.manufacture_day}</Typography>
-                <Typography>Hạn sử dụng: {batch.expiry_day}</Typography>
-              </Paper>
+    <Box sx={{ p: 3 }}>
+      <h2>Xác nhận phiếu nhập kho</h2>
+      <TextField
+        label="Tìm kiếm theo nhà cung cấp"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        sx={{ mb: 2, width: '100%' }}
+      />
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Mã phiếu nhập</TableCell>
+              <TableCell>Nhà cung cấp</TableCell>
+              <TableCell>Ngày nhập</TableCell>
+              <TableCell>Sản phẩm</TableCell>
+              <TableCell>Hành động</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredGoodReceipts.map((receipt) => (
+              <TableRow key={receipt._id}>
+                <TableCell>{receipt._id}</TableCell>
+                <TableCell>{receipt.supplier.name}</TableCell>
+                <TableCell>{new Date(receipt.receiptDate).toLocaleDateString()}</TableCell>
+                <TableCell>
+                  {receipt.items.map((item) => (
+                    <div key={item._id}>
+                      {item.product.name} - SL: {item.quantity}
+                    </div>
+                  ))}
+                </TableCell>
+                <TableCell>
+                  <Button variant="contained" color="primary" onClick={() => handleOpenDialog(receipt)}>
+                    Xác nhận nhập kho
+                  </Button>
+                </TableCell>
+              </TableRow>
             ))}
-          </Stack>
-        </Box>
-      )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="md">
+        <DialogTitle>Xác nhận phiếu nhập kho</DialogTitle>
+        <DialogContent>
+          {selectedReceipt && (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Sản phẩm</TableCell>
+                    <TableCell>Số lượng</TableCell>
+                    <TableCell>Ngày sản xuất</TableCell>
+                    <TableCell>Ngày hết hạn</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {selectedReceipt.items.map((item) => (
+                    <TableRow key={item._id}>
+                      <TableCell>{item.product.name}</TableCell>
+                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>{new Date(item.manufactureDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(item.expiryDate).toLocaleDateString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDialog(false)}>Hủy</Button>
+          <Button variant="contained" onClick={handleConfirm}>
+            Xác nhận
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
-export default ConfirmGoodReceipt;
+export default ConfirmGoodReceiptPage;

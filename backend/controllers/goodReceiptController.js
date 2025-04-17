@@ -1,4 +1,5 @@
-const GoodReceipt = require("../models/Goodreceipt");
+const mongoose = require("mongoose");
+const GoodReceipt = require("../models/GoodReceipt");
 const Batch = require("../models/Batch");
 const Product = require("../models/Product");
 const PurchaseOrder = require("../models/PurchaseOrder");
@@ -6,39 +7,62 @@ const Inventory = require("../models/Inventory");
 const Supplier = require("../models/Supplier");
 
 const goodReceiptController = {
-  // Tạo phiếu nhập kho
-  createGoodReceipt: async (req, res) => {
+  createGoodReceiptFromPurchaseOrder: async (req, res) => {
     try {
-      const { purchaseOrderId, items } = req.body;
+      const { purchaseOrderId } = req.params;
+      const { items } = req.body;
 
-      const order = await PurchaseOrder.findById(purchaseOrderId);
-      if (!order)
+      const purchaseOrder = await PurchaseOrder.findById(purchaseOrderId)
+        .populate("supplier")
+        .populate("items.product");
+
+      if (!purchaseOrder) {
         return res.status(404).json({ message: "Purchase Order not found" });
+      }
+
+      if (
+        purchaseOrder.status === "completed" ||
+        purchaseOrder.status === "cancelled"
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Purchase Order is already completed or cancelled" });
+      }
+
+      const goodReceiptItems = items.map((item) => ({
+        product: item.product,
+        quantity: item.quantity,
+        manufactureDate: new Date(),
+        expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      }));
 
       const goodReceipt = new GoodReceipt({
-        purchaseOrderId,
-        supplierId: order.supplierId,
-        items,
+        purchaseOrder: purchaseOrderId,
+        supplier: purchaseOrder.supplier._id,
+        receiptDate: new Date(),
+        receivedBy: req.user.id,
+        status: "draft",
+        items: goodReceiptItems,
+        notes: `Created from Purchase Order: ${purchaseOrderId}`,
       });
 
-      await goodReceipt.save();
+      const savedGoodReceipt = await goodReceipt.save();
 
-      // Cập nhật trạng thái đơn mua hàng
-      order.status = "completed";
-      await order.save();
-
-      res.status(201).json(goodReceipt);
+      res.status(201).json(savedGoodReceipt);
     } catch (error) {
+      console.error(
+        "Error creating Good Receipt from Purchase Order:",
+        error
+      );
       res.status(500).json({ error: error.message });
     }
   },
 
-  // Lấy tất cả phiếu nhập kho
   getAllGoodReceipts: async (req, res) => {
     try {
       const receipts = await GoodReceipt.find()
-        .populate("supplierId")
-        .populate("items.productId");
+        .populate("supplier")
+        .populate("items.product");
 
       res.status(200).json(receipts);
     } catch (error) {
@@ -46,12 +70,11 @@ const goodReceiptController = {
     }
   },
 
-  // Lấy chi tiết phiếu nhập kho theo ID
   getGoodReceiptById: async (req, res) => {
     try {
       const receipt = await GoodReceipt.findById(req.params.id)
-        .populate("supplierId")
-        .populate("items.productId");
+        .populate("supplier")
+        .populate("items.product");
 
       if (!receipt) {
         return res
@@ -65,10 +88,11 @@ const goodReceiptController = {
     }
   },
 
-  // Xác nhận nhập kho và tạo lô hàng
   confirmGoodReceipt: async (req, res) => {
     try {
-      const receipt = await GoodReceipt.findById(req.params.id);
+      const receipt = await GoodReceipt.findById(req.params.id).populate(
+        "items.product"
+      );
       if (!receipt)
         return res.status(404).json({ message: "Phiếu nhập không tồn tại." });
 
@@ -79,56 +103,40 @@ const goodReceiptController = {
       }
 
       const batchPromises = receipt.items.map(async (item) => {
-        const product = await Product.findById(item.productId);
+        const product = item.product;
         if (!product)
-          throw new Error(`Không tìm thấy sản phẩm ID: ${item.productId}`);
+          throw new Error(`Không tìm thấy sản phẩm ID: ${item.product}`);
 
-        const supplier = await Supplier.findById(receipt.supplierId);
+        const supplier = await Supplier.findById(receipt.supplier);
         if (!supplier)
           throw new Error(
-            `Không tìm thấy nhà cung cấp ID: ${receipt.supplierId}`
+            `Không tìm thấy nhà cung cấp ID: ${receipt.supplier}`
           );
 
-        // Tạo lô hàng mới
         const batch = new Batch({
-          manufacture_day: item.manufacture_day,
-          expiry_day: item.expiry_day,
-          quantity: item.quantity,
+          manufacture_day: item.manufactureDate,
+          expiry_day: item.expiryDate,
+          initial_quantity: item.quantity,
+          remaining_quantity: item.quantity,
           status: "active",
           product: product._id,
           supplier: supplier._id,
-          goodReceiptId: receipt._id,
+          goodReceipt: receipt._id,
         });
 
         const savedBatch = await batch.save();
 
-        // Thêm batch vào product.batches
-        product.batches = product.batches || [];
-        product.batches.push(savedBatch._id);
-        await product.save();
-
-        // Cập nhật tồn kho
-        let inventory = await Inventory.findOne({ productId: item.productId });
-        if (!inventory) {
-          inventory = new Inventory({
-            productId: item.productId,
-            warehouse_stock: item.quantity,
-            shelf_stock: 0,
-            total_stock: item.quantity,
-          });
-        } else {
-          inventory.warehouse_stock += item.quantity;
-          inventory.total_stock += item.quantity;
-        }
-
-        await inventory.save();
+        await Inventory.findOneAndUpdate(
+          { product: product._id },
+          { $inc: { warehouse_stock: item.quantity } },
+          { upsert: true, new: true }
+        );
 
         return savedBatch;
       });
 
       const createdBatches = await Promise.all(batchPromises);
 
-      // Cập nhật trạng thái phiếu nhập
       receipt.status = "received";
       await receipt.save();
 

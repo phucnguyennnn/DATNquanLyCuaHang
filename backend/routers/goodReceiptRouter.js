@@ -1,17 +1,28 @@
 const express = require("express");
 const router = express.Router();
 const goodReceiptController = require("../controllers/goodReceiptController");
+const { protect, restrictTo } = require("../middlewares/authmiddleware");
 
-// Xác nhận nhập kho
-router.patch("/confirm/:id", goodReceiptController.confirmGoodReceipt);
+// Route để tạo phiếu nhập kho từ phiếu đặt hàng (Admin only)
+router.post(
+  "/from-purchase-order/:purchaseOrderId",
+  protect,
+  restrictTo("admin"),
+  goodReceiptController.createGoodReceiptFromPurchaseOrder
+);
 
-// Tạo thủ công (nếu cần)
-router.post("/", goodReceiptController.createGoodReceipt);
+// Route để xác nhận phiếu nhập kho và tạo lô hàng (Admin only)
+router.patch(
+  "/confirm/:id",
+  protect,
+  restrictTo("admin"),
+  goodReceiptController.confirmGoodReceipt
+);
 
-// Lấy danh sách tất cả phiếu nhập kho
-router.get("/", goodReceiptController.getAllGoodReceipts);
+// Route để lấy tất cả phiếu nhập kho (Authenticated users)
+router.get("/", protect, goodReceiptController.getAllGoodReceipts);
 
-// Lấy chi tiết một phiếu nhập kho theo ID
-router.get("/:id", goodReceiptController.getGoodReceiptById);
+// Route để lấy chi tiết phiếu nhập kho theo ID (Authenticated users)
+router.get("/:id", protect, goodReceiptController.getGoodReceiptById);
 
 module.exports = router;

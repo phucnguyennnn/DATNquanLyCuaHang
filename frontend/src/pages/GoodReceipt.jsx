@@ -28,8 +28,11 @@ const CreateGoodReceipt = () => {
   // Hàm fetchOrders được tách ra để tái sử dụng
   const fetchOrders = async () => {
     try {
-      const res = await axios.get("http://localhost:8000/api/purchaseOrder");
-      setOrders(res.data.filter((o) => o.status === "pending"));
+      const token = localStorage.getItem("authToken");
+      const res = await axios.get("http://localhost:8000/api/purchaseOrder", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setOrders(res.data);
     } catch (error) {
       console.error(error);
     }
@@ -42,15 +45,19 @@ const CreateGoodReceipt = () => {
   // Khi chọn phiếu đặt mua
   const handleSelectOrder = async (orderId) => {
     try {
+      const token = localStorage.getItem("authToken");
       const res = await axios.get(
-        `http://localhost:8000/api/purchaseOrder/${orderId}`
+        `http://localhost:8000/api/purchaseOrder/${orderId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
       setSelectedOrder(res.data);
 
       // Khởi tạo batch info
       setBatchInfo(
         res.data.items.map((item) => ({
-          productId: item.productId._id,
+          productId: item.product._id,
           quantity: item.quantity,
           manufacture_day: "",
           expiry_day: "",
@@ -74,10 +81,22 @@ const CreateGoodReceipt = () => {
 
     try {
       setLoading(true);
-      await axios.post("http://localhost:8000/api/goodReceipt", {
-        purchaseOrderId: selectedOrder._id,
-        items: batchInfo,
-      });
+      const token = localStorage.getItem("authToken");
+      await axios.post(
+        "http://localhost:8000/api/goodReceipt/from-purchase-order/" +
+          selectedOrder._id,
+        {
+          items: batchInfo.map((item) => ({
+            product: item.productId,
+            quantity: item.quantity,
+            manufactureDate: item.manufacture_day,
+            expiryDate: item.expiry_day,
+          })),
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       alert("Tạo phiếu nhập kho thành công!");
       setSelectedOrder(null);
@@ -114,7 +133,7 @@ const CreateGoodReceipt = () => {
         >
           {orders.map((order) => (
             <MenuItem key={order._id} value={order._id}>
-              {order._id} - {order.supplierId?.name || "Không rõ nhà cung cấp"}
+              {order._id} - {order.supplierName || "Không rõ nhà cung cấp"}
             </MenuItem>
           ))}
         </Select>
@@ -130,12 +149,12 @@ const CreateGoodReceipt = () => {
           <Stack spacing={3}>
             {selectedOrder.items.map((item, index) => (
               <Paper
-                key={item.productId._id}
+                key={item.product._id}
                 elevation={2}
                 sx={{ p: 2, backgroundColor: "#fff" }}
               >
                 <Typography fontWeight="bold" mb={2}>
-                  {item.productId?.name}
+                  {item.product?.name}
                 </Typography>
 
                 <Grid container spacing={2}>
