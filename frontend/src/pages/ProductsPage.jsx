@@ -40,12 +40,22 @@ const ProductPage = () => {
           fetch('http://localhost:8000/api/products'),
           fetch('http://localhost:8000/api/categories')
         ]);
+
+        if (!productsRes.ok || !categoriesRes.ok) {
+          throw new Error('Failed to fetch data from API');
+        }
+
         const [productsData, categoriesData] = await Promise.all([
           productsRes.json(),
           categoriesRes.json()
         ]);
-        setProducts(productsData);
-        setCategories(categoriesData);
+
+        // Log dữ liệu trả về để kiểm tra
+        console.log('Products:', productsData);
+        console.log('Categories:', categoriesData);
+
+        setProducts(Array.isArray(productsData) ? productsData : []);
+        setCategories(Array.isArray(categoriesData) ? categoriesData : []);
         setLoading(false);
       } catch (err) {
         console.error('Fetch error:', err);
@@ -55,9 +65,11 @@ const ProductPage = () => {
     fetchData();
   }, []);
 
-  const filteredProducts = selectedCategory
-    ? products.filter(product => product.category?._id === selectedCategory)
-    : products;
+  const filteredProducts = Array.isArray(products)
+    ? selectedCategory
+      ? products.filter(product => product.category?._id === selectedCategory)
+      : products
+    : [];
 
   const handleAddToCart = (product) => {
     setCartItems(prev => {
@@ -147,58 +159,59 @@ const ProductPage = () => {
 
         {/* Product Grid */}
         <Stack direction="row" flexWrap="wrap" gap={4} justifyContent="flex-start">
-          {filteredProducts.map(product => (
-            <Card
-              key={product._id}
-              sx={{
-                width: 260,
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: 4,
-                borderRadius: 4,
-                overflow: 'hidden',
-                bgcolor: '#ffffff',
-                transition: 'transform 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-5px)',
-                }
-              }}
-            >
-              {product.images?.[0] && (
-                <CardMedia
-                  component="img"
-                  image={product.images[0]}
-                  alt={product.name}
-                  sx={{ height: 200, objectFit: 'contain', p: 2 }}
-                />
-              )}
-              <CardContent sx={{ flexGrow: 1 }}>
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                  {product.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {product.category?.name || 'Không rõ danh mục'}
-                </Typography>
-                <Typography variant="h6" color="primary" mt={1}>
-                  {new Intl.NumberFormat('vi-VN', {
-                    style: 'currency',
-                    currency: 'VND',
-                  }).format(product.price)}
-                </Typography>
-              </CardContent>
-              <Box p={2} pt={0}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  color="primary"
-                  onClick={() => handleAddToCart(product)}
-                  sx={{ fontWeight: 'bold', borderRadius: 2 }}
-                >
-                  Thêm vào giỏ
-                </Button>
-              </Box>
-            </Card>
-          ))}
+          {Array.isArray(filteredProducts) &&
+            filteredProducts.map(product => (
+              <Card
+                key={product._id}
+                sx={{
+                  width: 260,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: 4,
+                  borderRadius: 4,
+                  overflow: 'hidden',
+                  bgcolor: '#ffffff',
+                  transition: 'transform 0.3s ease',
+                  '&:hover': {
+                    transform: 'translateY(-5px)',
+                  }
+                }}
+              >
+                {product.images?.[0] && (
+                  <CardMedia
+                    component="img"
+                    image={product.images[0]}
+                    alt={product.name}
+                    sx={{ height: 200, objectFit: 'contain', p: 2 }}
+                  />
+                )}
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                    {product.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {product.category?.category_name || 'Không rõ danh mục'}
+                  </Typography>
+                  <Typography variant="h6" color="primary" mt={1}>
+                    {new Intl.NumberFormat('vi-VN', {
+                      style: 'currency',
+                      currency: 'VND',
+                    }).format(product.price)}
+                  </Typography>
+                </CardContent>
+                <Box p={2} pt={0}>
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    color="primary"
+                    onClick={() => handleAddToCart(product)}
+                    sx={{ fontWeight: 'bold', borderRadius: 2 }}
+                  >
+                    Thêm vào giỏ
+                  </Button>
+                </Box>
+              </Card>
+            ))}
         </Stack>
       </Box>
     </Box>

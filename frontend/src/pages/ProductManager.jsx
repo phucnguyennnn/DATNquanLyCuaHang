@@ -1,14 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from "react";
 import {
-  Box,
+  Container,
+  Typography,
   Button,
-  TextField,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  MenuItem,
   Table,
   TableBody,
   TableCell,
@@ -16,329 +10,679 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Chip,
+  Grid,
+  Box,
   IconButton,
-  Typography,
-  Collapse,
-  CircularProgress
-} from '@mui/material';
-import { Search, Add, Edit, Delete, ExpandMore, ExpandLess } from '@mui/icons-material';
+  Snackbar,
+  Alert,
+  CircularProgress,
+} from "@mui/material";
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Image as ImageIcon,
+  Visibility as VisibilityIcon,
+} from "@mui/icons-material";
+import axios from "axios";
+import { useFormik } from "formik";
+import * as yup from "yup";
 
-const ProductManagement = () => {
-  const [open, setOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+const productSchema = yup.object({
+  name: yup.string().required("Tên sản phẩm là bắt buộc"),
+  category: yup.string().required("Danh mục là bắt buộc"),
+  price: yup
+    .number()
+    .min(0, "Giá phải lớn hơn hoặc bằng 0")
+    .required("Giá là bắt buộc"),
+  SKU: yup.string().required("SKU là bắt buộc"),
+  unit: yup.string().required("Đơn vị là bắt buộc"),
+  description: yup.string(),
+  status: yup.string().oneOf(["active", "inactive"], "Trạng thái không hợp lệ"),
+  suppliers: yup.array().of(
+    yup.object().shape({
+      supplier: yup.string().required("Nhà cung cấp là bắt buộc"),
+      importPrice: yup
+        .number()
+        .min(0, "Giá nhập phải lớn hơn hoặc bằng 0")
+        .required("Giá nhập là bắt buộc"),
+    })
+  ),
+});
+
+const ProductManager = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  const [openCategories, setOpenCategories] = useState({});
-  const [formData, setFormData] = useState({ name: '', category: '', price: '', SKU: '', description: '', suppliers: [] });
-  const [editMode, setEditMode] = useState(false);
-  const [openSupplierDialog, setOpenSupplierDialog] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const api = axios.create({
-    baseURL: 'http://localhost:8000/api',
-    headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+  const [openDialog, setOpenDialog] = useState(false);
+  const [currentProduct, setCurrentProduct] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
   });
-// <<<<<<< Duong
-// =======
-//   const [imagePreviews, setImagePreviews] = useState([]);
-//   const [selectedImages, setSelectedImages] = useState([]);
-//   const token = localStorage.getItem("authToken");
-// >>>>>>> main
+  const [imagePreviews, setImagePreviews] = useState([]);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const token = localStorage.getItem("authToken");
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [productsRes, categoriesRes, suppliersRes] = await Promise.all([
-// <<<<<<< Duong
-//           api.get('/products'),
-//           api.get('/categories'),
-//           api.get('/suppliers')
-//         ]);
-//         setProducts(productsRes.data.data);
-//         setCategories(categoriesRes.data.data);
-// =======
-//           axios.get("http://localhost:8000/api/products", {
-//             headers: { Authorization: `Bearer ${token}` },
-//           }),
-//           axios.get("http://localhost:8000/api/categories", {
-//             headers: { Authorization: `Bearer ${token}` },
-//           }),
-//           axios.get("http://localhost:8000/api/suppliers", {
-//             headers: { Authorization: `Bearer ${token}` },
-//           }),
-//         ]);
+          axios.get("http://localhost:8000/api/products", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get("http://localhost:8000/api/categories", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get("http://localhost:8000/api/suppliers", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-//         // Log dữ liệu trả về để kiểm tra
-//         console.log("Products API response:", productsRes.data);
 
-//         // Đảm bảo dữ liệu là mảng trước khi gán
-//         setProducts(Array.isArray(productsRes.data.data) ? productsRes.data.data : []);
-//         setCategories(categoriesRes.data);
-// >>>>>>> main
+        // Đảm bảo dữ liệu là mảng trước khi gán
+        // setCategories(Array.isArray(categoriesRes.data.data) ? categoriesRes.data.data : []);
+        // setSuppliers(Array.isArray(suppliersRes.data.data) ? suppliersRes.data.data : []);
+        setProducts(Array.isArray(productsRes.data.data) ? productsRes.data.data : []);
+        setCategories(categoriesRes.data);
         setSuppliers(suppliersRes.data);
-        setLoading(false);
+        setIsLoading(false);
+
+         // Log dữ liệu trả về để kiểm tra
+        console.log("Categories API response:", categoriesRes.data);
+        console.log("Suppliers API response:", suppliersRes.data);
       } catch (error) {
-        console.error('Fetch data error:', error);
-        setLoading(false);
+        console.error("Error fetching data:", error);
+        setSnackbar({
+          open: true,
+          message: "Lỗi khi tải dữ liệu",
+          severity: "error",
+        });
+        setIsLoading(false);
       }
     };
+
     fetchData();
   }, []);
 
-  const handleSearch = (e) => setSearchTerm(e.target.value.toLowerCase());
+  const formik = useFormik({
+    initialValues: {
+      name: "",
+      category: "",
+      description: "",
+      price: 0,
+      SKU: "",
+      unit: "piece",
+      suppliers: [],
+      status: "active",
+      images: [],
+    },
+    validationSchema: productSchema,
+    onSubmit: async (values) => {
+      try {
+        const formData = new FormData();
 
-  const handleOpen = () => {
-    setOpen(true);
-    setEditMode(false);
-    setFormData({ name: '', category: '', price: '', SKU: '', description: '', suppliers: [] });
-  };
+        // Append basic fields
+        formData.append("name", values.name);
+        formData.append("category", values.category);
+        formData.append("description", values.description || "");
+        formData.append("price", values.price);
+        formData.append("SKU", values.SKU);
+        formData.append("unit", values.unit);
+        formData.append("status", values.status);
 
-  const handleClose = () => setOpen(false);
+        // Process suppliers - ensure correct format
+        const processedSuppliers = values.suppliers.map((s) => ({
+          supplier: s.supplier,
+          importPrice: Number(s.importPrice),
+        }));
+        formData.append("suppliers", JSON.stringify(processedSuppliers));
 
-  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+        // Add images to formData
+        selectedImages.forEach((image) => {
+          formData.append("images", image);
+        });
 
-  const handleSave = async () => {
-    try {
-      const method = editMode ? 'patch' : 'post';
-      const url = editMode ? `/products/${formData._id}` : '/products';
-      const response = await api[method](url, formData);
-      
-      if (editMode) {
-        setProducts(products.map(p => p._id === formData._id ? response.data.data : p));
-      } else {
-        setProducts([...products, response.data.data]);
+        const config = {
+          headers: {
+             Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        };
+
+        let response;
+        if (currentProduct) {
+          response = await axios.patch(
+            `http://localhost:8000/api/products/${currentProduct._id}`,
+            formData,
+            config
+          );
+        } else {
+          response = await axios.post(
+            "http://localhost:8000/api/products",
+            formData,
+            config
+          );
+        }
+
+        if (currentProduct) {
+          setProducts(
+            products.map((p) =>
+              p._id === currentProduct._id ? response.data.product : p
+            )
+          );
+        } else {
+          setProducts([...products, response.data.product]);
+        }
+
+        setSnackbar({
+          open: true,
+          message: currentProduct
+            ? "Cập nhật sản phẩm thành công"
+            : "Thêm sản phẩm thành công",
+          severity: "success",
+        });
+
+        handleCloseDialog();
+      } catch (error) {
+        console.error("Error saving product:", error);
+        setSnackbar({
+          open: true,
+          message: error.response?.data?.message || "Lỗi khi lưu sản phẩm",
+          severity: "error",
+        });
       }
-      handleClose();
-    } catch (error) {
-      console.error('Save product error:', error);
-    }
+    },
+  });
+
+  const handleSupplierChange = (index, field, value) => {
+    const newSuppliers = [...formik.values.suppliers];
+    newSuppliers[index] = {
+      ...newSuppliers[index],
+      [field]: field === "importPrice" ? Number(value) || 0 : value,
+    };
+    formik.setFieldValue("suppliers", newSuppliers);
   };
 
-  const handleEdit = (product) => {
-    setFormData({ ...product, category: product.category._id });
-    setEditMode(true);
-    setOpen(true);
+  const handleImageChange = (e) => {
+    const files = Array.from(e.target.files);
+    setSelectedImages(files);
+    const previews = files.map((file) => URL.createObjectURL(file));
+    setImagePreviews(previews);
   };
 
-  const handleDelete = async (id) => {
+  const handleOpenAddDialog = () => {
+    setCurrentProduct(null);
+    formik.resetForm();
+    setImagePreviews([]);
+    setSelectedImages([]);
+    setOpenDialog(true);
+  };
+
+  const handleOpenEditDialog = (product) => {
+    setCurrentProduct(product);
+    formik.setValues({
+      name: product.name,
+      category: product.category._id || product.category,
+      description: product.description || "",
+      price: product.price,
+      SKU: product.SKU,
+      unit: product.unit,
+      suppliers: product.suppliers.map((s) => ({
+        supplier: s.supplier._id || s.supplier,
+        importPrice: s.importPrice,
+      })),
+      status: product.status,
+      images: [],
+    });
+    setImagePreviews(product.images || []);
+    setSelectedImages([]);
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+  };
+
+  const handleDeleteProduct = async (id) => {
     try {
-      await api.delete(`/products/${id}`);
-      setProducts(products.filter(p => p._id !== id));
+      await axios.delete(`http://localhost:8000/api/products/${id}`);
+      setProducts(
+        products.map((p) => (p._id === id ? { ...p, status: "inactive" } : p))
+      );
+      setSnackbar({
+        open: true,
+        message: "Sản phẩm đã được đánh dấu là không hoạt động",
+        severity: "success",
+      });
     } catch (error) {
-      console.error('Delete product error:', error);
+      console.error("Error deleting product:", error);
+      setSnackbar({
+        open: true,
+        message: "Lỗi khi xóa sản phẩm",
+        severity: "error",
+      });
     }
   };
 
-  const toggleCategory = (categoryId) => {
-    setOpenCategories({ ...openCategories, [categoryId]: !openCategories[categoryId] });
+  const handleAddSupplier = () => {
+    formik.setFieldValue("suppliers", [
+      ...formik.values.suppliers,
+      { supplier: "", importPrice: 0 },
+    ]);
   };
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchTerm) ||
-    p.SKU.toLowerCase().includes(searchTerm) ||
-    p.category.name.toLowerCase().includes(searchTerm)
-  );
+  const handleRemoveSupplier = (index) => {
+    const newSuppliers = [...formik.values.suppliers];
+    newSuppliers.splice(index, 1);
+    formik.setFieldValue("suppliers", newSuppliers);
+  };
 
-  if (loading) return <CircularProgress />;
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  if (isLoading) {
+    return (
+      <Container
+        maxWidth="lg"
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "80vh",
+        }}
+      >
+        <CircularProgress />
+      </Container>
+    );
+  }
 
   return (
-    <Box sx={{ p: 3, backgroundColor: '#f5f5f5' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <TextField
-          variant="outlined"
-          placeholder="Search products..."
-          InputProps={{ startAdornment: <Search /> }}
-          onChange={handleSearch}
-          sx={{ width: 400 }}
-        />
-        <Button variant="contained" startIcon={<Add />} onClick={handleOpen}>Add Product</Button>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
+      >
+        <Typography variant="h4" component="h1">
+          Quản lý Sản phẩm
+        </Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={handleOpenAddDialog}
+        >
+          Thêm Sản phẩm
+        </Button>
       </Box>
 
       <TableContainer component={Paper}>
         <Table>
-          <TableHead sx={{ backgroundColor: '#3f51b5', color: 'white' }}>
+          <TableHead>
             <TableRow>
-              <TableCell>Name</TableCell>
+              <TableCell>STT</TableCell>
+              <TableCell>Tên sản phẩm</TableCell>
+              <TableCell>Danh mục</TableCell>
+              <TableCell>Giá</TableCell>
               <TableCell>SKU</TableCell>
-              <TableCell>Price</TableCell>
-              <TableCell>Category</TableCell>
-              <TableCell>Suppliers</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell>Đơn vị</TableCell>
+              <TableCell>Trạng thái</TableCell>
+              <TableCell>Hành động</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-// <<<<<<< Duong
-//             {categories.map(category => (
-//               <React.Fragment key={category._id}>
-//                 <TableRow sx={{ backgroundColor: '#e8eaf6', cursor: 'pointer' }} onClick={() => toggleCategory(category._id)}>
-//                   <TableCell colSpan={6}>
-//                     <Box display="flex" alignItems="center">
-//                       {openCategories[category._id] ? <ExpandLess /> : <ExpandMore />}
-//                       <Typography variant="h6">{category.name}</Typography>
-//                     </Box>
-//                   </TableCell>
-//                 </TableRow>
-//                 <TableRow>
-//                   <TableCell colSpan={6} sx={{ p: 0 }}>
-//                     <Collapse in={openCategories[category._id]}>
-//                       <Table>
-//                         <TableBody>
-//                           {filteredProducts.filter(p => p.category._id === category._id).map(product => (
-//                             <TableRow key={product._id}>
-//                               <TableCell>{product.name}</TableCell>
-//                               <TableCell>{product.SKU}</TableCell>
-//                               <TableCell>${product.price}</TableCell>
-//                               <TableCell>{product.category.name}</TableCell>
-//                               <TableCell>
-//                                 {product.suppliers.map(s => s.supplier.name).join(', ')}
-//                               </TableCell>
-//                               <TableCell>
-//                                 <IconButton onClick={() => handleEdit(product)}><Edit color="primary" /></IconButton>
-//                                 <IconButton onClick={() => handleDelete(product._id)}><Delete color="error" /></IconButton>
-//                               </TableCell>
-//                             </TableRow>
-//                           ))}
-//                         </TableBody>
-//                       </Table>
-//                     </Collapse>
-//                   </TableCell>
-//                 </TableRow>
-//               </React.Fragment>
-// =======
-//             {Array.isArray(products) && products.map((product, index) => (
-//               <TableRow key={product._id}>
-//                 <TableCell>{index + 1}</TableCell>
-//                 <TableCell>{product.category_name}</TableCell>
-//                 <TableCell>
-//                   {product.category?.category_name || "N/A"}
-//                 </TableCell>
-//                 <TableCell>{product.price.toLocaleString()} VND</TableCell>
-//                 <TableCell>{product.SKU}</TableCell>
-//                 <TableCell>{product.unit}</TableCell>
-//                 <TableCell>
-//                   <Chip
-//                     label={
-//                       product.status === "active"
-//                         ? "Hoạt động"
-//                         : "Không hoạt động"
-//                     }
-//                     color={product.status === "active" ? "success" : "error"}
-//                     size="small"
-//                   />
-//                 </TableCell>
-//                 <TableCell>
-//                   <IconButton onClick={() => handleOpenEditDialog(product)}>
-//                     <EditIcon color="primary" />
-//                   </IconButton>
-//                   <IconButton onClick={() => handleDeleteProduct(product._id)}>
-//                     <DeleteIcon color="error" />
-//                   </IconButton>
-//                 </TableCell>
-//               </TableRow>
-// >>>>>>> main
-            ))}
+            {Array.isArray(products) &&
+              products.map((product, index) => {
+                const categoryName =
+                  categories.find((cat) => cat._id === product.category)?.name || "N/A";
+
+                return (
+                  <TableRow key={product._id}>
+                    <TableCell>{index + 1}</TableCell>
+                    <TableCell>{product.name}</TableCell>
+                    <TableCell>{categoryName}</TableCell>
+                    <TableCell>{product.price.toLocaleString()} VND</TableCell>
+                    <TableCell>{product.SKU}</TableCell>
+                    <TableCell>{product.unit}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={
+                          product.status === "active"
+                            ? "Hoạt động"
+                            : "Không hoạt động"
+                        }
+                        color={product.status === "active" ? "success" : "error"}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <IconButton onClick={() => handleOpenEditDialog(product)}>
+                        <EditIcon color="primary" />
+                      </IconButton>
+                      <IconButton onClick={() => handleDeleteProduct(product._id)}>
+                        <DeleteIcon color="error" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
           </TableBody>
         </Table>
       </TableContainer>
 
-      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-        <DialogTitle>{editMode ? 'Edit Product' : 'Add New Product'}</DialogTitle>
-        <DialogContent>
-          <TextField fullWidth margin="normal" label="Product Name" name="name" 
-            value={formData.name} onChange={handleChange} />
-          <TextField select fullWidth margin="normal" label="Category" name="category" 
-            value={formData.category} onChange={handleChange}>
-            {categories.map(category => (
-              <MenuItem key={category._id} value={category._id}>{category.name}</MenuItem>
-            ))}
-          </TextField>
-          <TextField fullWidth margin="normal" label="Price" name="price" type="number" 
-            value={formData.price} onChange={handleChange} />
-          <TextField fullWidth margin="normal" label="SKU" name="SKU" 
-            value={formData.SKU} onChange={handleChange} />
-          <TextField fullWidth margin="normal" label="Description" name="description" multiline rows={3} 
-            value={formData.description} onChange={handleChange} />
-          <Box mt={2}>
-            <Button variant="outlined" onClick={() => setOpenSupplierDialog(true)}>Add Suppliers</Button>
-            {formData.suppliers.map(supplier => (
-              <Box key={supplier.supplier._id} mt={1}>
-                {supplier.supplier.name} - ${supplier.importPrice}
-              </Box>
-            ))}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleSave} color="primary" variant="contained">Save</Button>
-        </DialogActions>
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>
+          {currentProduct ? "Chỉnh sửa Sản phẩm" : "Thêm Sản phẩm Mới"}
+        </DialogTitle>
+        <form onSubmit={formik.handleSubmit}>
+          <DialogContent dividers>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  id="name"
+                  name="name"
+                  label="Tên sản phẩm"
+                  value={formik.values.name}
+                  onChange={formik.handleChange}
+                  error={formik.touched.name && Boolean(formik.errors.name)}
+                  helperText={formik.touched.name && formik.errors.name}
+                  margin="normal"
+                />
+
+                <FormControl fullWidth margin="normal">
+                  <InputLabel id="category-label">Danh mục</InputLabel>
+                  <Select
+                    labelId="category-label"
+                    id="category"
+                    name="category"
+                    value={formik.values.category}
+                    onChange={formik.handleChange}
+                    error={
+                      formik.touched.category && Boolean(formik.errors.category)
+                    }
+                  >
+                    {Array.isArray(categories) &&
+                      categories.map((category) => (
+                        <MenuItem key={category._id} value={category._id}>
+                          {category.category_name || category.name || "Không rõ danh mục"}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                  {formik.touched.category && formik.errors.category && (
+                    <Typography color="error" variant="caption">
+                      {formik.errors.category}
+                    </Typography>
+                  )}
+                </FormControl>
+
+                <TextField
+                  fullWidth
+                  id="description"
+                  name="description"
+                  label="Mô tả"
+                  multiline
+                  rows={3}
+                  value={formik.values.description}
+                  onChange={formik.handleChange}
+                  margin="normal"
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  id="price"
+                  name="price"
+                  label="Giá bán"
+                  type="number"
+                  value={formik.values.price}
+                  onChange={formik.handleChange}
+                  error={formik.touched.price && Boolean(formik.errors.price)}
+                  helperText={formik.touched.price && formik.errors.price}
+                  margin="normal"
+                />
+
+                <TextField
+                  fullWidth
+                  id="SKU"
+                  name="SKU"
+                  label="SKU"
+                  value={formik.values.SKU}
+                  onChange={formik.handleChange}
+                  error={formik.touched.SKU && Boolean(formik.errors.SKU)}
+                  helperText={formik.touched.SKU && formik.errors.SKU}
+                  margin="normal"
+                />
+
+                <FormControl fullWidth margin="normal">
+                  <InputLabel id="unit-label">Đơn vị</InputLabel>
+                  <Select
+                    labelId="unit-label"
+                    id="unit"
+                    name="unit"
+                    value={formik.values.unit}
+                    onChange={formik.handleChange}
+                    error={formik.touched.unit && Boolean(formik.errors.unit)}
+                  >
+                    <MenuItem value="piece">Cái</MenuItem>
+                    <MenuItem value="kg">Kg</MenuItem>
+                    <MenuItem value="liter">Lít</MenuItem>
+                    <MenuItem value="box">Hộp</MenuItem>
+                    <MenuItem value="set">Bộ</MenuItem>
+                    <MenuItem value="bottle">Chai</MenuItem>
+                    <MenuItem value="pack">Gói</MenuItem>
+                    <MenuItem value="carton">Thùng</MenuItem>
+                    <MenuItem value="pair">Đôi</MenuItem>
+                  </Select>
+                  {formik.touched.unit && formik.errors.unit && (
+                    <Typography color="error" variant="caption">
+                      {formik.errors.unit}
+                    </Typography>
+                  )}
+                </FormControl>
+
+                <FormControl fullWidth margin="normal">
+                  <InputLabel id="status-label">Trạng thái</InputLabel>
+                  <Select
+                    labelId="status-label"
+                    id="status"
+                    name="status"
+                    value={formik.values.status}
+                    onChange={formik.handleChange}
+                  >
+                    <MenuItem value="active">Hoạt động</MenuItem>
+                    <MenuItem value="inactive">Không hoạt động</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>
+                  Hình ảnh sản phẩm
+                </Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mb: 2 }}>
+                  {imagePreviews.map((img, index) => (
+                    <Box
+                      key={index}
+                      sx={{ position: "relative", width: 100, height: 100 }}
+                    >
+                      <img
+                        src={img}
+                        alt={`Preview ${index}`}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    </Box>
+                  ))}
+                </Box>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={<ImageIcon />}
+                >
+                  Tải lên hình ảnh
+                  <input
+                    type="file"
+                    hidden
+                    multiple
+                    accept="image/*"
+                    onChange={handleImageChange}
+                  />
+                </Button>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    mb: 2,
+                  }}
+                >
+                  <Typography variant="h6">Nhà cung cấp</Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleAddSupplier}
+                  >
+                    Thêm nhà cung cấp
+                  </Button>
+                </Box>
+
+                {formik.values.suppliers.map((supplier, index) => (
+                  <Grid container spacing={2} key={index} sx={{ mb: 2 }}>
+                    <Grid item xs={12} sm={5}>
+                      <FormControl fullWidth>
+                        <InputLabel id={`supplier-label-${index}`}>
+                          Nhà cung cấp
+                        </InputLabel>
+                        <Select
+                          labelId={`supplier-label-${index}`}
+                          value={supplier.supplier}
+                          onChange={(e) =>
+                            handleSupplierChange(
+                              index,
+                              "supplier",
+                              e.target.value
+                            )
+                          }
+                          error={
+                            formik.touched.suppliers?.[index]?.supplier &&
+                            Boolean(formik.errors.suppliers?.[index]?.supplier)
+                          }
+                        >
+                          {Array.isArray(suppliers) &&
+                            suppliers.map((s) => (
+                              <MenuItem key={s._id} value={s._id}>
+                                {s.name || s.supplier_name || "Không rõ nhà cung cấp"}
+                              </MenuItem>
+                            ))}
+                        </Select>
+                        {formik.touched.suppliers?.[index]?.supplier &&
+                          formik.errors.suppliers?.[index]?.supplier && (
+                            <Typography color="error" variant="caption">
+                              {formik.errors.suppliers[index].supplier}
+                            </Typography>
+                          )}
+                      </FormControl>
+                    </Grid>
+
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        fullWidth
+                        label="Giá nhập"
+                        type="number"
+                        value={supplier.importPrice}
+                        onChange={(e) =>
+                          handleSupplierChange(
+                            index,
+                            "importPrice",
+                            e.target.value
+                          )
+                        }
+                        error={
+                          formik.touched.suppliers?.[index]?.importPrice &&
+                          Boolean(formik.errors.suppliers?.[index]?.importPrice)
+                        }
+                        helperText={
+                          formik.touched.suppliers?.[index]?.importPrice &&
+                          formik.errors.suppliers?.[index]?.importPrice
+                        }
+                      />
+                    </Grid>
+
+                    <Grid
+                      item
+                      xs={12}
+                      sm={3}
+                      sx={{ display: "flex", alignItems: "center" }}
+                    >
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        color="error"
+                        onClick={() => handleRemoveSupplier(index)}
+                      >
+                        Xóa
+                      </Button>
+                    </Grid>
+                  </Grid>
+                ))}
+              </Grid>
+            </Grid>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Hủy</Button>
+            <Button type="submit" color="primary" variant="contained">
+              {currentProduct ? "Cập nhật" : "Thêm mới"}
+            </Button>
+          </DialogActions>
+        </form>
       </Dialog>
 
-      <SupplierDialog 
-        open={openSupplierDialog}
-        onClose={() => setOpenSupplierDialog(false)}
-        suppliers={suppliers}
-        selectedSuppliers={formData.suppliers}
-        onSelect={selected => setFormData({ ...formData, suppliers: selected })}
-      />
-    </Box>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Container>
   );
 };
 
-const SupplierDialog = ({ open, onClose, suppliers, selectedSuppliers, onSelect }) => {
-  const [selected, setSelected] = useState(selectedSuppliers);
-  const [prices, setPrices] = useState({});
-
-  const handleSelect = (supplier) => {
-    const exists = selected.find(s => s.supplier._id === supplier._id);
-    if (exists) {
-      setSelected(selected.filter(s => s.supplier._id !== supplier._id));
-    } else {
-      setSelected([...selected, { supplier, importPrice: 0 }]);
-    }
-  };
-
-  const handlePriceChange = (id, price) => setPrices({ ...prices, [id]: price });
-
-  const handleSave = () => {
-    const updated = selected.map(s => ({
-      supplier: s.supplier,
-      importPrice: prices[s.supplier._id] || s.importPrice
-    }));
-    onSelect(updated);
-    onClose();
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Select Suppliers</DialogTitle>
-      <DialogContent>
-        {suppliers.map(supplier => (
-          <Box key={supplier._id} display="flex" alignItems="center" mb={1}>
-            <input 
-              type="checkbox" 
-              checked={!!selected.find(s => s.supplier._id === supplier._id)} 
-              onChange={() => handleSelect(supplier)} 
-            />
-            <Box ml={2} flexGrow={1}>{supplier.name}</Box>
-            {selected.find(s => s.supplier._id === supplier._id) && (
-              <TextField
-                type="number"
-                label="Import Price"
-                value={prices[supplier._id] || ''}
-                onChange={e => handlePriceChange(supplier._id, e.target.value)}
-                sx={{ width: 120 }}
-              />
-            )}
-          </Box>
-        ))}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSave} color="primary" variant="contained">Save</Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
-
-export default ProductManagement;
+export default ProductManager;

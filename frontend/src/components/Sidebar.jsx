@@ -28,6 +28,9 @@ import {
   Inventory,
   RecentActors,
   BusinessCenter,
+  PointOfSale,
+  Category,
+  Handshake,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -125,6 +128,14 @@ const Sidebar = () => {
             </ListItemButton>
 
             {/* Products - Hiển thị cho tất cả các role */}
+            <ListItemButton onClick={() => navigate("/sales")}>
+              <ListItemIcon>
+                <PointOfSale />
+              </ListItemIcon>
+              <ListItemText primary="Bán hàng" />
+            </ListItemButton>
+
+            {/* Products - Hiển thị cho tất cả các role */}
             <ListItemButton onClick={() => navigate("/products_manager")}>
               <ListItemIcon>
                 <ShoppingCart />
@@ -191,18 +202,18 @@ const Sidebar = () => {
 
             {/* List User - Chỉ hiển thị cho admin */}
             {role === "admin" && (
-              <ListItemButton onClick={() => navigate("/categories")}>
+              <ListItemButton onClick={() => navigate("/categorie")}>
                 <ListItemIcon>
-                  <RecentActors />
+                  <Category />
                 </ListItemIcon>
                 <ListItemText primary="Danh mục hàng hóa" />
               </ListItemButton>
             )}
             {/* List User - Chỉ hiển thị cho admin */}
             {role === "admin" && (
-              <ListItemButton onClick={() => navigate("/suppliers")}>
+              <ListItemButton onClick={() => navigate("/supplier")}>
                 <ListItemIcon>
-                  <RecentActors />
+                  <Handshake />
                 </ListItemIcon>
                 <ListItemText primary="Nhà cung cấp" />
               </ListItemButton>
@@ -216,14 +227,7 @@ const Sidebar = () => {
                 <ListItemText primary="Nhân viên" />
               </ListItemButton>
             )}
-            {/* Settings - Hiển thị cho tất cả các role */}
-            <ListItemButton onClick={() => navigate("/settings")}>
-              <ListItemIcon>
-                <Settings />
-              </ListItemIcon>
-              <ListItemText primary="Cài đặt" />
-            </ListItemButton>
-
+          
             {/* Profile - Hiển thị cho tất cả các role */}
             <ListItemButton onClick={() => navigate("/profile")}>
               <ListItemIcon>
@@ -237,6 +241,15 @@ const Sidebar = () => {
           {/* Nút Logout */}
           <List>
             <Divider />
+              {/* Settings - Hiển thị cho tất cả các role */}
+            <ListItemButton onClick={() => navigate("/settings")}>
+              <ListItemIcon>
+                <Settings />
+              </ListItemIcon>
+              <ListItemText primary="Cài đặt" />
+            </ListItemButton>
+            <Divider />
+            {/* Nút Logout */}
             <ListItemButton onClick={handleLogoutClick}>
               <ListItemIcon>
                 <Logout />

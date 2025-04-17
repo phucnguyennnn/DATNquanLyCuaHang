@@ -8,8 +8,7 @@ import {
 } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
-
-
+import SalesPage from "./pages/SalesPage";
 
 function App() {
   const isAuthenticated = !!localStorage.getItem("authToken");
@@ -26,6 +25,7 @@ function App() {
           path="/homepage/*"
           element={isAuthenticated ? <HomePage /> : <Navigate to="/" />}
         />
+        <Route path="/sales" element={<SalesPage />} />
       </Routes>
     </>
   );

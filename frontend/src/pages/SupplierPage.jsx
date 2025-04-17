@@ -148,6 +148,7 @@ const SupplierPage = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState(null);
   const [products, setProducts] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Trạng thái đang xử lý
 
   useEffect(() => {
     fetchSuppliers();
@@ -185,7 +186,19 @@ const SupplierPage = () => {
     initialValues,
     validationSchema: SupplierSchema,
     onSubmit: async (values) => {
+      if (isSubmitting) return; // Ngăn chặn xử lý nhiều lần
+      setIsSubmitting(true); // Bắt đầu trạng thái xử lý
+
       try {
+        // Kiểm tra dữ liệu sản phẩm trước khi gửi
+        const invalidProducts = values.suppliedProducts.filter(sp => 
+          !sp.product?._id || sp.importPrice < 0 || sp.minOrderQuantity < 1
+        );
+        if (invalidProducts.length > 0) {
+          showSnackbar('Dữ liệu sản phẩm không hợp lệ', 'error');
+          return;
+        }
+
         const token = localStorage.getItem("authToken");
         const config = { 
           headers: { 
@@ -218,10 +231,13 @@ const SupplierPage = () => {
         handleCloseDialog();
         showSnackbar(`Nhà cung cấp ${editMode ? 'cập nhật' : 'tạo mới'} thành công`);
       } catch (error) {
+        console.error('Error submitting supplier:', error); // Log lỗi chi tiết
         showSnackbar(
           error.response?.data?.message || 'Thao tác thất bại', 
           'error'
         );
+      } finally {
+        setIsSubmitting(false); // Kết thúc trạng thái xử lý
       }
     }
   });
@@ -772,8 +788,13 @@ const SupplierPage = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDialog}>Hủy bỏ</Button>
-            <Button type="submit" variant="contained" color="primary">
-              {editMode ? 'Cập nhật' : 'Tạo mới'}
+            <Button 
+              type="submit" 
+              variant="contained" 
+              color="primary" 
+              disabled={isSubmitting} // Vô hiệu hóa nút khi đang xử lý
+            >
+              {isSubmitting ? 'Đang xử lý...' : (editMode ? 'Cập nhật' : 'Tạo mới')}
             </Button>
           </DialogActions>
         </form>
