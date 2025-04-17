@@ -1,23 +1,20 @@
 const express = require("express");
 const userController = require("../controllers/userController");
-const authMiddleware = require('.../middlewares/authMiddleware');
-const router = express.Router();
+const authMiddleware = require("../middlewares/authMiddleware");
+const upload = require("../middlewares/upload");
 
-// Middleware xác thực cho tất cả route
+const router = express.Router();
 router.use(authMiddleware.protect);
 
-// Lấy thông tin người dùng
-router.get("/", authMiddleware.restrictTo('admin'), userController.getAllUsers);
+router.get("/", authMiddleware.restrictTo("admin"), userController.getAllUsers);
 router.get("/me", userController.getCurrentUser);
 router.get("/:id", userController.getUserById);
-
-// Cập nhật thông tin
-router.put("/:id", userController.updateUser);
-
-// Xóa người dùng (chỉ admin)
-router.delete("/:id", authMiddleware.restrictTo('admin'), userController.deleteUser);
-
-// Thay đổi mật khẩu
+router.put("/:id", upload.single("profileImage"), userController.updateUser);
+router.delete(
+  "/:id",
+  authMiddleware.restrictTo("admin"),
+  userController.deleteUser
+);
 router.patch("/change-password", userController.changePassword);
 
 module.exports = router;
