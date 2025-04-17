@@ -27,7 +27,9 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Autocomplete
+  Autocomplete,
+  MenuItem,
+  Checkbox
 } from '@mui/material';
 import { 
   Add, 
@@ -39,13 +41,11 @@ import {
   AccountBalance,
   Payment,
   Person,
-  Star,
-  Close
+  Star
 } from '@mui/icons-material';
 import { useFormik } from 'formik';
 import * as yup from 'yup';
 import axios from 'axios';
-import ProductSearch from '../components/ProductSearch';
 
 const API_URL = 'http://localhost:8000/api/suppliers';
 const PRODUCTS_API = 'http://localhost:8000/api/products';
@@ -87,59 +87,25 @@ const SupplierSchema = yup.object().shape({
   isActive: yup.boolean().required('Bắt buộc chọn trạng thái'),
   suppliedProducts: yup.array().of(
     yup.object().shape({
-      product: yup.object().required('Sản phẩm bắt buộc'),
-      importPrice: yup.number().required('Giá nhập bắt buộc').min(0),
-      minOrderQuantity: yup.number().min(1).default(1),
-      leadTime: yup.number().min(0).default(0),
-      isPrimary: yup.boolean().default(false)
+      product: yup.string().required('Bắt buộc chọn sản phẩm'),
+      importPrice: yup.number().min(0, 'Không được âm').required('Bắt buộc nhập'),
+      minOrderQuantity: yup.number().min(1, 'Tối thiểu 1'),
+      leadTime: yup.number().min(0, 'Không được âm'),
+      unit: yup.string().required('Bắt buộc chọn đơn vị'),
+      conversionRate: yup.number().min(1, 'Tối thiểu 1').required('Bắt buộc nhập'),
+      isPrimary: yup.boolean()
     })
   )
 });
 
-const initialValues = {
-  name: '',
-  description: '',
-  company: '',
-  taxId: '',
-  address: { 
-    street: '', 
-    city: '', 
-    state: '', 
-    postalCode: '', 
-    country: '' 
-  },
-  contact: { 
-    phone: '', 
-    mobile: '', 
-    email: '', 
-    website: '' 
-  },
-  primaryContactPerson: { 
-    name: '', 
-    position: '', 
-    phone: '', 
-    email: '' 
-  },
-  paymentTerms: 30,
-  bankDetails: { 
-    accountName: '', 
-    accountNumber: '', 
-    bankName: '', 
-    branch: '', 
-    swiftCode: '' 
-  },
-  rating: 0,
-  notes: '',
-  isActive: true,
-  suppliedProducts: []
-};
-
 const SupplierPage = () => {
   const [suppliers, setSuppliers] = useState([]);
+  const [products, setProducts] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+
   const [snackbar, setSnackbar] = useState({ 
     open: false, 
     message: '', 
@@ -147,20 +113,19 @@ const SupplierPage = () => {
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState(null);
-  const [products, setProducts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false); // Trạng thái đang xử lý
 
   useEffect(() => {
     fetchSuppliers();
-    fetchProducts();
+    axios.get(PRODUCTS_API, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` }
+    }).then(({ data }) => setProducts(data.data));
   }, [searchTerm]);
 
   const fetchSuppliers = async () => {
     try {
       const { data } = await axios.get(API_URL, {
-        headers: { 
-          Authorization: `Bearer ${localStorage.getItem("authToken")}` 
-        },
+        headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` },
         params: { search: searchTerm }
       });
       setSuppliers(data);
@@ -169,21 +134,22 @@ const SupplierPage = () => {
     }
   };
 
-  const fetchProducts = async () => {
-    try {
-      const { data } = await axios.get(PRODUCTS_API, {
-        headers: { 
-          Authorization: `Bearer ${localStorage.getItem("authToken")}` 
-        }
-      });
-      setProducts(data.data || []);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    }
-  };
-
   const formik = useFormik({
-    initialValues,
+    initialValues: {
+      name: '',
+      description: '',
+      company: '',
+      taxId: '',
+      address: { street: '', city: '', state: '', postalCode: '', country: '' },
+      contact: { phone: '', mobile: '', email: '', website: '' },
+      primaryContactPerson: { name: '', position: '', phone: '', email: '' },
+      paymentTerms: 30,
+      bankDetails: { accountName: '', accountNumber: '', bankName: '', branch: '', swiftCode: '' },
+      rating: 0,
+      notes: '',
+      isActive: true,
+      suppliedProducts: []
+    },
     validationSchema: SupplierSchema,
     onSubmit: async (values) => {
       if (isSubmitting) return; // Ngăn chặn xử lý nhiều lần
@@ -200,31 +166,12 @@ const SupplierPage = () => {
         }
 
         const token = localStorage.getItem("authToken");
-        const config = { 
-          headers: { 
-            Authorization: `Bearer ${token}` 
-          } 
-        };
-
-        const formattedData = {
-          ...values,
-          suppliedProducts: values.suppliedProducts.map(sp => ({
-            product: sp.product._id,
-            importPrice: sp.importPrice,
-            minOrderQuantity: sp.minOrderQuantity,
-            leadTime: sp.leadTime,
-            isPrimary: sp.isPrimary
-          }))
-        };
+        const config = { headers: { Authorization: `Bearer ${token}` } };
 
         if (editMode) {
-          await axios.put(
-            `${API_URL}/${selectedSupplier._id}`, 
-            formattedData, 
-            config
-          );
+          await axios.put(`${API_URL}/${selectedSupplier._id}`, values, config);
         } else {
-          await axios.post(API_URL, formattedData, config);
+          await axios.post(API_URL, values, config);
         }
 
         fetchSuppliers();
@@ -238,32 +185,10 @@ const SupplierPage = () => {
         );
       } finally {
         setIsSubmitting(false); // Kết thúc trạng thái xử lý
+
       }
     }
   });
-
-  const addProductToSupplier = (product) => {
-    const isExisting = formik.values.suppliedProducts.some(
-      sp => sp.product._id === product._id
-    );
-    
-    if (!isExisting) {
-      const newProduct = {
-        product,
-        importPrice: 0,
-        minOrderQuantity: 1,
-        leadTime: 0,
-        isPrimary: false
-      };
-      formik.setFieldValue('suppliedProducts', [...formik.values.suppliedProducts, newProduct]);
-    }
-  };
-
-  const removeProductFromSupplier = (index) => {
-    const newProducts = [...formik.values.suppliedProducts];
-    newProducts.splice(index, 1);
-    formik.setFieldValue('suppliedProducts', newProducts);
-  };
 
   const handleOpenCreate = () => {
     setEditMode(false);
@@ -274,52 +199,25 @@ const SupplierPage = () => {
   const handleOpenEdit = (supplier) => {
     setEditMode(true);
     setSelectedSupplier(supplier);
-    
-    const mergedData = {
-      ...initialValues,
+    formik.setValues({
       ...supplier,
-      address: { ...initialValues.address, ...supplier.address },
-      contact: { ...initialValues.contact, ...supplier.contact },
-      primaryContactPerson: { 
-        ...initialValues.primaryContactPerson, 
-        ...supplier.primaryContactPerson 
-      },
-      bankDetails: { 
-        ...initialValues.bankDetails, 
-        ...supplier.bankDetails 
-      },
-      suppliedProducts: supplier.suppliedProducts?.map(sp => ({
-        product: products.find(p => p._id === sp.product),
-        ...sp
-      })) || []
-    };
-    
-    formik.setValues(mergedData);
+      suppliedProducts: supplier.suppliedProducts.map(sp => ({
+        ...sp,
+        product: sp.product._id ? sp.product._id : sp.product
+      }))
+    });
     setOpenDialog(true);
   };
 
-  const handleOpenDeleteDialog = (id) => {
-    setSupplierToDelete(id);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDelete = async () => {
+  const handleDelete = async (id) => {
     try {
-      await axios.delete(`${API_URL}/${supplierToDelete}`, {
-        headers: { 
-          Authorization: `Bearer ${localStorage.getItem("authToken")}` 
-        }
+      await axios.delete(`${API_URL}/${id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` }
       });
       fetchSuppliers();
       showSnackbar('Đã xóa nhà cung cấp thành công');
     } catch (error) {
-      showSnackbar(
-        error.response?.data?.message || 'Xóa thất bại', 
-        'error'
-      );
-    } finally {
-      setDeleteDialogOpen(false);
-      setSupplierToDelete(null);
+      showSnackbar(error.response?.data?.message || 'Xóa thất bại', 'error');
     }
   };
 
@@ -358,7 +256,7 @@ const SupplierPage = () => {
             <TableRow>
               <TableCell>Tên</TableCell>
               <TableCell>Mã số thuế</TableCell>
-              <TableCell>Sản phẩm cung cấp</TableCell>
+              <TableCell>Số sản phẩm</TableCell>
               <TableCell>Liên hệ</TableCell>
               <TableCell>Người liên hệ</TableCell>
               <TableCell>Điều khoản TT</TableCell>
@@ -373,50 +271,38 @@ const SupplierPage = () => {
                 <TableCell>
                   <Typography fontWeight="bold">{supplier.name}</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {supplier.company || 'Chưa cập nhật'}
+                    {supplier.company}
                   </Typography>
                 </TableCell>
-                <TableCell>{supplier.taxId || 'Chưa cập nhật'}</TableCell>
+                <TableCell>{supplier.taxId}</TableCell>
                 <TableCell>
-                  {supplier.suppliedProducts?.length > 0 ? (
-                    <Box>
-                      {supplier.suppliedProducts.slice(0, 3).map(sp => (
-                        <Chip 
-                          key={sp.product}
-                          label={`${products.find(p => p._id === sp.product)?.name || '...'} - ${sp.importPrice.toLocaleString()}`}
-                          size="small"
-                          sx={{ mr: 1, mb: 1 }}
-                        />
-                      ))}
-                      {supplier.suppliedProducts.length > 3 && (
-                        <Typography variant="caption">+ {supplier.suppliedProducts.length - 3} sản phẩm</Typography>
-                      )}
-                    </Box>
-                  ) : 'Chưa có sản phẩm'}
+                  <Chip 
+                    label={supplier.suppliedProducts?.length || 0}
+                    color="primary"
+                    variant="outlined"
+                  />
                 </TableCell>
                 <TableCell>
                   <Box>
-                    <div>{supplier.contact?.email || 'Chưa cập nhật'}</div>
-                    <div>📞 {supplier.contact?.phone || 'Chưa cập nhật'}</div>
-                    <div>📱 {supplier.contact?.mobile || 'Chưa cập nhật'}</div>
+                    <div>{supplier.contact?.email}</div>
+                    <div>{supplier.contact?.phone}</div>
+                    <div>{supplier.contact?.mobile}</div>
                   </Box>
                 </TableCell>
                 <TableCell>
-                  {(supplier.primaryContactPerson && (
+                  {supplier.primaryContactPerson && (
                     <Box>
-                      <div>{supplier.primaryContactPerson.name || 'Chưa cập nhật'}</div>
-                      <div>{supplier.primaryContactPerson.position || ''}</div>
-                      <div>{supplier.primaryContactPerson.phone || ''}</div>
+                      <div>{supplier.primaryContactPerson.name}</div>
+                      <div>{supplier.primaryContactPerson.position}</div>
+                      <div>{supplier.primaryContactPerson.phone}</div>
                     </Box>
-                  )) || 'Chưa cập nhật'}
+                  )}
                 </TableCell>
                 <TableCell>{supplier.paymentTerms} ngày</TableCell>
                 <TableCell>
                   <Box display="flex" alignItems="center">
                     <Star fontSize="small" color="warning" />
-                    <Typography ml={0.5}>
-                      {supplier.rating?.toFixed(1) || '0.0'}
-                    </Typography>
+                    <Typography ml={0.5}>{supplier.rating?.toFixed(1)}</Typography>
                   </Box>
                 </TableCell>
                 <TableCell>
@@ -433,7 +319,7 @@ const SupplierPage = () => {
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Xóa">
-                    <IconButton onClick={() => handleOpenDeleteDialog(supplier._id)}>
+                    <IconButton onClick={() => handleDelete(supplier._id)}>
                       <Delete fontSize="small" />
                     </IconButton>
                   </Tooltip>
@@ -445,9 +331,7 @@ const SupplierPage = () => {
       </TableContainer>
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="lg" fullWidth>
-        <DialogTitle>
-          {editMode ? 'Cập nhật nhà cung cấp' : 'Thêm nhà cung cấp mới'}
-        </DialogTitle>
+        <DialogTitle>{editMode ? 'Cập nhật nhà cung cấp' : 'Thêm nhà cung cấp mới'}</DialogTitle>
         <form onSubmit={formik.handleSubmit}>
           <DialogContent dividers>
             <Grid container spacing={3}>
@@ -568,7 +452,7 @@ const SupplierPage = () => {
                   <AccordionDetails>
                     <TextField
                       fullWidth
-                      label="Điện thoại bàn"
+                      label="Điện thoại"
                       name="contact.phone"
                       value={formik.values.contact.phone}
                       onChange={formik.handleChange}
@@ -578,12 +462,10 @@ const SupplierPage = () => {
                     />
                     <TextField
                       fullWidth
-                      label="Di động *"
+                      label="Di động"
                       name="contact.mobile"
                       value={formik.values.contact.mobile}
                       onChange={formik.handleChange}
-                      error={formik.touched.contact?.mobile && !!formik.errors.contact?.mobile}
-                      helperText={formik.touched.contact?.mobile && formik.errors.contact?.mobile}
                       margin="normal"
                     />
                     <TextField
@@ -697,90 +579,225 @@ const SupplierPage = () => {
               </Grid>
 
               <Grid item xs={12}>
-                <Accordion defaultExpanded>
+                <Accordion>
                   <AccordionSummary expandIcon={<ExpandMore />}>
                     <Payment sx={{ mr: 1 }} />
+                    <Typography>Thông tin bổ sung</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={4}>
+                        <TextField
+                          fullWidth
+                          label="Điều khoản thanh toán (ngày) *"
+                          name="paymentTerms"
+                          type="number"
+                          value={formik.values.paymentTerms}
+                          onChange={formik.handleChange}
+                          error={formik.touched.paymentTerms && !!formik.errors.paymentTerms}
+                          helperText={formik.touched.paymentTerms && formik.errors.paymentTerms}
+                          InputProps={{
+                            endAdornment: <InputAdornment position="end">ngày</InputAdornment>,
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={4}>
+                        <TextField
+                          fullWidth
+                          label="Đánh giá"
+                          name="rating"
+                          type="number"
+                          inputProps={{ min: 0, max: 5, step: 0.1 }}
+                          value={formik.values.rating}
+                          onChange={formik.handleChange}
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <Star color="warning" />
+                              </InputAdornment>
+                            ),
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={4}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              name="isActive"
+                              checked={formik.values.isActive}
+                              onChange={formik.handleChange}
+                              color="primary"
+                            />
+                          }
+                          label="Đang hoạt động"
+                          labelPlacement="start"
+                          sx={{ justifyContent: 'space-between', ml: 0 }}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          label="Ghi chú"
+                          name="notes"
+                          multiline
+                          rows={4}
+                          value={formik.values.notes}
+                          onChange={formik.handleChange}
+                          margin="normal"
+                        />
+                      </Grid>
+                    </Grid>
+                  </AccordionDetails>
+                </Accordion>
+              </Grid>
+
+              <Grid item xs={12}>
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMore />}>
+                    <Star sx={{ mr: 1 }} />
                     <Typography>Sản phẩm cung cấp</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
-                    <Box mb={2}>
-                      <ProductSearch 
-                        products={products}
-                        onSelect={addProductToSupplier}
-                        excludeSelected={formik.values.suppliedProducts.map(sp => sp.product._id)}
-                      />
+                    <Box sx={{ mb: 2 }}>
+                      <Button
+                        variant="outlined"
+                        startIcon={<Add />}
+                        onClick={() => {
+                          formik.setFieldValue('suppliedProducts', [
+                            ...formik.values.suppliedProducts,
+                            {
+                              product: '',
+                              importPrice: 0,
+                              minOrderQuantity: 1,
+                              leadTime: 0,
+                              unit: 'cái',
+                              conversionRate: 1,
+                              isPrimary: false
+                            }
+                          ]);
+                        }}
+                      >
+                        Thêm sản phẩm
+                      </Button>
                     </Box>
 
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Sản phẩm</TableCell>
-                          <TableCell>Giá nhập</TableCell>
-                          <TableCell>Số lượng tối thiểu</TableCell>
-                          <TableCell>Thời gian giao hàng</TableCell>
-                          <TableCell>Chính</TableCell>
-                          <TableCell>Thao tác</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {formik.values.suppliedProducts.map((sp, index) => (
-                          <TableRow key={index}>
-                            <TableCell>
-                              {sp.product?.name || 'Đang tải...'}
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                type="number"
-                                name={`suppliedProducts[${index}].importPrice`}
-                                value={sp.importPrice}
-                                onChange={formik.handleChange}
-                                size="small"
-                                InputProps={{
-                                  endAdornment: (
-                                    <InputAdornment position="end">₫</InputAdornment>
-                                  ),
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                type="number"
-                                name={`suppliedProducts[${index}].minOrderQuantity`}
-                                value={sp.minOrderQuantity}
-                                onChange={formik.handleChange}
-                                size="small"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                type="number"
-                                name={`suppliedProducts[${index}].leadTime`}
-                                value={sp.leadTime}
-                                onChange={formik.handleChange}
-                                size="small"
-                                InputProps={{
-                                  endAdornment: (
-                                    <InputAdornment position="end">ngày</InputAdornment>
-                                  ),
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Switch
-                                name={`suppliedProducts[${index}].isPrimary`}
-                                checked={sp.isPrimary}
-                                onChange={formik.handleChange}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <IconButton onClick={() => removeProductFromSupplier(index)}>
-                                <Close fontSize="small" />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    {formik.values.suppliedProducts.map((item, index) => (
+                      <Paper key={index} sx={{ p: 2, mb: 2 }}>
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} md={4}>
+                            <Autocomplete
+                              options={products}
+                              getOptionLabel={(option) => option.name}
+                              value={products.find(p => p._id === item.product) || null}
+                              onChange={(e, value) => {
+                                formik.setFieldValue(`suppliedProducts[${index}].product`, value?._id || '');
+                              }}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  label="Chọn sản phẩm *"
+                                  error={formik.touched.suppliedProducts?.[index]?.product && 
+                                         !!formik.errors.suppliedProducts?.[index]?.product}
+                                  helperText={formik.touched.suppliedProducts?.[index]?.product && 
+                                             formik.errors.suppliedProducts?.[index]?.product}
+                                />
+                              )}
+                            />
+                          </Grid>
+                          
+                          <Grid item xs={6} md={2}>
+                            <TextField
+                              fullWidth
+                              label="Giá nhập *"
+                              type="number"
+                              name={`suppliedProducts[${index}].importPrice`}
+                              value={item.importPrice}
+                              onChange={formik.handleChange}
+                              error={formik.touched.suppliedProducts?.[index]?.importPrice && 
+                                    !!formik.errors.suppliedProducts?.[index]?.importPrice}
+                              helperText={formik.touched.suppliedProducts?.[index]?.importPrice && 
+                                         formik.errors.suppliedProducts?.[index]?.importPrice}
+                            />
+                          </Grid>
+
+                          <Grid item xs={6} md={2}>
+                            <TextField
+                              fullWidth
+                              label="Số lượng tối thiểu *"
+                              type="number"
+                              name={`suppliedProducts[${index}].minOrderQuantity`}
+                              value={item.minOrderQuantity}
+                              onChange={formik.handleChange}
+                              inputProps={{ min: 1 }}
+                            />
+                          </Grid>
+
+                          <Grid item xs={6} md={2}>
+                            <TextField
+                              fullWidth
+                              label="Thời gian giao hàng"
+                              type="number"
+                              name={`suppliedProducts[${index}].leadTime`}
+                              value={item.leadTime}
+                              onChange={formik.handleChange}
+                              InputProps={{ endAdornment: <InputAdornment position="end">ngày</InputAdornment> }}
+                            />
+                          </Grid>
+
+                          <Grid item xs={6} md={2}>
+                            <TextField
+                              select
+                              fullWidth
+                              label="Đơn vị *"
+                              name={`suppliedProducts[${index}].unit`}
+                              value={item.unit}
+                              onChange={formik.handleChange}
+                            >
+                              {['thùng', 'bao', 'chai', 'lọ', 'hộp', 'gói', 'cái', 'kg', 'liter'].map(unit => (
+                                <MenuItem key={unit} value={unit}>{unit}</MenuItem>
+                              ))}
+                            </TextField>
+                          </Grid>
+
+                          <Grid item xs={6} md={2}>
+                            <TextField
+                              fullWidth
+                              label="Tỷ lệ quy đổi *"
+                              type="number"
+                              name={`suppliedProducts[${index}].conversionRate`}
+                              value={item.conversionRate}
+                              onChange={formik.handleChange}
+                              inputProps={{ min: 1 }}
+                            />
+                          </Grid>
+
+                          <Grid item xs={6} md={2}>
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  name={`suppliedProducts[${index}].isPrimary`}
+                                  checked={item.isPrimary}
+                                  onChange={formik.handleChange}
+                                />
+                              }
+                              label="Nhà cung cấp chính"
+                            />
+                          </Grid>
+
+                          <Grid item xs={12} sx={{ textAlign: 'right' }}>
+                            <IconButton
+                              onClick={() => {
+                                const newProducts = [...formik.values.suppliedProducts];
+                                newProducts.splice(index, 1);
+                                formik.setFieldValue('suppliedProducts', newProducts);
+                              }}
+                            >
+                              <Delete color="error" />
+                            </IconButton>
+                          </Grid>
+                        </Grid>
+                      </Paper>
+                    ))}
                   </AccordionDetails>
                 </Accordion>
               </Grid>
@@ -798,34 +815,6 @@ const SupplierPage = () => {
             </Button>
           </DialogActions>
         </form>
-      </Dialog>
-
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-      >
-        <DialogTitle>Xác nhận xóa</DialogTitle>
-        <DialogContent>
-          <Typography>Bạn có chắc chắn muốn xóa nhà cung cấp này?</Typography>
-          <Typography variant="body2" color="text.secondary" mt={1}>
-            Hành động này không thể hoàn tác!
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button 
-            onClick={() => setDeleteDialogOpen(false)}
-            variant="outlined"
-          >
-            Hủy bỏ
-          </Button>
-          <Button 
-            onClick={handleDelete} 
-            color="error"
-            variant="contained"
-          >
-            Xác nhận xóa
-          </Button>
-        </DialogActions>
       </Dialog>
 
       <Snackbar
