@@ -1,13 +1,13 @@
 const mongoose = require("mongoose");
 
 const goodReceiptItemSchema = new mongoose.Schema({
-  product: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Product', 
-    required: true 
+  product: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product',
+    required: true
   },
-  quantity: { 
-    type: Number, 
+  quantity: {
+    type: Number,
     required: true,
     min: 1,
     validate: {
@@ -15,8 +15,8 @@ const goodReceiptItemSchema = new mongoose.Schema({
       message: '{VALUE} is not an integer value'
     }
   },
-  manufactureDate: { 
-    type: Date, 
+  manufactureDate: {
+    type: Date,
     required: true,
     validate: {
       validator: function(value) {
@@ -25,8 +25,8 @@ const goodReceiptItemSchema = new mongoose.Schema({
       message: "Manufacture date cannot be in the future"
     }
   },
-  expiryDate: { 
-    type: Date, 
+  expiryDate: {
+    type: Date,
     required: true,
     validate: {
       validator: function(value) {
@@ -34,16 +34,6 @@ const goodReceiptItemSchema = new mongoose.Schema({
       },
       message: "Expiry date must be after manufacture date"
     }
-  },
-  unitPrice: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  totalPrice: {
-    type: Number,
-    required: true,
-    min: 0
   },
   batch: {
     type: mongoose.Schema.Types.ObjectId,
@@ -78,37 +68,29 @@ const goodReceiptSchema = new mongoose.Schema({
     default: 'draft'
   },
   items: [goodReceiptItemSchema],
-  totalAmount: {
-    type: Number,
-    required: true,
-    min: 0
-  },
   notes: {
     type: String,
     trim: true,
     maxlength: [500, 'Notes cannot exceed 500 characters']
   }
-}, { 
+}, {
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
 
-// Indexes for better query performance
 goodReceiptSchema.index({ purchaseOrder: 1 });
 goodReceiptSchema.index({ supplier: 1 });
 goodReceiptSchema.index({ receiptDate: -1 });
 goodReceiptSchema.index({ status: 1 });
 
-// Middleware to update inventory when good receipt is completed
 goodReceiptSchema.pre('save', async function(next) {
   if (this.isModified('status')) {
     if (this.status === 'received') {
       const Batch = mongoose.model('Batch');
       const Inventory = mongoose.model('Inventory');
-      
+
       for (const item of this.items) {
-        // Create batch for each item
         const batch = new Batch({
           product: item.product,
           supplier: this.supplier,
@@ -118,13 +100,11 @@ goodReceiptSchema.pre('save', async function(next) {
           remaining_quantity: item.quantity,
           status: 'active',
           goodReceipt: this._id,
-          import_price: item.unitPrice
         });
-        
+
         const savedBatch = await batch.save();
         item.batch = savedBatch._id;
-        
-        // Update inventory
+
         await Inventory.findOneAndUpdate(
           { product: item.product },
           { $inc: { warehouse_stock: item.quantity } },

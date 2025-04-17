@@ -60,11 +60,7 @@ const batchSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "GoodReceipt",
       required: true
-    },
-    import_price: {
-      type: Number,
-      required: true,
-      min: 0
+    
     },
     discountInfo: {
       isDiscounted: {
