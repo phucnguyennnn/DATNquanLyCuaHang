@@ -1,6 +1,6 @@
 const express = require("express");
 const userController = require("../controllers/userController");
-const authMiddleware = require('../middlewares/authmiddleware');
+const authMiddleware = require('.../middlewares/authMiddleware');
 const router = express.Router();
 
 // Middleware xác thực cho tất cả route

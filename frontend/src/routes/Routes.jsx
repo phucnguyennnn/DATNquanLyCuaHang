@@ -24,6 +24,8 @@ import ProductPage from "../pages/ProductsPage";
 import CartPage from "../pages/Cart";
 import CategoryPage from "../pages/CategoryPage";
 import SupplierPage from "../pages/SupplierPage";
+import VerifyOTPPage from "../pages/VerifyOTPPage";
+import VerifyResetOTPPage from "../pages/VerifyResetOTP";
 
 
 const useAuth = () => {
@@ -52,7 +54,9 @@ const AppRouter = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        
+        <Route path="verify-otp" element={<VerifyOTPPage />} />
+        <Route path="verify-reset-otp" element={<VerifyResetOTPPage />} />
+        <Route path="products_page" element={<ProductPage />} />
         {/* Protected routes with layout */}
         <Route
           path="/"
@@ -61,7 +65,6 @@ const AppRouter = () => {
           <Route index element={<HomePage />} />
           <Route path="homepage" element={<HomePage />} />
           <Route path="products_manager" element={<ProductManager />} />
-          <Route path="products_page" element={<ProductPage />} />
           <Route path="settings" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
           <Route path="suppliers" element={<SupplierPage />} />
@@ -71,6 +74,7 @@ const AppRouter = () => {
           <Route path="inventory/add-shipment" element={<AddToInventoy />} />
           <Route path="cart_page" element={<CartPage />} />
           <Route path="categories" element={<CategoryPage />} />
+          
         </Route>
         
         {/* 404 page */}
