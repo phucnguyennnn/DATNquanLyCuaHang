@@ -50,9 +50,46 @@ const Sidebar = () => {
   const hoverColor = theme.palette.action.hover;
   const textColor = theme.palette.text.primary;
   const iconColor = theme.palette.primary.contrastText; // Màu chữ/icon trên màu primary
-
   const handleLogout = async () => {
-    // ... (hàm handleLogout giữ nguyên)
+    try {
+      const token = localStorage.getItem("authToken");
+
+      if (token) {
+        console.log("Tìm thấy token:", token);
+        navigate("/login");
+      } else {
+        console.log("Không tìm thấy Token.");
+      }
+
+      const response = await axios.post(
+        "http://localhost:8000/api/auth/logout",
+        {},
+        {
+          headers: {
+            token: `Bearer ${token}`,
+          },
+          withCredentials: true,
+        }
+      );
+
+      if (response.status === 200) {
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("userID");
+        localStorage.removeItem("userRole");
+        console.log("Đăng xuất thành công!");
+        navigate("/login");
+      } else {
+        console.error("Đăng xuất thất bại:", response.status);
+      }
+    } catch (error) {
+      console.error("Lỗi đăng xuất:", error.response?.data || error.message);
+      if (error.response?.status === 403) {
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("userID");
+        localStorage.removeItem("role");
+        navigate("/login");
+      }
+    }
   };
 
   const handleLogoutClick = () => {
@@ -103,7 +140,9 @@ const Sidebar = () => {
             <ListItemButton
               onClick={() => navigate("/homepage")}
               sx={{
-                backgroundColor: isPathActive("/homepage") ? activeColor : "transparent",
+                backgroundColor: isPathActive("/homepage")
+                  ? activeColor
+                  : "transparent",
                 color: iconColor,
                 "&:hover": {
                   backgroundColor: hoverColor,
@@ -119,7 +158,9 @@ const Sidebar = () => {
             <ListItemButton
               onClick={() => navigate("/products_manager")}
               sx={{
-                backgroundColor: isPathActive("/products_manager") ? activeColor : "transparent",
+                backgroundColor: isPathActive("/products_manager")
+                  ? activeColor
+                  : "transparent",
                 color: iconColor,
                 "&:hover": {
                   backgroundColor: hoverColor,
@@ -137,7 +178,9 @@ const Sidebar = () => {
                 <ListItemButton
                   onClick={() => setOpenInventory(!openInventory)}
                   sx={{
-                    backgroundColor: isPathPrefixActive("/inventory") ? activeColor : "transparent",
+                    backgroundColor: isPathPrefixActive("/inventory")
+                      ? activeColor
+                      : "transparent",
                     color: iconColor,
                     "&:hover": {
                       backgroundColor: hoverColor,
@@ -148,15 +191,28 @@ const Sidebar = () => {
                     <WarehouseIcon />
                   </ListItemIcon>
                   <ListItemText primary="Kho hàng" />
-                  {openInventory ? <ExpandLess sx={{ color: iconColor }} /> : <ExpandMore sx={{ color: iconColor }} />}
+                  {openInventory ? (
+                    <ExpandLess sx={{ color: iconColor }} />
+                  ) : (
+                    <ExpandMore sx={{ color: iconColor }} />
+                  )}
                 </ListItemButton>
 
-                <Collapse in={openInventory} timeout="auto" unmountOnExit sx={{ backgroundColor: primaryColor }}>
+                <Collapse
+                  in={openInventory}
+                  timeout="auto"
+                  unmountOnExit
+                  sx={{ backgroundColor: primaryColor }}
+                >
                   <List component="div" disablePadding>
                     <ListItemButton
                       sx={{
                         pl: 4,
-                        backgroundColor: isPathActive("/inventory/purchase-order") ? activeColor : "transparent",
+                        backgroundColor: isPathActive(
+                          "/inventory/purchase-order"
+                        )
+                          ? activeColor
+                          : "transparent",
                         color: iconColor,
                         "&:hover": {
                           backgroundColor: hoverColor,
@@ -172,7 +228,9 @@ const Sidebar = () => {
                     <ListItemButton
                       sx={{
                         pl: 4,
-                        backgroundColor: isPathActive("/inventory/receipt") ? activeColor : "transparent",
+                        backgroundColor: isPathActive("/inventory/receipt")
+                          ? activeColor
+                          : "transparent",
                         color: iconColor,
                         "&:hover": {
                           backgroundColor: hoverColor,
@@ -188,7 +246,9 @@ const Sidebar = () => {
                     <ListItemButton
                       sx={{
                         pl: 4,
-                        backgroundColor: isPathActive("/inventory/add-shipment") ? activeColor : "transparent",
+                        backgroundColor: isPathActive("/inventory/add-shipment")
+                          ? activeColor
+                          : "transparent",
                         color: iconColor,
                         "&:hover": {
                           backgroundColor: hoverColor,
@@ -205,7 +265,7 @@ const Sidebar = () => {
                 </Collapse>
               </>
             )}
-
+            {/* 
             {role === "admin" && (
               <ListItemButton
                 onClick={() => navigate("/products_page")}
@@ -222,13 +282,15 @@ const Sidebar = () => {
                 </ListItemIcon>
                 <ListItemText primary="Giao diện sản phẩm khách hàng" />
               </ListItemButton>
-            )}
+            )} */}
 
             {role === "admin" && (
               <ListItemButton
                 onClick={() => navigate("/categories")}
                 sx={{
-                  backgroundColor: isPathActive("/categories") ? activeColor : "transparent",
+                  backgroundColor: isPathActive("/categories")
+                    ? activeColor
+                    : "transparent",
                   color: iconColor,
                   "&:hover": {
                     backgroundColor: hoverColor,
@@ -245,7 +307,9 @@ const Sidebar = () => {
               <ListItemButton
                 onClick={() => navigate("/suppliers")}
                 sx={{
-                  backgroundColor: isPathActive("/suppliers") ? activeColor : "transparent",
+                  backgroundColor: isPathActive("/suppliers")
+                    ? activeColor
+                    : "transparent",
                   color: iconColor,
                   "&:hover": {
                     backgroundColor: hoverColor,
@@ -262,7 +326,9 @@ const Sidebar = () => {
               <ListItemButton
                 onClick={() => navigate("/users")}
                 sx={{
-                  backgroundColor: isPathActive("/users") ? activeColor : "transparent",
+                  backgroundColor: isPathActive("/users")
+                    ? activeColor
+                    : "transparent",
                   color: iconColor,
                   "&:hover": {
                     backgroundColor: hoverColor,
@@ -279,7 +345,9 @@ const Sidebar = () => {
             <ListItemButton
               onClick={() => navigate("/settings")}
               sx={{
-                backgroundColor: isPathActive("/settings") ? activeColor : "transparent",
+                backgroundColor: isPathActive("/settings")
+                  ? activeColor
+                  : "transparent",
                 color: iconColor,
                 "&:hover": {
                   backgroundColor: hoverColor,
@@ -295,7 +363,9 @@ const Sidebar = () => {
             <ListItemButton
               onClick={() => navigate("/profile")}
               sx={{
-                backgroundColor: isPathActive("/profile") ? activeColor : "transparent",
+                backgroundColor: isPathActive("/profile")
+                  ? activeColor
+                  : "transparent",
                 color: iconColor,
                 "&:hover": {
                   backgroundColor: hoverColor,
@@ -331,7 +401,9 @@ const Sidebar = () => {
 
       <Dialog open={openLogoutDialog} onClose={handleCloseLogoutDialog}>
         <DialogTitle color={textColor}>Xác nhận đăng xuất</DialogTitle>
-        <DialogContent color={textColor}>Bạn có chắc chắn muốn đăng xuất không?</DialogContent>
+        <DialogContent color={textColor}>
+          Bạn có chắc chắn muốn đăng xuất không?
+        </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseLogoutDialog} color="primary">
             Hủy
