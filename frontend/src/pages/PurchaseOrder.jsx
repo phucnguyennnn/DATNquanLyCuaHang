@@ -46,6 +46,8 @@ const PurchaseOrderManagement = () => {
   const [quantity, setQuantity] = useState(1);
   const [unit, setUnit] = useState("");
   const [conversionRate, setConversionRate] = useState(1);
+  const [unitPrice, setUnitPrice] = useState(0);
+  const [smallestUnit, setSmallestUnit] = useState("");
   const [orderItems, setOrderItems] = useState([]);
   const [sendEmail, setSendEmail] = useState(true);
   const [orders, setOrders] = useState([]);
@@ -107,7 +109,7 @@ const PurchaseOrderManagement = () => {
   };
 
   const handleAddItem = () => {
-    if (!selectedProduct || quantity <= 0 || !unit || conversionRate <= 0) {
+    if (!selectedProduct || quantity <= 0 || !unit || conversionRate <= 0 || !smallestUnit || unitPrice <= 0) {
       alert("Vui lòng nhập đầy đủ thông tin sản phẩm!");
       return;
     }
@@ -132,8 +134,9 @@ const PurchaseOrderManagement = () => {
         quantity: Number(quantity),
         unit,
         conversionRate: Number(conversionRate),
-        unitPrice: product.price,
-        totalPrice: Number(quantity) * product.price,
+        unitPrice: Number(unitPrice),
+        smallestUnit,
+        totalPrice: Number(quantity) * Number(unitPrice),
       }]);
     }
 
@@ -141,6 +144,8 @@ const PurchaseOrderManagement = () => {
     setQuantity(1);
     setUnit("");
     setConversionRate(1);
+    setUnitPrice(0);
+    setSmallestUnit("");
   };
 
   const handleRemoveItem = (productId) => {
@@ -171,12 +176,13 @@ const PurchaseOrderManagement = () => {
     try {
       const payload = {
         supplier: selectedSupplier,
-        items: orderItems.map(({ product, quantity, unit, conversionRate, unitPrice }) => ({
+        items: orderItems.map(({ product, quantity, unit, conversionRate, unitPrice, smallestUnit }) => ({
           product,
           quantity,
           unit,
           conversionRate,
           unitPrice,
+          smallestUnit,
         })),
         totalAmount: calculateTotal(),
         sendEmailFlag: sendEmail,
@@ -228,12 +234,13 @@ const PurchaseOrderManagement = () => {
       const payload = {
         ...editOrder,
         supplier: editOrder.supplier._id,
-        items: editOrderItems.map(({ product, quantity, unit, conversionRate, unitPrice }) => ({
+        items: editOrderItems.map(({ product, quantity, unit, conversionRate, unitPrice, smallestUnit }) => ({
           product: product._id,
           quantity,
           unit,
           conversionRate,
-          unitPrice
+          unitPrice,
+          smallestUnit,
         }))
       };
 
@@ -287,111 +294,172 @@ const PurchaseOrderManagement = () => {
           Tạo phiếu đặt hàng
         </Typography>
         <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-          <Stack spacing={3}>
-            <FormControl fullWidth>
-              <InputLabel>Chọn nhà cung cấp</InputLabel>
-              <Select
-                value={selectedSupplier}
-                label="Chọn nhà cung cấp"
-                onChange={(e) => setSelectedSupplier(e.target.value)}
-              >
-                {suppliers.map((sup) => (
-                  <MenuItem key={sup._id} value={sup._id}>
-                    {sup.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={4}>
-                <FormControl fullWidth>
-                  <InputLabel>Sản phẩm</InputLabel>
-                  <Select
-                    value={selectedProduct}
-                    label="Sản phẩm"
-                    onChange={(e) => setSelectedProduct(e.target.value)}
-                  >
-                    {products.map((p) => (
-                      <MenuItem key={p._id} value={p._id}>
-                        {p.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={6} sm={2}>
-                <TextField
-                  label="Số lượng"
-                  type="number"
-                  fullWidth
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
-                />
-              </Grid>
-              <Grid item xs={6} sm={2}>
-                <FormControl fullWidth>
-                  <InputLabel>Đơn vị</InputLabel>
-                  <Select
-                    value={unit}
-                    label="Đơn vị"
-                    onChange={(e) => setUnit(e.target.value)}
-                  >
-                    {UNITS.map((u) => (
-                      <MenuItem key={u} value={u}>
-                        {u}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={6} sm={2}>
-                <TextField
-                  label="Quy đổi"
-                  type="number"
-                  fullWidth
-                  value={conversionRate}
-                  onChange={(e) => setConversionRate(Number(e.target.value))}
-                />
-              </Grid>
-              <Grid item xs={12} sm={1}>
-                <Button
-                  variant="contained"
-                  onClick={handleAddItem}
-                  sx={{ height: "100%" }}
+          <Typography variant="h6" gutterBottom>
+            Thông tin nhà cung cấp
+          </Typography>
+          <FormControl fullWidth>
+            <InputLabel>Chọn nhà cung cấp</InputLabel>
+            <Select
+              value={selectedSupplier}
+              label="Chọn nhà cung cấp"
+              onChange={(e) => setSelectedSupplier(e.target.value)}
+            >
+              {suppliers.map((sup) => (
+                <MenuItem key={sup._id} value={sup._id}>
+                  {sup.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Paper>
+
+        <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+          <Typography variant="h6" gutterBottom>
+            Thông tin sản phẩm
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth>
+                <InputLabel>Sản phẩm</InputLabel>
+                <Select
+                  value={selectedProduct}
+                  label="Sản phẩm"
+                  onChange={(e) => setSelectedProduct(e.target.value)}
                 >
-                  <AddIcon />
-                </Button>
+                  {products.map((p) => (
+                    <MenuItem key={p._id} value={p._id}>
+                      {p.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={8}>
+              <Grid container spacing={2}>
+                <Grid item xs={2.4}>
+                  <TextField
+                    label="Số lượng"
+                    type="number"
+                    fullWidth
+                    value={quantity}
+                    onChange={(e) => setQuantity(Number(e.target.value))}
+                  />
+                </Grid>
+                <Grid item xs={2.4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Đơn vị</InputLabel>
+                    <Select
+                      value={unit}
+                      label="Đơn vị"
+                      onChange={(e) => setUnit(e.target.value)}
+                    >
+                      {UNITS.map((u) => (
+                        <MenuItem key={u} value={u}>
+                          {u}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={2.4}>
+                  <TextField
+                    label="Quy đổi"
+                    type="number"
+                    fullWidth
+                    value={conversionRate}
+                    onChange={(e) => setConversionRate(Number(e.target.value))}
+                  />
+                </Grid>
+                <Grid item xs={2.4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Đơn vị nhỏ nhất</InputLabel>
+                    <Select
+                      value={smallestUnit}
+                      label="Đơn vị nhỏ nhất"
+                      onChange={(e) => setSmallestUnit(e.target.value)}
+                    >
+                      {UNITS.map((u) => (
+                        <MenuItem key={u} value={u}>
+                          {u}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={2.4}>
+                  <TextField
+                    label="Giá nhập"
+                    type="number"
+                    fullWidth
+                    value={unitPrice}
+                    onChange={(e) => setUnitPrice(Number(e.target.value))}
+                  />
+                </Grid>
               </Grid>
             </Grid>
-            <TextField
-              label="Ngày giao hàng dự kiến"
-              type="date"
-              fullWidth
-              value={expectedDeliveryDate}
-              onChange={(e) => setExpectedDeliveryDate(e.target.value)}
-            />
-            <TextField
-              label="Ghi chú"
-              fullWidth
-              multiline
-              rows={4}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-            <TextField
-              label="Địa chỉ giao hàng"
-              fullWidth
-              value={deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
-            />
-            <TextField
-              label="Phương thức thanh toán"
-              fullWidth
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-            />
-          </Stack>
+            <Grid item xs={12} sm={1}>
+              <Button
+                variant="contained"
+                onClick={handleAddItem}
+                sx={{ height: "100%" }}
+              >
+                <AddIcon />
+              </Button>
+            </Grid>
+          </Grid>
         </Paper>
+
+        <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+          <Typography variant="h6" gutterBottom>
+            Thông tin giao hàng
+          </Typography>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <TextField
+                label="Địa chỉ giao hàng"
+                fullWidth
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                label="Ghi chú"
+                fullWidth
+                multiline
+                rows={2}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </Grid>
+
+            <Grid item xs={6}>
+              <TextField
+                label="Ngày giao hàng dự kiến"
+                type="date"
+                fullWidth
+                value={expectedDeliveryDate}
+                onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+                InputLabelProps={{
+                  shrink: true,
+                }}
+              />
+            </Grid>
+
+            <Grid item xs={6}>
+              <TextField
+                label="Phương thức thanh toán"
+                fullWidth
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+              />
+            </Grid>
+          </Grid>
+        </Paper>
+
+        
 
         {orderItems.length > 0 && (
           <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
@@ -408,7 +476,8 @@ const PurchaseOrderManagement = () => {
                       <TableCell>SL</TableCell>
                       <TableCell>Quy đổi</TableCell>
                       <TableCell>SL nhỏ nhất</TableCell>
-                      <TableCell>Đơn giá</TableCell>
+                      <TableCell>Đơn vị nhỏ nhất</TableCell>
+                      <TableCell>Giá nhập</TableCell>
                       <TableCell>Thành tiền</TableCell>
                       <TableCell></TableCell>
                     </TableRow>
@@ -429,6 +498,7 @@ const PurchaseOrderManagement = () => {
                         </TableCell>
                         <TableCell>{item.conversionRate}</TableCell>
                         <TableCell>{item.quantity * item.conversionRate}</TableCell>
+                        <TableCell>{item.smallestUnit}</TableCell>
                         <TableCell>{item.unitPrice.toLocaleString()} đ</TableCell>
                         <TableCell>{item.totalPrice.toLocaleString()} đ</TableCell>
                         <TableCell>
@@ -546,6 +616,7 @@ const PurchaseOrderManagement = () => {
                         <TableCell>SL</TableCell>
                         <TableCell>Quy đổi</TableCell>
                         <TableCell>Đơn giá</TableCell>
+                        <TableCell>Đơn vị nhỏ nhất</TableCell>
                         <TableCell>Thành tiền</TableCell>
                       </TableRow>
                     </TableHead>
@@ -591,6 +662,18 @@ const PurchaseOrderManagement = () => {
                                 handleEditOrderItemChange(index, "unitPrice", Number(e.target.value))
                               }
                             />
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={item.smallestUnit}
+                              onChange={(e) => 
+                                handleEditOrderItemChange(index, "smallestUnit", e.target.value)
+                              }
+                            >
+                              {UNITS.map((unit) => (
+                                <MenuItem key={unit} value={unit}>{unit}</MenuItem>
+                              ))}
+                            </Select>
                           </TableCell>
                           <TableCell>{(item.quantity * item.unitPrice).toLocaleString()} đ</TableCell>
                         </TableRow>

@@ -28,7 +28,13 @@ const purchaseOrderController = {
           return res.status(404).json({ message: `Không tìm thấy sản phẩm với ID: ${item.product}` });
         }
 
-        const itemTotal = product.price * item.quantity;
+        // Find the unit with the matching name and get its salePrice
+        const unit = product.units.find(u => u.name === item.unit);
+        if (!unit) {
+          return res.status(400).json({ message: `Không tìm thấy đơn vị '${item.unit}' cho sản phẩm ${product.name}.` });
+        }
+
+        const itemTotal = unit.salePrice * item.quantity;
         totalAmount += itemTotal;
       }
 
@@ -192,13 +198,16 @@ const sendPurchaseOrderEmail = async (toEmail, order) => {
   try {
     const itemsListHtml = order.items.map((item, index) => {
       const productName = item.product ? item.product.name : 'Không rõ';
-      const itemTotal = (item.product ? item.product.price : 0) * item.quantity;
+      const unit = item.product?.units.find(u => u.name === item.unit);
+      const salePrice = unit ? unit.salePrice : 0;
+      const itemTotal = salePrice * item.quantity;
+
       return `
         <tr>
           <td>${index + 1}</td>
           <td>${productName}</td>
           <td>${item.quantity} ${item.unit}</td>
-          <td>${item.product ? item.product.price.toLocaleString() : 'Không rõ'} đ</td>
+          <td>${salePrice.toLocaleString()} đ</td>
           <td>${item.conversionRate}</td>
           <td>${itemTotal.toLocaleString()} đ</td>
         </tr>

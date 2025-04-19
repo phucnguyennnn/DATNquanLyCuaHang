@@ -24,12 +24,30 @@ const CreateGoodReceipt = () => {
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const token = localStorage.getItem("authToken");
+  
+
+  // Hàm kiểm tra token
+  const isTokenValid = () => {
+    if (!token) {
+      alert("Vui lòng đăng nhập để tiếp tục.");
+      return false;
+    }
+    return true;
+  };
 
   // Hàm fetchOrders được tách ra để tái sử dụng
   const fetchOrders = async () => {
+
+    if (!isTokenValid()) return;
     try {
-      const res = await axios.get("http://localhost:8000/api/purchaseOrder");
+      const res = await axios.get("http://localhost:8000/api/purchaseorder", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       setOrders(res.data.filter((o) => o.status === "pending"));
+      console.log(res.data.filter((o) => o.status === "pending"));
     } catch (error) {
       console.error(error);
     }
@@ -41,9 +59,17 @@ const CreateGoodReceipt = () => {
 
   // Khi chọn phiếu đặt mua
   const handleSelectOrder = async (orderId) => {
+    if (!isTokenValid()) return;
+    
+
     try {
       const res = await axios.get(
-        `http://localhost:8000/api/purchaseOrder/${orderId}`
+        `http://localhost:8000/api/purchaseorder/${orderId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       setSelectedOrder(res.data);
 
@@ -70,14 +96,22 @@ const CreateGoodReceipt = () => {
 
   // Gửi phiếu nhập kho
   const handleSubmit = async () => {
-    if (!selectedOrder) return;
+    if (!isTokenValid() || !selectedOrder) return;
 
     try {
       setLoading(true);
-      await axios.post("http://localhost:8000/api/goodReceipt", {
-        purchaseOrderId: selectedOrder._id,
-        items: batchInfo,
-      });
+      await axios.post(
+        "http://localhost:8000/api/goodReceipt",
+        {
+          purchaseOrderId: selectedOrder._id,
+          items: batchInfo,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       alert("Tạo phiếu nhập kho thành công!");
       setSelectedOrder(null);

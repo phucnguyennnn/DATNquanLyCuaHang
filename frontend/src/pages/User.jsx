@@ -39,6 +39,21 @@ const ListUsers = () => {
     fetchUsers();
   }, []);
 
+  const renderAddress = (address) => {
+    if (!address) return 'Không có địa chỉ';
+
+    const { street, city, state, postalCode, country } = address;
+    return (
+      <>
+        {street && <div>{street}</div>}
+        {city && <div>{city}</div>}
+        {state && <div>{state}</div>}
+        {postalCode && <div>{postalCode}</div>}
+        {country && <div>{country}</div>}
+      </>
+    );
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" mt={4}>
@@ -81,7 +96,7 @@ const ListUsers = () => {
               <TableCell>{user.fullName}</TableCell>
               <TableCell>{user.email}</TableCell>
               <TableCell>{user.phone}</TableCell>
-              <TableCell>{user.address}</TableCell>
+              <TableCell>{renderAddress(user.address)}</TableCell>
               <TableCell>{user.role}</TableCell>
               <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
             </TableRow>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { 
   Box, 
   Button, 
@@ -97,6 +97,9 @@ const SupplierSchema = yup.object().shape({
     })
   )
 });
+
+// Memoized TextField component
+const MemoizedTextField = memo((props) => <TextField {...props} />);
 
 const SupplierPage = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -233,7 +236,7 @@ const SupplierPage = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <TextField
+        <MemoizedTextField
           label="Tìm kiếm nhà cung cấp"
           variant="outlined"
           size="small"
@@ -342,7 +345,7 @@ const SupplierPage = () => {
                     <Typography>Thông tin cơ bản</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Tên nhà cung cấp *"
                       name="name"
@@ -352,7 +355,7 @@ const SupplierPage = () => {
                       helperText={formik.touched.name && formik.errors.name}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Tên công ty"
                       name="company"
@@ -360,7 +363,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Mã số thuế"
                       name="taxId"
@@ -368,7 +371,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Mô tả"
                       name="description"
@@ -389,7 +392,7 @@ const SupplierPage = () => {
                   <AccordionDetails>
                     <Grid container spacing={2}>
                       <Grid item xs={12} md={6}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Đường/Số nhà"
                           name="address.street"
@@ -399,7 +402,7 @@ const SupplierPage = () => {
                         />
                       </Grid>
                       <Grid item xs={12} md={6}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Thành phố"
                           name="address.city"
@@ -409,7 +412,7 @@ const SupplierPage = () => {
                         />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Tỉnh/Thành"
                           name="address.state"
@@ -419,7 +422,7 @@ const SupplierPage = () => {
                         />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Mã bưu điện"
                           name="address.postalCode"
@@ -429,7 +432,7 @@ const SupplierPage = () => {
                         />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Quốc gia"
                           name="address.country"
@@ -450,7 +453,7 @@ const SupplierPage = () => {
                     <Typography>Thông tin liên hệ</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Điện thoại"
                       name="contact.phone"
@@ -460,7 +463,7 @@ const SupplierPage = () => {
                       helperText={formik.touched.contact?.phone && formik.errors.contact?.phone}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Di động"
                       name="contact.mobile"
@@ -468,7 +471,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Email"
                       name="contact.email"
@@ -476,7 +479,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Website"
                       name="contact.website"
@@ -493,7 +496,7 @@ const SupplierPage = () => {
                     <Typography>Người liên hệ chính</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Họ tên"
                       name="primaryContactPerson.name"
@@ -501,7 +504,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Chức vụ"
                       name="primaryContactPerson.position"
@@ -509,7 +512,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Số điện thoại"
                       name="primaryContactPerson.phone"
@@ -517,7 +520,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Email"
                       name="primaryContactPerson.email"
@@ -534,7 +537,7 @@ const SupplierPage = () => {
                     <Typography>Thông tin ngân hàng</Typography>
                   </AccordionSummary>
                   <AccordionDetails>
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Tên tài khoản"
                       name="bankDetails.accountName"
@@ -542,7 +545,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Số tài khoản"
                       name="bankDetails.accountNumber"
@@ -550,7 +553,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Tên ngân hàng"
                       name="bankDetails.bankName"
@@ -558,7 +561,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Chi nhánh"
                       name="bankDetails.branch"
@@ -566,7 +569,7 @@ const SupplierPage = () => {
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Mã SWIFT"
                       name="bankDetails.swiftCode"
@@ -587,7 +590,7 @@ const SupplierPage = () => {
                   <AccordionDetails>
                     <Grid container spacing={2}>
                       <Grid item xs={12} md={4}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Điều khoản thanh toán (ngày) *"
                           name="paymentTerms"
@@ -602,7 +605,7 @@ const SupplierPage = () => {
                         />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Đánh giá"
                           name="rating"
@@ -635,7 +638,7 @@ const SupplierPage = () => {
                         />
                       </Grid>
                       <Grid item xs={12}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Ghi chú"
                           name="notes"
@@ -693,7 +696,7 @@ const SupplierPage = () => {
                                 formik.setFieldValue(`suppliedProducts[${index}].product`, value?._id || '');
                               }}
                               renderInput={(params) => (
-                                <TextField
+                                <MemoizedTextField
                                   {...params}
                                   label="Chọn sản phẩm *"
                                   error={formik.touched.suppliedProducts?.[index]?.product && 
@@ -704,24 +707,8 @@ const SupplierPage = () => {
                               )}
                             />
                           </Grid>
-                          
                           <Grid item xs={6} md={2}>
-                            <TextField
-                              fullWidth
-                              label="Giá nhập *"
-                              type="number"
-                              name={`suppliedProducts[${index}].importPrice`}
-                              value={item.importPrice}
-                              onChange={formik.handleChange}
-                              error={formik.touched.suppliedProducts?.[index]?.importPrice && 
-                                    !!formik.errors.suppliedProducts?.[index]?.importPrice}
-                              helperText={formik.touched.suppliedProducts?.[index]?.importPrice && 
-                                         formik.errors.suppliedProducts?.[index]?.importPrice}
-                            />
-                          </Grid>
-
-                          <Grid item xs={6} md={2}>
-                            <TextField
+                            <MemoizedTextField
                               fullWidth
                               label="Số lượng tối thiểu *"
                               type="number"
@@ -733,7 +720,7 @@ const SupplierPage = () => {
                           </Grid>
 
                           <Grid item xs={6} md={2}>
-                            <TextField
+                            <MemoizedTextField
                               fullWidth
                               label="Thời gian giao hàng"
                               type="number"
@@ -745,7 +732,7 @@ const SupplierPage = () => {
                           </Grid>
 
                           <Grid item xs={6} md={2}>
-                            <TextField
+                            <MemoizedTextField
                               select
                               fullWidth
                               label="Đơn vị *"
@@ -756,11 +743,11 @@ const SupplierPage = () => {
                               {['thùng', 'bao', 'chai', 'lọ', 'hộp', 'gói', 'cái', 'kg', 'liter'].map(unit => (
                                 <MenuItem key={unit} value={unit}>{unit}</MenuItem>
                               ))}
-                            </TextField>
+                            </MemoizedTextField>
                           </Grid>
 
                           <Grid item xs={6} md={2}>
-                            <TextField
+                            <MemoizedTextField
                               fullWidth
                               label="Tỷ lệ quy đổi *"
                               type="number"

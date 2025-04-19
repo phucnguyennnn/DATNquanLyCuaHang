@@ -8,8 +8,11 @@ const AppWrapper = () => {
 
   // Lắng nghe sự kiện thay đổi localStorage (trong cùng tab)
   React.useEffect(() => {
-    const handleStorageChange = () => {
-      setKey((prev) => prev + 1);
+    const handleStorageChange = (event) => {
+      // Kiểm tra nếu thay đổi liên quan đến một key cụ thể
+      if (event.key) {
+        setKey((prev) => prev + 1);
+      }
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
