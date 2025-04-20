@@ -97,6 +97,7 @@ const ProductManager = () => {
   const [imagePreviews, setImagePreviews] = useState([]);
   const [selectedImages, setSelectedImages] = useState([]);
   const [showOptionalFields, setShowOptionalFields] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(""); // State để lưu giá trị tìm kiếm
   const token = localStorage.getItem("authToken");
   const unitTranslations = {
     piece: "Cái",
@@ -159,7 +160,7 @@ const ProductManager = () => {
       SKU: "",
       units: defaultUnits,
       suppliers: [],
-      active: true,
+      active: false,
       images: [],
       barcode: "",
     },
@@ -291,7 +292,7 @@ const ProductManager = () => {
         leadTime: s.leadTime || 0,
         isPrimary: s.isPrimary || false,
       })),
-      active: product.active || true, // Update to use 'active' field
+      active: product.active, // Update to use 'active' field
       images: [],
       barcode: product.barcode || "",
     });
@@ -307,16 +308,19 @@ const ProductManager = () => {
   };
 
   const handleDeleteProduct = async (id) => {
+    const confirmDelete = window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này?");
+    if (!confirmDelete) return;
+
     try {
       await axios.patch(
         `http://localhost:8000/api/products/${id}`,
-        { active: false }, // Update to set 'active' to false
+        { active: false }, // Đặt trạng thái thành không hoạt động
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
       setProducts(
-        products.map((p) => (p._id === id ? { ...p, active: false } : p)) // Update to use 'active'
+        products.map((p) => (p._id === id ? { ...p, active: false } : p)) // Cập nhật trạng thái trong danh sách
       );
       setSnackbar({
         open: true,
@@ -350,6 +354,10 @@ const ProductManager = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const filteredProducts = products.filter((product) =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (isLoading) {
     return (
       <Container
@@ -379,6 +387,14 @@ const ProductManager = () => {
         <Typography variant="h4" component="h1">
           Quản lý Sản phẩm
         </Typography>
+        <TextField
+          variant="outlined"
+          size="small"
+          placeholder="Tìm kiếm sản phẩm..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          sx={{ marginRight: 2 }}
+        />
         <Button
           variant="contained"
           color="primary"
@@ -389,8 +405,8 @@ const ProductManager = () => {
         </Button>
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
+      <TableContainer component={Paper} sx={{ maxHeight: 600, overflow: 'auto' }}>
+        <Table stickyHeader>
           <TableHead>
             <TableRow>
               <TableCell>STT</TableCell>
@@ -404,53 +420,56 @@ const ProductManager = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {Array.isArray(products) &&
-              products.map((product, index) => {
-                const categoryName =
-                  categories.find((cat) => cat._id === product.category)?.name || "N/A";
-
-                return (
-                  <TableRow key={product._id}>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>{product.name}</TableCell>
-                    <TableCell>{product.category?.name || "Không có danh mục"}</TableCell>
-                    <TableCell>
-                      {product.units && product.units.length > 0
-                        ? product.units[0].salePrice.toLocaleString("vi-VN", {
-                            style: "currency",
-                            currency: "VND",
-                          })
-                        : "Chưa có giá"}
-                    </TableCell>
-                    <TableCell>{product.SKU}</TableCell>
-                    <TableCell>
-                      {(product.units || []).map((unit) => unit.name).join(", ")}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={product.active ? "Hoạt động" : "Không hoạt động"} // Update to use 'active'
-                        color={product.active ? "success" : "error"} // Update to use 'active'
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <IconButton onClick={() => handleOpenEditDialog(product)}>
-                        <EditIcon color="primary" />
-                      </IconButton>
-                      <IconButton onClick={() => handleDeleteProduct(product._id)}>
-                        <DeleteIcon color="error" />
-                      </IconButton>
-                      <Button
-                        variant="text"
-                        color="primary"
-                        onClick={() => navigate(`/product-details/${product._id}`)} // Navigate to product details page
-                      >
-                        Xem chi tiết
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+            {Array.isArray(filteredProducts) &&
+              filteredProducts
+                .sort((a, b) => {
+                  // Sắp xếp sản phẩm hoạt động trước, sản phẩm không hoạt động sau
+                  if (a.active === b.active) return 0;
+                  return a.active ? -1 : 1;
+                })
+                .map((product, index) => {
+                  return (
+                    <TableRow key={product._id}>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>{product.name}</TableCell>
+                      <TableCell>{product.category?.name || "Không có danh mục"}</TableCell>
+                      <TableCell>
+                        {product.units && product.units.length > 0
+                          ? product.units[0].salePrice.toLocaleString("vi-VN", {
+                              style: "currency",
+                              currency: "VND",
+                            })
+                          : "Chưa có giá"}
+                      </TableCell>
+                      <TableCell>{product.SKU}</TableCell>
+                      <TableCell>
+                        {(product.units || []).map((unit) => unit.name).join(", ")}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={product.active ? "Hoạt động" : "Không hoạt động"}
+                          color={product.active ? "success" : "error"}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton onClick={() => handleOpenEditDialog(product)}>
+                          <EditIcon color="primary" />
+                        </IconButton>
+                        <IconButton onClick={() => handleDeleteProduct(product._id)}>
+                          <DeleteIcon color="error" />
+                        </IconButton>
+                        <Button
+                          variant="text"
+                          color="primary"
+                          onClick={() => navigate(`/product-details/${product._id}`)}
+                        >
+                          Xem chi tiết
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
           </TableBody>
         </Table>
       </TableContainer>
