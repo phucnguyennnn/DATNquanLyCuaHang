@@ -36,7 +36,14 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 const UNITS = ["thùng", "bao", "chai", "lọ", "hộp", "gói", "cái", "kg", "liter"];
-const STATUSES = ["draft", "pending", "approved", "partially_received", "completed", "cancelled"];
+const STATUSES = [
+  { value: "draft", label: "Nháp" },
+  { value: "pending", label: "Đang chờ" },
+  { value: "approved", label: "Đã duyệt" },
+  { value: "partially_received", label: "Nhận một phần" },
+  { value: "completed", label: "Hoàn thành" },
+  { value: "cancelled", label: "Đã hủy" },
+];
 
 const PurchaseOrderManagement = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -45,9 +52,7 @@ const PurchaseOrderManagement = () => {
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [unit, setUnit] = useState("");
-  const [conversionRate, setConversionRate] = useState(1);
   const [unitPrice, setUnitPrice] = useState(0);
-  const [smallestUnit, setSmallestUnit] = useState("");
   const [orderItems, setOrderItems] = useState([]);
   const [sendEmail, setSendEmail] = useState(true);
   const [orders, setOrders] = useState([]);
@@ -63,6 +68,8 @@ const PurchaseOrderManagement = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const navigate = useNavigate();
 
+  const token = localStorage.getItem("authToken");
+
   useEffect(() => {
     const interceptor = axios.interceptors.request.use((config) => {
       const token = localStorage.getItem("authToken");
@@ -77,31 +84,70 @@ const PurchaseOrderManagement = () => {
   }, []);
 
   useEffect(() => {
-    if (selectedSupplier) fetchProductsBySupplier(selectedSupplier);
-    else setProducts([]);
-  }, [selectedSupplier]);
+    fetchProducts();
+  }, []);
 
   const fetchSuppliers = async () => {
+
     try {
-      const response = await axios.get("http://localhost:8000/api/suppliers");
+      const response = await axios.get("http://localhost:8000/api/suppliers",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       setSuppliers(response.data);
+      console.log("sup: ", response.data);
     } catch (error) {
       console.error(error);
     }
   };
 
-  const fetchProductsBySupplier = async (supplierId) => {
+  const fetchProducts = async () => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/suppliers/${supplierId}/products`);
-      setProducts(response.data.products);
+      const response = await axios.get("http://localhost:8000/api/products",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setProducts(response.data.data);
+      
+      // If a supplier is selected, filter products to show only those supplied by the supplier
+      if (selectedSupplier) {
+        const supplierData = await axios.get(
+          `http://localhost:8000/api/suppliers/${selectedSupplier}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        if (supplierData.data && supplierData.data.suppliedProducts) {
+          const suppliedProductIds = supplierData.data.suppliedProducts.map(
+            item => item.product
+          );
+          
+          const filteredProducts = response.data.data.filter(
+            product => suppliedProductIds.includes(product._id)
+          );
+          
+          setProducts(filteredProducts);
+        }
+      }
     } catch (error) {
       console.error("Lỗi khi lấy danh sách sản phẩm:", error);
     }
   };
 
+  useEffect(() => {
+    if (selectedSupplier) {
+      fetchProducts();
+    }
+  }, [selectedSupplier]);
+
   const fetchOrders = async () => {
     try {
-      const response = await axios.get("http://localhost:8000/api/purchaseOrder");
+      const response = await axios.get("http://localhost:8000/api/purchaseOrder",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       setOrders(response.data);
     } catch (error) {
       console.error("Lỗi khi lấy danh sách phiếu đặt hàng:", error);
@@ -109,7 +155,7 @@ const PurchaseOrderManagement = () => {
   };
 
   const handleAddItem = () => {
-    if (!selectedProduct || quantity <= 0 || !unit || conversionRate <= 0 || !smallestUnit || unitPrice <= 0) {
+    if (!selectedProduct || quantity <= 0 || !unit || unitPrice <= 0) {
       alert("Vui lòng nhập đầy đủ thông tin sản phẩm!");
       return;
     }
@@ -117,35 +163,39 @@ const PurchaseOrderManagement = () => {
     const product = products.find((p) => p._id === selectedProduct);
     if (!product) return;
 
-    const existingIndex = orderItems.findIndex((item) => item.product === selectedProduct);
+    const existingIndex = orderItems.findIndex(
+      (item) => item.product === selectedProduct && item.unit === unit
+    );
 
     if (existingIndex !== -1) {
-      setOrderItems(orderItems.map((item, index) => 
-        index === existingIndex ? {
-          ...item,
-          quantity: item.quantity + Number(quantity),
-          totalPrice: (item.quantity + Number(quantity)) * item.unitPrice
-        } : item
+      setOrderItems(orderItems.map((item, index) =>
+        index === existingIndex
+          ? {
+              ...item,
+              quantity: item.quantity + Number(quantity),
+              totalPrice: (item.quantity + Number(quantity)) * item.unitPrice,
+            }
+          : item
       ));
     } else {
-      setOrderItems([...orderItems, {
-        product: selectedProduct,
-        name: product.name,
-        quantity: Number(quantity),
-        unit,
-        conversionRate: Number(conversionRate),
-        unitPrice: Number(unitPrice),
-        smallestUnit,
-        totalPrice: Number(quantity) * Number(unitPrice),
-      }]);
+      setOrderItems([
+        ...orderItems,
+        {
+          product: selectedProduct,
+          name: product.name,
+          SKU: product.SKU,
+          quantity: Number(quantity),
+          unit,
+          unitPrice: Number(unitPrice),
+          totalPrice: Number(quantity) * Number(unitPrice),
+        },
+      ]);
     }
 
     setSelectedProduct("");
     setQuantity(1);
     setUnit("");
-    setConversionRate(1);
     setUnitPrice(0);
-    setSmallestUnit("");
   };
 
   const handleRemoveItem = (productId) => {
@@ -173,26 +223,36 @@ const PurchaseOrderManagement = () => {
   };
 
   const handleSubmit = async () => {
+    if (!selectedSupplier) {
+      alert("Vui lòng chọn nhà cung cấp!");
+      return;
+    }
+
+    if (orderItems.length === 0) {
+      alert("Vui lòng thêm ít nhất một sản phẩm vào phiếu đặt hàng!");
+      return;
+    }
+
     try {
       const payload = {
         supplier: selectedSupplier,
-        items: orderItems.map(({ product, quantity, unit, conversionRate, unitPrice, smallestUnit }) => ({
+        items: orderItems.map(({ product, quantity, unit, unitPrice }) => ({
           product,
           quantity,
           unit,
-          conversionRate,
           unitPrice,
-          smallestUnit,
         })),
         totalAmount: calculateTotal(),
         sendEmailFlag: sendEmail,
-        expectedDeliveryDate: expectedDeliveryDate,
-        notes: notes,
-        deliveryAddress: deliveryAddress,
-        paymentMethod: paymentMethod,
+        expectedDeliveryDate,
+        notes,
+        deliveryAddress,
+        paymentMethod,
       };
 
-      await axios.post("http://localhost:8000/api/purchaseOrder", payload);
+      await axios.post("http://localhost:8000/api/purchaseOrder", payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       alert("Tạo phiếu đặt hàng thành công!");
       setSelectedSupplier("");
       setOrderItems([]);
@@ -234,13 +294,11 @@ const PurchaseOrderManagement = () => {
       const payload = {
         ...editOrder,
         supplier: editOrder.supplier._id,
-        items: editOrderItems.map(({ product, quantity, unit, conversionRate, unitPrice, smallestUnit }) => ({
+        items: editOrderItems.map(({ product, quantity, unit, unitPrice }) => ({
           product: product._id,
           quantity,
           unit,
-          conversionRate,
           unitPrice,
-          smallestUnit,
         }))
       };
 
@@ -327,8 +385,10 @@ const PurchaseOrderManagement = () => {
                   onChange={(e) => setSelectedProduct(e.target.value)}
                 >
                   {products.map((p) => (
+                    
+
                     <MenuItem key={p._id} value={p._id}>
-                      {p.name}
+                      {p.name} - {p.SKU} ({p.units[0]?.name || "N/A"})
                     </MenuItem>
                   ))}
                 </Select>
@@ -336,16 +396,17 @@ const PurchaseOrderManagement = () => {
             </Grid>
             <Grid item xs={12} sm={8}>
               <Grid container spacing={2}>
-                <Grid item xs={2.4}>
+                <Grid item xs={3}>
                   <TextField
                     label="Số lượng"
                     type="number"
                     fullWidth
                     value={quantity}
                     onChange={(e) => setQuantity(Number(e.target.value))}
+                    inputProps={{ min: 1 }}
                   />
                 </Grid>
-                <Grid item xs={2.4}>
+                <Grid item xs={3}>
                   <FormControl fullWidth>
                     <InputLabel>Đơn vị</InputLabel>
                     <Select
@@ -353,46 +414,38 @@ const PurchaseOrderManagement = () => {
                       label="Đơn vị"
                       onChange={(e) => setUnit(e.target.value)}
                     >
-                      {UNITS.map((u) => (
-                        <MenuItem key={u} value={u}>
-                          {u}
-                        </MenuItem>
-                      ))}
+                      {products
+                        .find((p) => p._id === selectedProduct)?.units.map((u) => (
+                          <MenuItem key={u.name} value={u.name}>
+                            {u.name}
+                          </MenuItem>
+                        ))}
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={2.4}>
-                  <TextField
-                    label="Quy đổi"
-                    type="number"
-                    fullWidth
-                    value={conversionRate}
-                    onChange={(e) => setConversionRate(Number(e.target.value))}
-                  />
-                </Grid>
-                <Grid item xs={2.4}>
-                  <FormControl fullWidth>
-                    <InputLabel>Đơn vị nhỏ nhất</InputLabel>
-                    <Select
-                      value={smallestUnit}
-                      label="Đơn vị nhỏ nhất"
-                      onChange={(e) => setSmallestUnit(e.target.value)}
-                    >
-                      {UNITS.map((u) => (
-                        <MenuItem key={u} value={u}>
-                          {u}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={2.4}>
+                <Grid item xs={3}>
                   <TextField
                     label="Giá nhập"
                     type="number"
                     fullWidth
                     value={unitPrice}
                     onChange={(e) => setUnitPrice(Number(e.target.value))}
+                    inputProps={{ min: 0 }}
+                  />
+                </Grid>
+                <Grid item xs={3}>
+                  <TextField
+                    label={`Quy đổi (${products.find((p) => p._id === selectedProduct)?.units.find((u) => u.ratio === 1)?.name || "đơn vị nhỏ nhất"})`}
+                    type="text"
+                    fullWidth
+                    value={
+                      unit
+                        ? `${quantity * (products.find((p) => p._id === selectedProduct)?.units.find((u) => u.name === unit)?.ratio || 1)}`
+                        : ""
+                    }
+                    InputProps={{
+                      readOnly: true,
+                    }}
                   />
                 </Grid>
               </Grid>
@@ -459,8 +512,6 @@ const PurchaseOrderManagement = () => {
           </Grid>
         </Paper>
 
-        
-
         {orderItems.length > 0 && (
           <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
             <Typography variant="h6" gutterBottom>
@@ -472,11 +523,10 @@ const PurchaseOrderManagement = () => {
                   <TableHead>
                     <TableRow>
                       <TableCell>Tên sản phẩm</TableCell>
+                      <TableCell>SKU</TableCell>
                       <TableCell>Đơn vị</TableCell>
+                      <TableCell>Quy đổi</TableCell> {/* New column for conversion value */}
                       <TableCell>SL</TableCell>
-                      <TableCell>Quy đổi</TableCell>
-                      <TableCell>SL nhỏ nhất</TableCell>
-                      <TableCell>Đơn vị nhỏ nhất</TableCell>
                       <TableCell>Giá nhập</TableCell>
                       <TableCell>Thành tiền</TableCell>
                       <TableCell></TableCell>
@@ -486,7 +536,11 @@ const PurchaseOrderManagement = () => {
                     {orderItems.map((item, index) => (
                       <TableRow key={index}>
                         <TableCell>{item.name}</TableCell>
+                        <TableCell>{item.SKU}</TableCell>
                         <TableCell>{item.unit}</TableCell>
+                        <TableCell>
+                          {products.find((p) => p._id === item.product)?.units.find((u) => u.name === item.unit)?.ratio || "N/A"}
+                        </TableCell> {/* Display conversion value */}
                         <TableCell>
                           <IconButton onClick={() => updateQuantity(item.product, -1)}>
                             <RemoveIcon fontSize="small" />
@@ -496,9 +550,6 @@ const PurchaseOrderManagement = () => {
                             <AddCircleOutlineIcon fontSize="small" />
                           </IconButton>
                         </TableCell>
-                        <TableCell>{item.conversionRate}</TableCell>
-                        <TableCell>{item.quantity * item.conversionRate}</TableCell>
-                        <TableCell>{item.smallestUnit}</TableCell>
                         <TableCell>{item.unitPrice.toLocaleString()} đ</TableCell>
                         <TableCell>{item.totalPrice.toLocaleString()} đ</TableCell>
                         <TableCell>
@@ -561,7 +612,9 @@ const PurchaseOrderManagement = () => {
                       {new Date(order.expectedDeliveryDate).toLocaleDateString()}
                     </TableCell>
                     <TableCell>{order.totalAmount.toLocaleString()} đ</TableCell>
-                    <TableCell>{order.status}</TableCell>
+                    <TableCell>
+                      {STATUSES.find((status) => status.value === order.status)?.label || "Không xác định"}
+                    </TableCell> {/* Display order status in Vietnamese */}
                     <TableCell>
                       <IconButton onClick={() => handleEdit(order)}>
                         <EditIcon />
@@ -614,9 +667,7 @@ const PurchaseOrderManagement = () => {
                         <TableCell>Tên sản phẩm</TableCell>
                         <TableCell>Đơn vị</TableCell>
                         <TableCell>SL</TableCell>
-                        <TableCell>Quy đổi</TableCell>
                         <TableCell>Đơn giá</TableCell>
-                        <TableCell>Đơn vị nhỏ nhất</TableCell>
                         <TableCell>Thành tiền</TableCell>
                       </TableRow>
                     </TableHead>
@@ -648,32 +699,11 @@ const PurchaseOrderManagement = () => {
                           <TableCell>
                             <TextField
                               type="number"
-                              value={item.conversionRate}
-                              onChange={(e) => 
-                                handleEditOrderItemChange(index, "conversionRate", Number(e.target.value))
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              type="number"
                               value={item.unitPrice}
                               onChange={(e) => 
                                 handleEditOrderItemChange(index, "unitPrice", Number(e.target.value))
                               }
                             />
-                          </TableCell>
-                          <TableCell>
-                            <Select
-                              value={item.smallestUnit}
-                              onChange={(e) => 
-                                handleEditOrderItemChange(index, "smallestUnit", e.target.value)
-                              }
-                            >
-                              {UNITS.map((unit) => (
-                                <MenuItem key={unit} value={unit}>{unit}</MenuItem>
-                              ))}
-                            </Select>
                           </TableCell>
                           <TableCell>{(item.quantity * item.unitPrice).toLocaleString()} đ</TableCell>
                         </TableRow>
@@ -721,7 +751,9 @@ const PurchaseOrderManagement = () => {
                     onChange={(e) => setEditOrder({ ...editOrder, status: e.target.value })}
                   >
                     {STATUSES.map((status) => (
-                      <MenuItem key={status} value={status}>{status}</MenuItem>
+                      <MenuItem key={status.value} value={status.value}>
+                        {status.label}
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>

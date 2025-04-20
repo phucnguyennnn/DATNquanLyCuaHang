@@ -75,7 +75,9 @@ const ProductDetail = () => {
               <ul className="list-disc pl-5 space-y-1">
                 {product.suppliers.map((s, idx) => (
                   <li key={idx}>
-                    {s.supplier.name} - {s.supplier.contact} (Giá nhập: {s.importPrice}đ)
+                    {s.supplier.name || "Không rõ nhà cung cấp"}
+                    {s.supplier.contact?.phone && ` - ${s.supplier.contact.phone}`}
+                    {s.isPrimary && " (Nhà cung cấp chính)"}
                   </li>
                 ))}
               </ul>

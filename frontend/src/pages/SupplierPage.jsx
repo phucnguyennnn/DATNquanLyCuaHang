@@ -87,13 +87,7 @@ const SupplierSchema = yup.object().shape({
   isActive: yup.boolean().required('Bắt buộc chọn trạng thái'),
   suppliedProducts: yup.array().of(
     yup.object().shape({
-      product: yup.string().required('Bắt buộc chọn sản phẩm'),
-      importPrice: yup.number().min(0, 'Không được âm').required('Bắt buộc nhập'),
-      minOrderQuantity: yup.number().min(1, 'Tối thiểu 1'),
-      leadTime: yup.number().min(0, 'Không được âm'),
-      unit: yup.string().required('Bắt buộc chọn đơn vị'),
-      conversionRate: yup.number().min(1, 'Tối thiểu 1').required('Bắt buộc nhập'),
-      isPrimary: yup.boolean()
+      product: yup.string().required('Bắt buộc chọn sản phẩm')
     })
   )
 });
@@ -122,8 +116,37 @@ const SupplierPage = () => {
     fetchSuppliers();
     axios.get(PRODUCTS_API, {
       headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` }
-    }).then(({ data }) => setProducts(data.data));
+    }).then(({ data }) => {
+      setProducts(data.data);
+    });
   }, [searchTerm]);
+
+  const isProductBelongsToSupplier = (productId, supplierId) => {
+    if (!productId || !supplierId) return false;
+    
+    const product = products.find(p => p._id === productId);
+    if (!product || !product.suppliers) return false;
+    
+    return product.suppliers.some(s => {
+      if (!s || !s.supplier) return false;
+      const supplierIdToCompare = s.supplier._id || s.supplier;
+      return supplierIdToCompare === supplierId;
+    });
+  };
+
+  const getProductsForSupplier = (supplierId) => {
+    if (!supplierId) return [];
+    
+    return products.filter(product => {
+      if (!product || !product.suppliers) return false;
+      
+      return product.suppliers.some(s => {
+        if (!s || !s.supplier) return false;
+        const supplierIdToCompare = s.supplier._id || s.supplier;
+        return supplierIdToCompare === supplierId;
+      });
+    });
+  };
 
   const fetchSuppliers = async () => {
     try {
@@ -155,16 +178,15 @@ const SupplierPage = () => {
     },
     validationSchema: SupplierSchema,
     onSubmit: async (values) => {
-      if (isSubmitting) return; // Ngăn chặn xử lý nhiều lần
-      setIsSubmitting(true); // Bắt đầu trạng thái xử lý
+      if (isSubmitting) return;
+      setIsSubmitting(true);
 
       try {
-        // Kiểm tra dữ liệu sản phẩm trước khi gửi
         const invalidProducts = values.suppliedProducts.filter(sp => 
-          !sp.product?._id || sp.importPrice < 0 || sp.minOrderQuantity < 1
+          !sp.product
         );
         if (invalidProducts.length > 0) {
-          showSnackbar('Dữ liệu sản phẩm không hợp lệ', 'error');
+          showSnackbar('Vui lòng chọn sản phẩm', 'error');
           return;
         }
 
@@ -181,34 +203,57 @@ const SupplierPage = () => {
         handleCloseDialog();
         showSnackbar(`Nhà cung cấp ${editMode ? 'cập nhật' : 'tạo mới'} thành công`);
       } catch (error) {
-        console.error('Error submitting supplier:', error); // Log lỗi chi tiết
+        console.error('Error submitting supplier:', error);
         showSnackbar(
           error.response?.data?.message || 'Thao tác thất bại', 
           'error'
         );
       } finally {
-        setIsSubmitting(false); // Kết thúc trạng thái xử lý
-
+        setIsSubmitting(false);
       }
     }
   });
 
   const handleOpenCreate = () => {
     setEditMode(false);
+    setSelectedSupplier(null);
     formik.resetForm();
     setOpenDialog(true);
   };
 
   const handleOpenEdit = (supplier) => {
+    if (!supplier || !supplier._id) {
+      showSnackbar('Không thể chỉnh sửa nhà cung cấp này, thiếu ID', 'error');
+      return;
+    }
+    
     setEditMode(true);
     setSelectedSupplier(supplier);
+    
+    const supplierProducts = getProductsForSupplier(supplier._id);
+    const existingProducts = Array.isArray(supplier.suppliedProducts) 
+      ? supplier.suppliedProducts.map(sp => ({
+          product: sp.product?._id || sp.product || ''
+        })) 
+      : [];
+    
+    const productIds = new Set(existingProducts.map(p => p.product).filter(id => id));
+    const additionalProducts = supplierProducts
+      .filter(p => p._id && !productIds.has(p._id))
+      .map(p => ({ product: p._id }));
+    
     formik.setValues({
       ...supplier,
-      suppliedProducts: supplier.suppliedProducts.map(sp => ({
-        ...sp,
-        product: sp.product._id ? sp.product._id : sp.product
-      }))
+      address: supplier.address || { street: '', city: '', state: '', postalCode: '', country: '' },
+      contact: supplier.contact || { phone: '', mobile: '', email: '', website: '' },
+      primaryContactPerson: supplier.primaryContactPerson || { name: '', position: '', phone: '', email: '' },
+      bankDetails: supplier.bankDetails || { accountName: '', accountNumber: '', bankName: '', branch: '', swiftCode: '' },
+      paymentTerms: supplier.paymentTerms || 30,
+      rating: supplier.rating || 0,
+      isActive: supplier.isActive !== undefined ? supplier.isActive : true,
+      suppliedProducts: [...existingProducts, ...additionalProducts]
     });
+    
     setOpenDialog(true);
   };
 
@@ -669,25 +714,50 @@ const SupplierPage = () => {
                           formik.setFieldValue('suppliedProducts', [
                             ...formik.values.suppliedProducts,
                             {
-                              product: '',
-                              importPrice: 0,
-                              minOrderQuantity: 1,
-                              leadTime: 0,
-                              unit: 'cái',
-                              conversionRate: 1,
-                              isPrimary: false
+                              product: ''
                             }
                           ]);
                         }}
                       >
                         Thêm sản phẩm
                       </Button>
+                      
+                      {editMode && selectedSupplier && selectedSupplier._id && (
+                        <Button
+                          variant="outlined"
+                          color="secondary"
+                          sx={{ ml: 2 }}
+                          onClick={() => {
+                            const supplierProducts = getProductsForSupplier(selectedSupplier._id);
+                            const currentProductIds = new Set(
+                              formik.values.suppliedProducts
+                                .filter(p => p && p.product)
+                                .map(p => p.product)
+                            );
+                            
+                            const newProducts = supplierProducts
+                              .filter(p => p._id && !currentProductIds.has(p._id))
+                              .map(p => ({ product: p._id }));
+                              
+                            if (newProducts.length > 0) {
+                              formik.setFieldValue('suppliedProducts', [
+                                ...formik.values.suppliedProducts,
+                                ...newProducts
+                              ]);
+                            } else {
+                              showSnackbar('Đã thêm tất cả sản phẩm của nhà cung cấp này', 'info');
+                            }
+                          }}
+                        >
+                          Tự động thêm sản phẩm từ nhà cung cấp
+                        </Button>
+                      )}
                     </Box>
 
                     {formik.values.suppliedProducts.map((item, index) => (
                       <Paper key={index} sx={{ p: 2, mb: 2 }}>
                         <Grid container spacing={2}>
-                          <Grid item xs={12} md={4}>
+                          <Grid item xs={10}>
                             <Autocomplete
                               options={products}
                               getOptionLabel={(option) => option.name}
@@ -695,6 +765,23 @@ const SupplierPage = () => {
                               onChange={(e, value) => {
                                 formik.setFieldValue(`suppliedProducts[${index}].product`, value?._id || '');
                               }}
+                              renderOption={(props, option) => (
+                                <li {...props}>
+                                  <Box display="flex" alignItems="center" width="100%">
+                                    <Typography>{option.name}</Typography>
+                                    {editMode && selectedSupplier && selectedSupplier._id && 
+                                      isProductBelongsToSupplier(option._id, selectedSupplier._id) && (
+                                        <Chip 
+                                          size="small" 
+                                          label="Đã liên kết" 
+                                          color="primary" 
+                                          sx={{ ml: 1 }}
+                                        />
+                                      )
+                                    }
+                                  </Box>
+                                </li>
+                              )}
                               renderInput={(params) => (
                                 <MemoizedTextField
                                   {...params}
@@ -706,72 +793,15 @@ const SupplierPage = () => {
                                 />
                               )}
                             />
-                          </Grid>
-                          <Grid item xs={6} md={2}>
-                            <MemoizedTextField
-                              fullWidth
-                              label="Số lượng tối thiểu *"
-                              type="number"
-                              name={`suppliedProducts[${index}].minOrderQuantity`}
-                              value={item.minOrderQuantity}
-                              onChange={formik.handleChange}
-                              inputProps={{ min: 1 }}
-                            />
+                            {editMode && selectedSupplier && selectedSupplier._id && item.product && 
+                             isProductBelongsToSupplier(item.product, selectedSupplier._id) && (
+                              <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
+                                Sản phẩm này đã liên kết với nhà cung cấp trong danh mục sản phẩm
+                              </Typography>
+                            )}
                           </Grid>
 
-                          <Grid item xs={6} md={2}>
-                            <MemoizedTextField
-                              fullWidth
-                              label="Thời gian giao hàng"
-                              type="number"
-                              name={`suppliedProducts[${index}].leadTime`}
-                              value={item.leadTime}
-                              onChange={formik.handleChange}
-                              InputProps={{ endAdornment: <InputAdornment position="end">ngày</InputAdornment> }}
-                            />
-                          </Grid>
-
-                          <Grid item xs={6} md={2}>
-                            <MemoizedTextField
-                              select
-                              fullWidth
-                              label="Đơn vị *"
-                              name={`suppliedProducts[${index}].unit`}
-                              value={item.unit}
-                              onChange={formik.handleChange}
-                            >
-                              {['thùng', 'bao', 'chai', 'lọ', 'hộp', 'gói', 'cái', 'kg', 'liter'].map(unit => (
-                                <MenuItem key={unit} value={unit}>{unit}</MenuItem>
-                              ))}
-                            </MemoizedTextField>
-                          </Grid>
-
-                          <Grid item xs={6} md={2}>
-                            <MemoizedTextField
-                              fullWidth
-                              label="Tỷ lệ quy đổi *"
-                              type="number"
-                              name={`suppliedProducts[${index}].conversionRate`}
-                              value={item.conversionRate}
-                              onChange={formik.handleChange}
-                              inputProps={{ min: 1 }}
-                            />
-                          </Grid>
-
-                          <Grid item xs={6} md={2}>
-                            <FormControlLabel
-                              control={
-                                <Checkbox
-                                  name={`suppliedProducts[${index}].isPrimary`}
-                                  checked={item.isPrimary}
-                                  onChange={formik.handleChange}
-                                />
-                              }
-                              label="Nhà cung cấp chính"
-                            />
-                          </Grid>
-
-                          <Grid item xs={12} sx={{ textAlign: 'right' }}>
+                          <Grid item xs={2} sx={{ textAlign: 'right', display: 'flex', alignItems: 'center' }}>
                             <IconButton
                               onClick={() => {
                                 const newProducts = [...formik.values.suppliedProducts];
@@ -796,7 +826,7 @@ const SupplierPage = () => {
               type="submit" 
               variant="contained" 
               color="primary" 
-              disabled={isSubmitting} // Vô hiệu hóa nút khi đang xử lý
+              disabled={isSubmitting}
             >
               {isSubmitting ? 'Đang xử lý...' : (editMode ? 'Cập nhật' : 'Tạo mới')}
             </Button>
