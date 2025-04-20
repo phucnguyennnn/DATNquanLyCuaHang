@@ -368,7 +368,7 @@ const CreateGoodReceipt = () => {
 
           return {
             productId: item.product,
-            quantity: Number(item.quantity), // Base quantity
+            quantity: Number(item.quantity) * ratio, // quantity theo ratio
             unit: item.unit, // Unit name
             unitPrice: item.unitPrice,
             totalPrice: item.unitPrice * Number(item.quantity),
@@ -386,7 +386,7 @@ const CreateGoodReceipt = () => {
 
           return {
             productId: item.product,
-            quantity: Number(item.quantity),
+            quantity: Number(item.quantity) * ratio, // quantity theo ratio
             unit: item.unit,
             unitPrice: Number(item.unitPrice),
             totalPrice: Number(item.unitPrice) * Number(item.quantity),

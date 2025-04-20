@@ -274,10 +274,10 @@ const updateQuantities = (batch) => {
 const updateStatus = (batch) => {
   if (batch.expiry_day < new Date()) {
     batch.status = "hết hạn";
-  } else if (batch.remaining_quantity === 0) {
+  } else if (batch.remaining_quantity === 0 && batch.quantity_on_shelf === 0) {
     batch.status = "hết hàng";
-  } else if (batch.remaining_quantity < batch.initial_quantity * 0.2) {
-    batch.status = "không hoạt động";
+    // } else if (batch.remaining_quantity < batch.initial_quantity * 0.2) {
+    //   batch.status = "không hoạt động";
   } else {
     batch.status = "hoạt động";
   }

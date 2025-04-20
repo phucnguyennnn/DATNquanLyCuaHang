@@ -56,6 +56,7 @@ const CreateOrder = () => {
   const [token] = useState(localStorage.getItem("authToken"));
   const [hasUserSelectedBatch, setHasUserSelectedBatch] = useState(false);
   const [cashReceivedError, setCashReceivedError] = useState("");
+  const [submittingOrder, setSubmittingOrder] = useState(false);
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -309,6 +310,7 @@ const CreateOrder = () => {
     }
 
     setCashReceivedError("");
+    setSubmittingOrder(true); // Bắt đầu loading
 
     const orderData = {
       items: orderItems.map((item) => ({
@@ -347,6 +349,7 @@ const CreateOrder = () => {
       console.error(error);
       alert("Tạo đơn thất bại!");
     }
+    setSubmittingOrder(false); // Kết thúc loading
   };
 
   const subtotal = orderItems.reduce((sum, item) => sum + item.total, 0);
@@ -484,9 +487,10 @@ const CreateOrder = () => {
                     secondary={
                       <>
                         <Typography variant="body2">
-                          Đơn vị: {item.selectedUnit.name} (1
+                          Đơn vị: {item.selectedUnit.name} 
+                          {/* (1
                           {item.selectedUnit.name} = {item.selectedUnit.ratio}
-                          {item.product.units.find((u) => u.ratio === 1)?.name})
+                          {item.product.units.find((u) => u.ratio === 1)?.name}) */}
                         </Typography>
                         {item.batches.map((batch, batchIndex) => {
                           const currentQty =
@@ -664,10 +668,12 @@ const CreateOrder = () => {
                     disabled={
                       orderItems.length === 0 ||
                       !!cashReceivedError ||
-                      !cashReceived
+                      !cashReceived ||
+                      submittingOrder
                     }
+                    startIcon={submittingOrder ? <CircularProgress size={22} /> : null}
                   >
-                    Tạo đơn hàng ({orderItems.length})
+                    {submittingOrder ? "Đang tạo đơn..." : `Tạo đơn hàng (${orderItems.length})`}
                   </Button>
                 </Grid>
               </Grid>
@@ -694,8 +700,9 @@ const CreateOrder = () => {
             >
               {selectedProduct?.units?.map((unit) => (
                 <MenuItem key={unit.name} value={unit.name}>
-                  {unit.name} (1{unit.name} = {unit.ratio}{" "}
-                  {selectedProduct.units.find((u) => u.ratio === 1)?.name})
+                  {/* {unit.name} (1{unit.name} = {unit.ratio}{" "}
+                  {selectedProduct.units.find((u) => u.ratio === 1)?.name}) */}
+                  {unit.name}
                 </MenuItem>
               ))}
             </Select>
@@ -758,9 +765,9 @@ const CreateOrder = () => {
                           {discount.isDiscounted && (
                             <>
                               {discount.discountValue}%
-                              <Typography variant="caption">
+                              {/* <Typography variant="caption">
                                 {discount.discountReason}
-                              </Typography>
+                              </Typography> */}
                             </>
                           )}
                         </TableCell>
@@ -769,7 +776,7 @@ const CreateOrder = () => {
                         <TableCell>
                           <TextField
                             type="number"
-                            value={selectedBatches[batch._id] || 1}
+                            value={selectedBatches[batch._id] || 0}
                             onChange={(e) =>
                               handleBatchQtyChange(batch._id, e.target.value)
                             }

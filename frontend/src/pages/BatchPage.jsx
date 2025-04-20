@@ -29,6 +29,7 @@ import {
   IconButton,
   Collapse,
   FormHelperText,
+  Pagination, // Added for pagination
 } from "@mui/material";
 import { format, isBefore, addDays } from "date-fns";
 import axios from "axios";
@@ -44,6 +45,9 @@ function ShelfInventoryPage() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  // Thêm state cho warning filter
+  const [warningFilter, setWarningFilter] = useState("");
+
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState("asc");
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
@@ -242,7 +246,7 @@ function ShelfInventoryPage() {
 
   useEffect(() => {
     fetchData();
-  }, [searchTerm, statusFilter]);
+  }, [searchTerm, statusFilter /* warningFilter không ảnh hưởng fetchData */]);
 
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
@@ -250,6 +254,11 @@ function ShelfInventoryPage() {
 
   const handleStatusChange = (event) => {
     setStatusFilter(event.target.value);
+  };
+
+  // Thêm handler cho warning filter
+  const handleWarningFilterChange = (event) => {
+    setWarningFilter(event.target.value);
   };
 
   const handleSort = (column) => {
@@ -281,19 +290,27 @@ function ShelfInventoryPage() {
 
   // Helper functions to consistently get thresholds with proper priority
   const getExpiryThreshold = (product) => {
-    return product?.expiryThresholdDays !== undefined && 
-           product?.expiryThresholdDays !== null && 
-           product?.expiryThresholdDays !== "" 
-      ? product.expiryThresholdDays 
-      : settings.expiryThresholdDays;
+    if (
+      product &&
+      product.expiryThresholdDays !== undefined &&
+      product.expiryThresholdDays !== null &&
+      product.expiryThresholdDays !== ""
+    ) {
+      return product.expiryThresholdDays;
+    }
+    return settings.expiryThresholdDays;
   };
 
   const getLowQuantityThreshold = (product) => {
-    return product?.lowQuantityThreshold !== undefined && 
-           product?.lowQuantityThreshold !== null && 
-           product?.lowQuantityThreshold !== "" 
-      ? product.lowQuantityThreshold 
-      : settings.lowQuantityThreshold;
+    if (
+      product &&
+      product.lowQuantityThreshold !== undefined &&
+      product.lowQuantityThreshold !== null &&
+      product.lowQuantityThreshold !== ""
+    ) {
+      return product.lowQuantityThreshold;
+    }
+    return settings.lowQuantityThreshold;
   };
 
   // Helper to check if product is nearing expiry
@@ -588,6 +605,37 @@ function ShelfInventoryPage() {
     }));
   };
 
+  // Add pagination state
+  const [page, setPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  // Handle page change
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
+    // Reset open rows when changing page
+    setOpenRows({});
+  };
+
+  // Áp dụng warning filter vào dữ liệu đã sort
+  const filteredGroupedByProduct = useMemo(() => {
+    if (!warningFilter) return groupedByProduct;
+    return groupedByProduct.filter(group =>
+      Array.from(group.warnings).includes(warningFilter)
+    );
+  }, [groupedByProduct, warningFilter]);
+
+  // Calculate paginated data for the current page
+  const paginatedGroupedByProduct = useMemo(() => {
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredGroupedByProduct.slice(startIndex, endIndex);
+  }, [filteredGroupedByProduct, page, itemsPerPage]);
+
+  // Calculate total number of pages
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredGroupedByProduct.length / itemsPerPage);
+  }, [filteredGroupedByProduct, itemsPerPage]);
+
   return (
     <Container
       maxWidth="xl"
@@ -627,6 +675,29 @@ function ShelfInventoryPage() {
               <MenuItem value="hết hàng">Hết hàng</MenuItem>
             </Select>
           </FormControl>
+          {/* Thêm bộ lọc cảnh báo */}
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <InputLabel id="warning-filter-label" shrink>
+              Cảnh báo
+            </InputLabel>
+            <Select
+              labelId="warning-filter-label"
+              id="warning-filter"
+              value={warningFilter}
+              label="Cảnh báo"
+              onChange={handleWarningFilterChange}
+              displayEmpty
+              renderValue={(value) => (value === "" ? "Tất cả" : value)}
+              inputProps={{
+                "aria-label": "Cảnh báo",
+              }}
+            >
+              <MenuItem value="">Tất cả</MenuItem>
+              <MenuItem value="Sắp hết hạn">Sắp hết hạn</MenuItem>
+              <MenuItem value="Ít trên quầy">Ít trên quầy</MenuItem>
+              <MenuItem value="Ít trong kho">Ít trong kho</MenuItem>
+            </Select>
+          </FormControl>
         </Stack>
       </Box>
       {loading ? (
@@ -641,12 +712,12 @@ function ShelfInventoryPage() {
       ) : error ? (
         <Alert severity="error">{error}</Alert>
       ) : (
-        <Box sx={{ flex: 1, minHeight: 400 }}>
+        <Box sx={{ flex: 1, minHeight: 400, display: 'flex', flexDirection: 'column' }}>
           <TableContainer
             component={Paper}
             sx={{
-              height: "100%",
-              maxHeight: "calc(110vh - 220px)",
+              flex: 1,
+              maxHeight: "calc(110vh - 260px)", // Adjusted to make room for pagination
               "& .MuiTable-root": { minWidth: 1000 },
             }}
           >
@@ -710,7 +781,7 @@ function ShelfInventoryPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {groupedByProduct.map((group, index) => (
+                {paginatedGroupedByProduct.map((group, index) => (
                   <React.Fragment key={group.productId}>
                     <TableRow>
                       <TableCell>
@@ -726,7 +797,7 @@ function ShelfInventoryPage() {
                           )}
                         </IconButton>
                       </TableCell>
-                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>{(page - 1) * itemsPerPage + index + 1}</TableCell>
                       <TableCell
                         component="th"
                         scope="row"
@@ -965,8 +1036,31 @@ function ShelfInventoryPage() {
               </TableBody>
             </Table>
           </TableContainer>
+          
+          {/* Pagination control */}
+          {filteredGroupedByProduct.length > 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 2 }}>
+              <Pagination 
+                count={totalPages} 
+                page={page} 
+                onChange={handlePageChange} 
+                color="primary"
+                showFirstButton
+                showLastButton
+              />
+            </Box>
+          )}
+          
+          {filteredGroupedByProduct.length === 0 && !loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}>
+              <Typography variant="body1" color="text.secondary">
+                Không tìm thấy sản phẩm nào phù hợp với bộ lọc đã chọn
+              </Typography>
+            </Box>
+          )}
         </Box>
       )}
+      
       <Dialog open={batchDialogOpen} onClose={handleCloseBatchDialog}>
         <DialogTitle>Thông tin Lô hàng</DialogTitle>
         <DialogContent>
