@@ -70,6 +70,9 @@ const Sidebar = () => {
         localStorage.removeItem("authToken");
         localStorage.removeItem("userID");
         localStorage.removeItem("userRole");
+        localStorage.removeItem("fullName");
+        localStorage.removeItem("role");
+        localStorage.removeItem("userName");
         console.log("Đăng xuất thành công!");
         navigate("/login");
       } else {

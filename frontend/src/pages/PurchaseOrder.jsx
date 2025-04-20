@@ -32,6 +32,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import RemoveIcon from "@mui/icons-material/Remove";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import EditIcon from "@mui/icons-material/Edit";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
@@ -63,6 +64,10 @@ const PurchaseOrderManagement = () => {
   const [notes, setNotes] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+  const [totalPrice, setTotalPrice] = useState(0);
+  const [approvalDate, setApprovalDate] = useState(null);
+  const [orderStatus, setOrderStatus] = useState("draft");
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -77,6 +82,18 @@ const PurchaseOrderManagement = () => {
       return config;
     });
 
+    const getUserInfo = () => {
+      try {
+        const userInfoString = localStorage.getItem("userInfo");
+        if (userInfoString) {
+          const userInfo = JSON.parse(userInfoString);
+        }
+      } catch (error) {
+        console.error("Lỗi khi lấy thông tin người dùng:", error);
+      }
+    };
+
+    getUserInfo();
     fetchSuppliers();
     fetchOrders();
 
@@ -87,8 +104,11 @@ const PurchaseOrderManagement = () => {
     fetchProducts();
   }, []);
 
-  const fetchSuppliers = async () => {
+  useEffect(() => {
+    setTotalPrice(calculateTotal());
+  }, [orderItems]);
 
+  const fetchSuppliers = async () => {
     try {
       const response = await axios.get("http://localhost:8000/api/suppliers",
         {
@@ -109,9 +129,9 @@ const PurchaseOrderManagement = () => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      setProducts(response.data.data);
+      const activeProducts = response.data.data.filter(product => product.active !== false);
+      setProducts(activeProducts);
       
-      // If a supplier is selected, filter products to show only those supplied by the supplier
       if (selectedSupplier) {
         const supplierData = await axios.get(
           `http://localhost:8000/api/suppliers/${selectedSupplier}`,
@@ -123,7 +143,7 @@ const PurchaseOrderManagement = () => {
             item => item.product
           );
           
-          const filteredProducts = response.data.data.filter(
+          const filteredProducts = activeProducts.filter(
             product => suppliedProductIds.includes(product._id)
           );
           
@@ -149,6 +169,7 @@ const PurchaseOrderManagement = () => {
         }
       );
       setOrders(response.data);
+      console.log("Danh sách phiếu đặt hàng:", response.data);
     } catch (error) {
       console.error("Lỗi khi lấy danh sách phiếu đặt hàng:", error);
     }
@@ -222,6 +243,30 @@ const PurchaseOrderManagement = () => {
     return orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
   };
 
+  const handlePreviewOrder = () => {
+    if (!selectedSupplier) {
+      alert("Vui lòng chọn nhà cung cấp!");
+      return;
+    }
+
+    if (orderItems.length === 0) {
+      alert("Vui lòng thêm ít nhất một sản phẩm vào phiếu đặt hàng!");
+      return;
+    }
+    
+    // Validate expected delivery date
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    const deliveryDate = new Date(expectedDeliveryDate);
+    
+    if (deliveryDate <= currentDate) {
+      alert("Ngày giao hàng dự kiến phải sau ngày hiện tại!");
+      return;
+    }
+    
+    setShowPreview(true);
+  };
+
   const handleSubmit = async () => {
     if (!selectedSupplier) {
       alert("Vui lòng chọn nhà cung cấp!");
@@ -232,45 +277,85 @@ const PurchaseOrderManagement = () => {
       alert("Vui lòng thêm ít nhất một sản phẩm vào phiếu đặt hàng!");
       return;
     }
+    
+    // Validate expected delivery date
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    const deliveryDate = new Date(expectedDeliveryDate);
+    
+    if (deliveryDate <= currentDate) {
+      alert("Ngày giao hàng dự kiến phải sau ngày hiện tại!");
+      return;
+    }
 
     try {
       const payload = {
         supplier: selectedSupplier,
-        items: orderItems.map(({ product, quantity, unit, unitPrice }) => ({
+        supplierName: suppliers.find(s => s._id === selectedSupplier)?.name || "",
+        items: orderItems.map(({ product, name, SKU, quantity, unit, unitPrice, totalPrice }) => ({
           product,
+          productName: name,
+          productSKU: SKU,
           quantity,
           unit,
           unitPrice,
+          totalPrice: quantity * unitPrice,
+          conversionRate: products.find(p => p._id === product)?.units.find(u => u.name === unit)?.ratio || 1,
         })),
-        totalAmount: calculateTotal(),
+        totalAmount: totalPrice,
         sendEmailFlag: sendEmail,
         expectedDeliveryDate,
         notes,
         deliveryAddress,
         paymentMethod,
+        createdBy: (() => {
+          try {
+            const name = localStorage.getItem("fullName");
+            return name || "Không xác định";
+          } catch (error) {
+            return "Không xác định";
+          }
+        })(),
+        status: orderStatus,
+        createdByName: localStorage.getItem("fullName") || "Không xác định",
+        orderDate: new Date().toISOString(),
+        approvalDate: orderStatus === "approved" ? new Date().toISOString() : null,
       };
 
-      await axios.post("http://localhost:8000/api/purchaseOrder", payload, {
+      console.log("Dữ liệu gửi đi khi tạo phiếu:", payload);
+
+      const response = await axios.post("http://localhost:8000/api/purchaseOrder", payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      
+      console.log("Phản hồi khi tạo phiếu:", response.data);
+      
       alert("Tạo phiếu đặt hàng thành công!");
       setSelectedSupplier("");
       setOrderItems([]);
       fetchOrders();
     } catch (error) {
       console.error(error);
-      alert("Lỗi khi tạo phiếu!");
+      // Improved error handling
+      if (error.response && error.response.data && error.response.data.error) {
+        alert(`Lỗi khi tạo phiếu: ${error.response.data.error}`);
+      } else {
+        alert("Lỗi khi tạo phiếu đặt hàng!");
+      }
     }
   };
 
   const handleEdit = (order) => {
+    console.log("Thông tin phiếu đang chỉnh sửa:", order);
     setEditOrder({
       ...order,
       expectedDeliveryDate: order.expectedDeliveryDate.split("T")[0],
       deliveryAddress: order.deliveryAddress || "",
       paymentMethod: order.paymentMethod || "",
       notes: order.notes || "",
-      status: order.status || "draft"
+      status: order.status || "draft",
+      originalStatus: order.status || "draft",
+      approvalDate: order.approvalDate || null,
     });
     setEditOrderItems(order.items);
     setOpenDialog(true);
@@ -291,18 +376,32 @@ const PurchaseOrderManagement = () => {
     }
     
     try {
+      const isNewlyApproved = editOrder.status === "approved" && 
+                             (editOrder.originalStatus && editOrder.originalStatus !== "approved");
+      
       const payload = {
         ...editOrder,
         supplier: editOrder.supplier._id,
+        supplierName: suppliers.find(s => s._id === editOrder.supplier._id)?.name || editOrder.supplierName,
         items: editOrderItems.map(({ product, quantity, unit, unitPrice }) => ({
           product: product._id,
+          productName: product.name || "",
+          productSKU: product.SKU || "",
           quantity,
           unit,
           unitPrice,
-        }))
+          totalPrice: quantity * unitPrice,
+          conversionRate: products.find(p => p._id === product._id)?.units.find(u => u.name === unit)?.ratio || 1,
+        })),
+        approvalDate: isNewlyApproved ? new Date().toISOString() : editOrder.approvalDate,
+        totalAmount: editOrderItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0),
       };
 
-      await axios.put(`http://localhost:8000/api/purchaseOrder/${editOrder._id}`, payload);
+      console.log("Dữ liệu gửi đi khi cập nhật phiếu:", payload);
+
+      const response = await axios.put(`http://localhost:8000/api/purchaseOrder/${editOrder._id}`, payload);
+      console.log("Phản hồi khi cập nhật phiếu:", response.data);
+      
       alert("Cập nhật phiếu đặt hàng thành công!");
       setOpenDialog(false);
       fetchOrders();
@@ -385,8 +484,6 @@ const PurchaseOrderManagement = () => {
                   onChange={(e) => setSelectedProduct(e.target.value)}
                 >
                   {products.map((p) => (
-                    
-
                     <MenuItem key={p._id} value={p._id}>
                       {p.name} - {p.SKU} ({p.units[0]?.name || "N/A"})
                     </MenuItem>
@@ -509,23 +606,52 @@ const PurchaseOrderManagement = () => {
                 onChange={(e) => setPaymentMethod(e.target.value)}
               />
             </Grid>
+            
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Trạng thái phiếu</InputLabel>
+                <Select
+                  value={orderStatus}
+                  label="Trạng thái phiếu"
+                  onChange={(e) => setOrderStatus(e.target.value)}
+                >
+                  {STATUSES.map((status) => (
+                    <MenuItem key={status.value} value={status.value}>
+                      {status.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
           </Grid>
         </Paper>
 
-        {orderItems.length > 0 && (
+        {orderItems.length > 0 && !showPreview && (
           <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-            <Typography variant="h6" gutterBottom>
-              Danh sách sản phẩm đã chọn
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Danh sách sản phẩm đã chọn
+              </Typography>
+              <Button 
+                variant="outlined" 
+                color="primary" 
+                onClick={handlePreviewOrder}
+                startIcon={<VisibilityIcon />}
+              >
+                Xem trước phiếu
+              </Button>
+            </Box>
+            
             <Box sx={{ overflowX: "auto" }}>
               <TableContainer>
                 <Table>
                   <TableHead>
                     <TableRow>
+                      <TableCell width="50px">STT</TableCell>
                       <TableCell>Tên sản phẩm</TableCell>
                       <TableCell>SKU</TableCell>
                       <TableCell>Đơn vị</TableCell>
-                      <TableCell>Quy đổi</TableCell> {/* New column for conversion value */}
+                      <TableCell>Quy đổi</TableCell>
                       <TableCell>SL</TableCell>
                       <TableCell>Giá nhập</TableCell>
                       <TableCell>Thành tiền</TableCell>
@@ -535,12 +661,13 @@ const PurchaseOrderManagement = () => {
                   <TableBody>
                     {orderItems.map((item, index) => (
                       <TableRow key={index}>
+                        <TableCell>{index + 1}</TableCell>
                         <TableCell>{item.name}</TableCell>
                         <TableCell>{item.SKU}</TableCell>
                         <TableCell>{item.unit}</TableCell>
                         <TableCell>
                           {products.find((p) => p._id === item.product)?.units.find((u) => u.name === item.unit)?.ratio || "N/A"}
-                        </TableCell> {/* Display conversion value */}
+                        </TableCell>
                         <TableCell>
                           <IconButton onClick={() => updateQuantity(item.product, -1)}>
                             <RemoveIcon fontSize="small" />
@@ -565,7 +692,7 @@ const PurchaseOrderManagement = () => {
             </Box>
             <Box mt={2}>
               <Typography variant="h6">
-                Tổng tiền: {calculateTotal().toLocaleString()} đ
+                Tổng tiền: {totalPrice.toLocaleString()} đ
               </Typography>
               <FormControlLabel
                 control={
@@ -583,6 +710,185 @@ const PurchaseOrderManagement = () => {
           </Paper>
         )}
 
+        <Dialog
+          open={showPreview}
+          onClose={() => setShowPreview(false)}
+          fullWidth
+          maxWidth="md"
+          scroll="paper"
+        >
+          <DialogTitle>Xem trước phiếu đặt hàng</DialogTitle>
+          <DialogContent dividers sx={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            <Stack spacing={3}>
+              <Box>
+                <Typography variant="h6" gutterBottom>Thông tin chung</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="body1">
+                      <strong>Nhà cung cấp:</strong> {suppliers.find(s => s._id === selectedSupplier)?.name}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body1">
+                      <strong>Ngày đặt hàng:</strong> {new Date().toLocaleDateString()}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body1">
+                      <strong>Ngày giao hàng dự kiến:</strong> {new Date(expectedDeliveryDate).toLocaleDateString()}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body1">
+                      <strong>Phương thức thanh toán:</strong> {paymentMethod || "Chưa có"}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="body1">
+                      <strong>Địa chỉ giao hàng:</strong> {deliveryAddress || "Chưa có"}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="body1">
+                      <strong>Ghi chú:</strong> {notes || "Không có"}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body1">
+                      <strong>Trạng thái:</strong> {
+                        STATUSES.find((status) => status.value === orderStatus)?.label || "Nháp"
+                      }
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="body1">
+                      <strong>Người lập đơn:</strong> {
+                        (() => {
+                          try {
+                            const name = localStorage.getItem("fullName");
+                            return name || "Không xác định";
+                          } catch (error) {
+                            return "Không xác định";
+                          }
+                        })()
+                      }
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+              
+              <Box>
+                <Typography variant="h6" gutterBottom>Danh sách sản phẩm</Typography>
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>STT</TableCell>
+                        <TableCell>Tên sản phẩm</TableCell>
+                        <TableCell>SKU</TableCell>
+                        <TableCell>Đơn vị</TableCell>
+                        <TableCell>SL</TableCell>
+                        <TableCell>Giá nhập</TableCell>
+                        <TableCell>Thành tiền</TableCell>
+                        <TableCell>Hành động</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {orderItems.map((item, index) => (
+                        <TableRow key={index}>
+                          <TableCell>{index + 1}</TableCell>
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell>{item.SKU}</TableCell>
+                          <TableCell>{item.unit}</TableCell>
+                          <TableCell>
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const newQuantity = Math.max(1, parseInt(e.target.value) || 1);
+                                setOrderItems(prev => 
+                                  prev.map((prevItem, idx) => 
+                                    idx === index 
+                                      ? { 
+                                          ...prevItem, 
+                                          quantity: newQuantity,
+                                          totalPrice: newQuantity * prevItem.unitPrice 
+                                        } 
+                                      : prevItem
+                                  )
+                                );
+                              }}
+                              InputProps={{ inputProps: { min: 1 } }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={item.unitPrice}
+                              onChange={(e) => {
+                                const newPrice = Math.max(0, parseFloat(e.target.value) || 0);
+                                setOrderItems(prev => 
+                                  prev.map((prevItem, idx) => 
+                                    idx === index 
+                                      ? { 
+                                          ...prevItem, 
+                                          unitPrice: newPrice,
+                                          totalPrice: prevItem.quantity * newPrice 
+                                        } 
+                                      : prevItem
+                                  )
+                                );
+                              }}
+                              InputProps={{ inputProps: { min: 0 } }}
+                            />
+                          </TableCell>
+                          <TableCell>{item.totalPrice.toLocaleString()} đ</TableCell>
+                          <TableCell>
+                            <IconButton 
+                              color="error" 
+                              onClick={() => handleRemoveItem(item.product)}
+                              size="small"
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+              
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6">
+                  Tổng tiền: {totalPrice.toLocaleString()} đ
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={sendEmail}
+                      onChange={(e) => setSendEmail(e.target.checked)}
+                    />
+                  }
+                  label="Gửi email cho nhà cung cấp"
+                />
+              </Box>
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowPreview(false)}>Quay lại chỉnh sửa</Button>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={handleSubmit}
+            >
+              Xác nhận tạo phiếu
+            </Button>
+          </DialogActions>
+        </Dialog>
+
         <Typography variant="h5" mb={2}>
           Danh sách phiếu đặt hàng
         </Typography>
@@ -593,7 +899,9 @@ const PurchaseOrderManagement = () => {
                 <TableRow>
                   <TableCell>Mã phiếu</TableCell>
                   <TableCell>Nhà cung cấp</TableCell>
+                  <TableCell>Người lập đơn</TableCell>
                   <TableCell>Ngày đặt hàng</TableCell>
+                  <TableCell>Ngày duyệt đơn</TableCell>
                   <TableCell>Ngày giao hàng dự kiến</TableCell>
                   <TableCell>Tổng tiền</TableCell>
                   <TableCell>Trạng thái</TableCell>
@@ -609,12 +917,15 @@ const PurchaseOrderManagement = () => {
                       {new Date(order.orderDate).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
+                      {order.approvalDate ? new Date(order.approvalDate).toLocaleDateString() : "Chưa duyệt"}
+                    </TableCell>
+                    <TableCell>
                       {new Date(order.expectedDeliveryDate).toLocaleDateString()}
                     </TableCell>
                     <TableCell>{order.totalAmount.toLocaleString()} đ</TableCell>
                     <TableCell>
                       {STATUSES.find((status) => status.value === order.status)?.label || "Không xác định"}
-                    </TableCell> {/* Display order status in Vietnamese */}
+                    </TableCell>
                     <TableCell>
                       <IconButton onClick={() => handleEdit(order)}>
                         <EditIcon />
@@ -757,6 +1068,27 @@ const PurchaseOrderManagement = () => {
                     ))}
                   </Select>
                 </FormControl>
+
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextField
+                      label="Ngày lập đơn"
+                      value={new Date(editOrder.orderDate).toLocaleDateString()}
+                      InputProps={{ readOnly: true }}
+                      fullWidth
+                    />
+                  </Grid>
+                  {editOrder.status === "approved" && (
+                    <Grid item xs={6}>
+                      <TextField
+                        label="Ngày duyệt đơn"
+                        value={editOrder.approvalDate ? new Date(editOrder.approvalDate).toLocaleDateString() : "Chưa duyệt"}
+                        InputProps={{ readOnly: true }}
+                        fullWidth
+                      />
+                    </Grid>
+                  )}
+                </Grid>
               </Stack>
             )}
           </DialogContent>

@@ -51,6 +51,7 @@ const LoginPage = () => {
       localStorage.setItem("authToken", response.data.accessToken);
       localStorage.setItem("userID", response.data._id);
       localStorage.setItem("userRole", response.data.role);
+      localStorage.setItem("fullName", response.data.fullName);
 
       // Kiểm tra userRole và chuyển hướng phù hợp
       if (response.data.role === "customer") {

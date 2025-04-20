@@ -7,6 +7,8 @@ const purchaseOrderItemSchema = new mongoose.Schema(
       ref: "Product",
       required: true,
     },
+    productName: { type: String }, // Store product name for historical reference
+    productSKU: { type: String }, // Store SKU for historical reference
     quantity: {
       type: Number,
       required: true,
@@ -19,10 +21,27 @@ const purchaseOrderItemSchema = new mongoose.Schema(
     unit: {
       type: String,
       required: true,
-      enum: ["thùng", "bao", "chai", "lọ", "hộp", "gói", "cái", "kg", "liter"],
-      default: "thùng",
+      enum: ["cái", "gói", "bao", "thùng", "chai", "lọ", "hộp", "kg", "gram", "liter", "ml"],
+      default: "cái",
     },
-    conversionRate: { type: Number, required: true, min: 1 },
+    unitPrice: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    totalPrice: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    conversionRate: {
+      type: Number,
+      min: 1,
+      default: 1,
+      // Đại diện cho tỷ lệ chuyển đổi từ đơn vị cơ bản sang đơn vị đã chọn
+      // Ví dụ: nếu đơn vị cơ bản là "cái" và đơn vị đã chọn là "thùng" với tỷ lệ 24,
+      // thì conversionRate = 24
+    },
     receivedQuantity: { type: Number, default: 0, min: 0 },
     note: { type: String, default: "", maxlength: 200 },
   },
@@ -58,7 +77,7 @@ const purchaseOrderSchema = new mongoose.Schema(
     },
     items: [purchaseOrderItemSchema],
     totalAmount: { type: Number, required: true, min: 0 },
-    orderDate: { type: Date, default: Date.now, required: true },
+    orderDate: { type: Date, default: Date.now, required: false },
     expectedDeliveryDate: {
       type: Date,
       validate: {
