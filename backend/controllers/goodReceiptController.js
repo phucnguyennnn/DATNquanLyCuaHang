@@ -9,16 +9,35 @@ const goodReceiptController = {
   // Tạo phiếu nhập kho
   createGoodReceipt: async (req, res) => {
     try {
-      const { purchaseOrderId, items } = req.body;
+      const { purchaseOrderId, supplierId, receivedBy, items } = req.body;
+
+      console.log("Request data received:", JSON.stringify(req.body, null, 2));
+
+      // Kiểm tra xem có ID phiếu đặt hàng không
+      if (!purchaseOrderId) {
+        return res.status(400).json({ message: "Thiếu ID phiếu đặt hàng" });
+      }
 
       const order = await PurchaseOrder.findById(purchaseOrderId);
-      if (!order)
-        return res.status(404).json({ message: "Purchase Order not found" });
+      if (!order) {
+        return res.status(404).json({ message: "Không tìm thấy phiếu đặt hàng" });
+      }
 
       const goodReceipt = new GoodReceipt({
         purchaseOrderId,
-        supplierId: order.supplierId,
-        items,
+        supplierId: supplierId || order.supplier, // Hỗ trợ cả hai cách viết
+        receivedBy,
+        items: items.map(item => ({
+          productId: item.productId || item.product, // Hỗ trợ cả hai cách viết
+          quantity: item.quantity,
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+          manufacture_day: item.manufacture_day || item.manufactureDate, // Hỗ trợ cả hai cách viết
+          expiry_day: item.expiry_day || item.expiryDate, // Hỗ trợ cả hai cách viết
+          productName: item.productName,
+          productSKU: item.productSKU
+        }))
       });
 
       await goodReceipt.save();
@@ -29,6 +48,7 @@ const goodReceiptController = {
 
       res.status(201).json(goodReceipt);
     } catch (error) {
+      console.error("Lỗi khi tạo phiếu nhập kho:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -37,8 +57,11 @@ const goodReceiptController = {
   getAllGoodReceipts: async (req, res) => {
     try {
       const receipts = await GoodReceipt.find()
-        .populate("supplierId")
-        .populate("items.productId");
+        .populate("supplier")
+        .populate({
+          path: "items.productId",
+          strictPopulate: false
+        });
 
       res.status(200).json(receipts);
     } catch (error) {
@@ -50,8 +73,11 @@ const goodReceiptController = {
   getGoodReceiptById: async (req, res) => {
     try {
       const receipt = await GoodReceipt.findById(req.params.id)
-        .populate("supplierId")
-        .populate("items.productId");
+        .populate("supplier")
+        .populate({
+          path: "items.productId",
+          strictPopulate: false
+        });
 
       if (!receipt) {
         return res

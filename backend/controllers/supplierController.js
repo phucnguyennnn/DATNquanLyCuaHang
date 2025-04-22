@@ -223,17 +223,23 @@ const getSupplierById = async (req, res) => {
       return res.status(400).json({ message: "Invalid supplier ID format." });
     }
 
-    const supplier = await Supplier.findById(req.params.id).populate({
-      path: "products",
-      select: "name SKU price active",
-      match: { active: true },
-    });
+    const supplier = await Supplier.findById(req.params.id);
 
     if (!supplier) {
       return res.status(404).json({ message: "Supplier not found." });
     }
 
-    return res.status(200).json(supplier);
+    // Get products associated with this supplier using the correct field
+    const products = await Product.find({ "suppliers.supplier": req.params.id })
+      .select("name SKU price active");
+
+    // Add products to the response
+    const supplierWithProducts = {
+      ...supplier.toObject(),
+      products
+    };
+
+    return res.status(200).json(supplierWithProducts);
   } catch (error) {
     console.error("Get supplier by ID error:", error);
     return res.status(500).json({

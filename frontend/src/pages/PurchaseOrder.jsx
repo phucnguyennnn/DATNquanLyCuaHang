@@ -116,7 +116,7 @@ const PurchaseOrderManagement = () => {
         }
       );
       setSuppliers(response.data);
-      console.log("sup: ", response.data);
+      // console.log("sup: ", response.data);
     } catch (error) {
       console.error(error);
     }
@@ -169,7 +169,7 @@ const PurchaseOrderManagement = () => {
         }
       );
       setOrders(response.data);
-      console.log("Danh sách phiếu đặt hàng:", response.data);
+      // console.log("Danh sách phiếu đặt hàng:", response.data);
     } catch (error) {
       console.error("Lỗi khi lấy danh sách phiếu đặt hàng:", error);
     }
@@ -397,10 +397,10 @@ const PurchaseOrderManagement = () => {
         totalAmount: editOrderItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0),
       };
 
-      console.log("Dữ liệu gửi đi khi cập nhật phiếu:", payload);
+      // console.log("Dữ liệu gửi đi khi cập nhật phiếu:", payload);
 
       const response = await axios.put(`http://localhost:8000/api/purchaseOrder/${editOrder._id}`, payload);
-      console.log("Phản hồi khi cập nhật phiếu:", response.data);
+      // console.log("Phản hồi khi cập nhật phiếu:", response.data);
       
       alert("Cập nhật phiếu đặt hàng thành công!");
       setOpenDialog(false);
@@ -899,9 +899,9 @@ const PurchaseOrderManagement = () => {
                 <TableRow>
                   <TableCell>Mã phiếu</TableCell>
                   <TableCell>Nhà cung cấp</TableCell>
-                  <TableCell>Người lập đơn</TableCell>
                   <TableCell>Ngày đặt hàng</TableCell>
-                  <TableCell>Ngày duyệt đơn</TableCell>
+                  <TableCell>Người lập đơn</TableCell>
+                  {/* <TableCell>Ngày duyệt đơn</TableCell> */}
                   <TableCell>Ngày giao hàng dự kiến</TableCell>
                   <TableCell>Tổng tiền</TableCell>
                   <TableCell>Trạng thái</TableCell>
@@ -917,11 +917,13 @@ const PurchaseOrderManagement = () => {
                       {new Date(order.orderDate).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
+                      {order.createdByName || "Không xác định"}
+                    </TableCell>
+                    {/* <TableCell>
                       {order.approvalDate ? new Date(order.approvalDate).toLocaleDateString() : "Chưa duyệt"}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(order.expectedDeliveryDate).toLocaleDateString()}
-                    </TableCell>
+                    </TableCell> */}
+                    <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
+                   
                     <TableCell>{order.totalAmount.toLocaleString()} đ</TableCell>
                     <TableCell>
                       {STATUSES.find((status) => status.value === order.status)?.label || "Không xác định"}

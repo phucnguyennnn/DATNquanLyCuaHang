@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const goodReceiptController = require("../controllers/goodReceiptController");
 
+// http://localhost:8000/api/goodreceipt
 // Xác nhận nhập kho
 router.patch("/confirm/:id", goodReceiptController.confirmGoodReceipt);
 

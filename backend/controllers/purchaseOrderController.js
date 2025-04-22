@@ -78,10 +78,10 @@ const purchaseOrderController = {
         .populate({
           path: 'items.product',
           populate: {
-            path: 'suppliers',
+            path: 'suppliers.supplier', // Make sure this matches the schema
           },
         })
-        .populate('supplier', 'name contact');
+        .populate('supplier', 'name contact'); // NOT supplierId, but supplier
 
       res.status(200).json(orders);
     } catch (error) {
@@ -96,10 +96,10 @@ const purchaseOrderController = {
         .populate({
           path: 'items.product',
           populate: {
-            path: 'suppliers',
+            path: 'suppliers.supplier', // Make sure this matches the schema
           },
         })
-        .populate('supplier', 'name contact');
+        .populate('supplier', 'name contact'); // NOT supplierId, but supplier
 
       if (!order) {
         return res.status(404).json({ message: 'Không tìm thấy phiếu đặt hàng.' });
