@@ -38,26 +38,19 @@ const createSupplier = async (req, res) => {
           });
         }
 
-        const supplierIndex = product.suppliers.findIndex((s) =>
-          s.supplier.equals(newSupplier._id)
+        // Check if supplier already exists in product's suppliers
+        const supplierExists = product.suppliers.some(s =>
+          s.supplier && s.supplier.toString() === newSupplier._id.toString()
         );
 
-        if (supplierIndex === -1) {
+        if (!supplierExists) {
+          // Add supplier to product
           product.suppliers.push({
             supplier: newSupplier._id,
-            importPrice: sp.importPrice,
-            minOrderQuantity: sp.minOrderQuantity,
-            leadTime: sp.leadTime,
-            isPrimary: sp.isPrimary,
+            isPrimary: false
           });
-        } else {
-          product.suppliers[supplierIndex] = {
-            ...product.suppliers[supplierIndex].toObject(),
-            ...sp,
-          };
+          await product.save();
         }
-
-        await product.save();
       }
       newSupplier.suppliedProducts = suppliedProducts;
     }
@@ -90,19 +83,23 @@ const updateSupplier = async (req, res) => {
       return res.status(404).json({ message: "Supplier not found." });
     }
 
+    // Get product IDs from old and new lists
     const oldProducts = supplier.suppliedProducts.map((sp) =>
       sp.product.toString()
     );
     const newProducts = suppliedProducts?.map((sp) => sp.product) || [];
 
+    // Determine which products to add/remove
     const productsToRemove = oldProducts.filter(
       (p) => !newProducts.includes(p)
     );
-    const productsToAdd =
-      suppliedProducts?.filter((sp) => !oldProducts.includes(sp.product)) || [];
+    const productsToAdd = newProducts.filter(
+      (p) => !oldProducts.includes(p)
+    );
 
-    for (const sp of productsToRemove) {
-      const product = await Product.findById(sp);
+    // Remove supplier reference from products no longer supplied
+    for (const productId of productsToRemove) {
+      const product = await Product.findById(productId);
       if (product) {
         product.suppliers = product.suppliers.filter(
           (s) => !s.supplier.equals(req.params.id)
@@ -111,40 +108,34 @@ const updateSupplier = async (req, res) => {
       }
     }
 
-    for (const sp of suppliedProducts || []) {
-      if (!isValidObjectId(sp.product)) {
+    // Add supplier reference to newly supplied products
+    for (const productId of productsToAdd) {
+      if (!isValidObjectId(productId)) {
         return res.status(400).json({
-          message: `Invalid product ID: ${sp.product}`,
+          message: `Invalid product ID: ${productId}`,
         });
       }
 
-      const product = await Product.findById(sp.product);
+      const product = await Product.findById(productId);
       if (!product) {
         return res.status(404).json({
-          message: `Product not found: ${sp.product}`,
+          message: `Product not found: ${productId}`,
         });
       }
 
-      const supplierIndex = product.suppliers.findIndex((s) =>
-        s.supplier.equals(req.params.id)
+      // Check if supplier already exists in product's suppliers
+      const supplierExists = product.suppliers.some(s =>
+        s.supplier && s.supplier.toString() === req.params.id
       );
 
-      if (supplierIndex === -1) {
+      if (!supplierExists) {
+        // Add supplier to product
         product.suppliers.push({
           supplier: req.params.id,
-          importPrice: sp.importPrice,
-          minOrderQuantity: sp.minOrderQuantity,
-          leadTime: sp.leadTime,
-          isPrimary: sp.isPrimary,
+          isPrimary: false
         });
-      } else {
-        product.suppliers[supplierIndex] = {
-          ...product.suppliers[supplierIndex].toObject(),
-          ...sp,
-        };
+        await product.save();
       }
-
-      await product.save();
     }
 
     supplier.suppliedProducts = suppliedProducts || [];
@@ -232,17 +223,23 @@ const getSupplierById = async (req, res) => {
       return res.status(400).json({ message: "Invalid supplier ID format." });
     }
 
-    const supplier = await Supplier.findById(req.params.id).populate({
-      path: "products",
-      select: "name SKU price active",
-      match: { active: true },
-    });
+    const supplier = await Supplier.findById(req.params.id);
 
     if (!supplier) {
       return res.status(404).json({ message: "Supplier not found." });
     }
 
-    return res.status(200).json(supplier);
+    // Get products associated with this supplier using the correct field
+    const products = await Product.find({ "suppliers.supplier": req.params.id })
+      .select("name SKU price active");
+
+    // Add products to the response
+    const supplierWithProducts = {
+      ...supplier.toObject(),
+      products
+    };
+
+    return res.status(200).json(supplierWithProducts);
   } catch (error) {
     console.error("Get supplier by ID error:", error);
     return res.status(500).json({
@@ -267,9 +264,8 @@ const toggleSupplierStatus = async (req, res) => {
     await supplier.save();
 
     return res.status(200).json({
-      message: `Supplier ${
-        supplier.isActive ? "activated" : "deactivated"
-      } successfully.`,
+      message: `Supplier ${supplier.isActive ? "activated" : "deactivated"
+        } successfully.`,
       supplier,
     });
   } catch (error) {

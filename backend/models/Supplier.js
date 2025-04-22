@@ -1,14 +1,14 @@
 const mongoose = require('mongoose');
 
 const supplierSchema = new mongoose.Schema({
-  name: { 
-    type: String, 
-    required: true, 
+  name: {
+    type: String,
+    required: true,
     unique: true,
     trim: true,
     maxlength: [100, 'Supplier name cannot exceed 100 characters']
   },
-  description: { 
+  description: {
     type: String,
     trim: true,
     maxlength: [500, 'Description cannot exceed 500 characters']
@@ -30,8 +30,8 @@ const supplierSchema = new mongoose.Schema({
     country: String
   },
   contact: {
-    phone: { 
-      type: String, 
+    phone: {
+      type: String,
       match: /^[0-9]{10,15}$/,
       trim: true
     },
@@ -40,8 +40,8 @@ const supplierSchema = new mongoose.Schema({
       match: /^[0-9]{10,15}$/,
       trim: true
     },
-    email: { 
-      type: String, 
+    email: {
+      type: String,
       match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
       lowercase: true,
       trim: true
@@ -88,38 +88,9 @@ const supplierSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',
       required: true
-    },
-    importPrice: {
-      type: Number,
-      required: true,
-      min: 0
-    },
-    minOrderQuantity: {
-      type: Number,
-      min: 1,
-      default: 1
-    },
-    leadTime: {
-      type: Number,
-      min: 0,
-      default: 0
-    },
-    isPrimary: {
-      type: Boolean,
-      default: false
-    },
-    unit: {
-      type: String,
-      required: true,
-      enum: ['thùng', 'bao', 'chai', 'lọ', 'hộp', 'gói', 'cái', 'kg', 'liter']
-    },
-    conversionRate: {
-      type: Number,
-      required: true,
-      min: 1
     }
   }]
-}, { 
+}, {
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
