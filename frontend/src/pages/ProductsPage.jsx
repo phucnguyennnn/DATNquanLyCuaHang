@@ -35,8 +35,7 @@ const ProductListPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const theme = useTheme();
-  // Thay đổi màu primaryColor để có màu xanh nhạt hơn
-  const primaryColor = "#ADD8E6"; // Ví dụ: màu xanh nhạt
+  const primaryColor = "#ADD8E6";
   const activeColor = theme.palette.action.selected;
   const hoverColor = theme.palette.action.hover;
   const [openProductDialog, setOpenProductDialog] = useState(false);
@@ -47,7 +46,6 @@ const ProductListPage = () => {
       const response = await axios.get("http://localhost:8000/api/products");
       if (response.data.success) {
         setProducts(response.data.data);
-        console.log("Dữ liệu tất cả sản phẩm đã tải:", response.data.data);
       } else {
         console.error("Lỗi từ API (tất cả sản phẩm):", response.data);
       }
@@ -65,11 +63,6 @@ const ProductListPage = () => {
       );
       if (response.data.success) {
         setProducts(response.data.data);
-        console.log(
-          "Dữ liệu sản phẩm theo danh mục đã tải:",
-          response.data.data,
-          categoryId
-        );
       } else {
         console.error("Lỗi từ API (lọc theo danh mục):", response.data);
       }
@@ -91,7 +84,6 @@ const ProductListPage = () => {
 
   const handleCategoryClick = (category) => {
     setSelectedCategory(category);
-    console.log("Danh mục được chọn:", category);
     if (category) {
       fetchProductsByCategory(category._id);
     } else {
@@ -112,7 +104,7 @@ const ProductListPage = () => {
     setSelectedProductDetails(null);
   };
   const handleGoToCart = () => {
-    navigate("/cart_page"); // Đảm bảo bạn đã định nghĩa route '/cart' trong ứng dụng của mình
+    navigate("/cart_page");
   };
   const handleAddToCart = (product) => {
     console.log(`Thêm ${product.name} vào giỏ hàng`);
@@ -128,8 +120,6 @@ const ProductListPage = () => {
         product.name.toLowerCase().includes(searchTerm.toLowerCase())
       )
     : [];
-
-  console.log("Dữ liệu products trước khi lọc:", products);
 
   const renderCategories = (categoryList, level = 0) => {
     const marginLeft = level * 16;

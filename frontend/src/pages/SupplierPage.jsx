@@ -213,7 +213,13 @@ const SupplierPage = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 3 } }}>
+    <Box sx={{ 
+      p: { xs: 1, sm: 3 },
+      height: '100vh',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
       <Box sx={{ 
         display: 'flex', 
         flexDirection: { xs: 'column', sm: 'row' }, 
@@ -244,7 +250,16 @@ const SupplierPage = () => {
         </Button>
       </Box>
 
-      <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
+      <TableContainer 
+        component={Paper} 
+        sx={{ 
+          overflowX: 'auto',
+          flex: 1,
+          maxHeight: 'calc(100vh - 160px)',
+          '&::-webkit-scrollbar': { width: '8px', height: '8px' },
+          '&::-webkit-scrollbar-thumb': { bgcolor: 'grey.400' }
+        }}
+      >
         <Table sx={{ minWidth: 800 }}>
           <TableHead>
             <TableRow>

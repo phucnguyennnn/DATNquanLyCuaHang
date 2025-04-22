@@ -132,7 +132,16 @@ const CategoryManager = () => {
         <Button variant="contained" startIcon={<Add />} onClick={handleOpenAdd}>Add</Button>
       </Box>
 
-      <TableContainer component={Paper}>
+      <TableContainer 
+        component={Paper} 
+        sx={{ 
+          maxHeight: 'calc(100vh - 190px)', 
+          overflow: 'auto',
+          '&::-webkit-scrollbar': { width: 8 },
+          '&::-webkit-scrollbar-thumb': { backgroundColor: '#888', borderRadius: 4 }
+        }}
+        stickyHeader
+      >
         <Table>
           <TableHead>
             <TableRow>
@@ -182,4 +191,4 @@ const CategoryManager = () => {
   );
 };
 
-export default CategoryManager;
+export default CategoryManager; 
