@@ -15,4 +15,7 @@ router.get("/", goodReceiptController.getAllGoodReceipts);
 // Lấy chi tiết một phiếu nhập kho theo ID
 router.get("/:id", goodReceiptController.getGoodReceiptById);
 
+// Fix data format for receipt items (normalizes product/productId field)
+router.patch("/fix-format/:id", goodReceiptController.fixReceiptFormat);
+
 module.exports = router;

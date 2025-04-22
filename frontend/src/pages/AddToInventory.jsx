@@ -20,6 +20,11 @@ const AddToInventory = () => {
   const [processingId, setProcessingId] = useState(null);
   const [createdBatches, setCreatedBatches] = useState([]);
   const [error, setError] = useState(null);
+  const [errorDetails, setErrorDetails] = useState({
+    receiptId: null,
+    itemIndex: null,
+    showDetails: false
+  });
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -53,6 +58,7 @@ const AddToInventory = () => {
     try {
       setProcessingId(receiptId);
       setError(null);
+      setErrorDetails({ receiptId: null, itemIndex: null, showDetails: false });
       
       // Add authorization header if needed
       const token = localStorage.getItem('accessToken');
@@ -79,11 +85,101 @@ const AddToInventory = () => {
       alert('Lô hàng đã được chuyển vào kho thành công!');
     } catch (error) {
       console.error('Error confirming good receipt:', error);
-      setError(error.response?.data?.message || error.response?.data?.error || 'Failed to confirm good receipt. Please try again.');
-      alert('Xác nhận thất bại: ' + (error.response?.data?.message || error.response?.data?.error || 'Đã xảy ra lỗi'));
+      
+      // Enhanced error handling
+      let errorMessage = 'Xác nhận thất bại: ';
+      
+      // Handle specific item validation errors
+      if (error.response?.data?.itemIndex !== undefined) {
+        const itemIndex = error.response.data.itemIndex;
+        errorMessage += `${error.response.data.message}\n\n`;
+        errorMessage += `Vui lòng kiểm tra lại thông tin phiếu nhập kho và đảm bảo tất cả sản phẩm có ID hợp lệ.`;
+        
+        // Save error details for rendering problem item details
+        setErrorDetails({
+          receiptId: processingId,
+          itemIndex: itemIndex,
+          showDetails: true
+        });
+        
+        // Get the affected receipt to highlight it in the UI
+        const affectedReceipt = receipts.find(r => r._id === receiptId);
+        if (affectedReceipt && affectedReceipt.items && affectedReceipt.items[itemIndex]) {
+          const problematicItem = affectedReceipt.items[itemIndex];
+          errorMessage += `\n\nThông tin mục có vấn đề: ${problematicItem.productName || 'Sản phẩm không xác định'} (Vị trí: ${itemIndex + 1})`;
+        }
+      } else {
+        // Generic error handling
+        errorMessage += error.response?.data?.message || error.response?.data?.error || 'Đã xảy ra lỗi không xác định';
+      }
+      
+      setError(errorMessage);
+      alert(errorMessage);
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const renderReceiptItemDetails = () => {
+    if (!errorDetails.showDetails) return null;
+    
+    const receipt = receipts.find(r => r._id === errorDetails.receiptId);
+    if (!receipt) return null;
+    
+    return (
+      <Paper sx={{ p: 2, mb: 3, bgcolor: '#fff3e0', mt: 2 }}>
+        <Typography variant="h6" gutterBottom>Chi tiết phiếu nhập có vấn đề:</Typography>
+        <Typography><strong>ID phiếu:</strong> {receipt._id}</Typography>
+        <Typography><strong>Nhà cung cấp:</strong> {receipt.supplier?.name || 'N/A'}</Typography>
+        
+        <Box mt={2}>
+          <Typography variant="subtitle1"><strong>Danh sách sản phẩm:</strong></Typography>
+          <Box sx={{ maxHeight: '250px', overflowY: 'auto', pl: 2, pr: 2 }}>
+            {receipt.items?.map((item, idx) => (
+              <Paper 
+                key={idx}
+                sx={{ 
+                  p: 2, 
+                  my: 1, 
+                  bgcolor: idx === errorDetails.itemIndex ? '#ffebee' : '#fafafa',
+                  border: idx === errorDetails.itemIndex ? '1px solid #f44336' : '1px solid #e0e0e0',
+                }}
+              >
+                <Typography color={idx === errorDetails.itemIndex ? "error" : "textPrimary"}>
+                  <strong>Mục #{idx + 1}:</strong> {idx === errorDetails.itemIndex ? '(Có vấn đề)' : ''}
+                </Typography>
+                <Box ml={2}>
+                  <Typography><strong>Tên sản phẩm:</strong> {item.productName || 'N/A'}</Typography>
+                  <Typography><strong>ID sản phẩm:</strong> {item.productId || 'Không xác định'}</Typography>
+                  <Typography><strong>Số lượng:</strong> {item.quantity}</Typography>
+                  <Typography><strong>Đơn vị:</strong> {item.unit || 'N/A'}</Typography>
+                  <Typography><strong>Đơn giá:</strong> {item.unitPrice?.toLocaleString('vi-VN') || 'N/A'} VNĐ</Typography>
+                </Box>
+                {idx === errorDetails.itemIndex && (
+                  <Box mt={1} p={1} bgcolor="#fff8e1" borderRadius={1}>
+                    <Typography color="error">
+                      <strong>Vấn đề:</strong> ID sản phẩm không tồn tại hoặc không hợp lệ. 
+                      Vui lòng kiểm tra lại phiếu đặt hàng gốc và đảm bảo mã sản phẩm chính xác.
+                    </Typography>
+                  </Box>
+                )}
+              </Paper>
+            ))}
+          </Box>
+        </Box>
+        
+        <Box mt={2} display="flex" justifyContent="flex-end">
+          <Button 
+            size="small" 
+            variant="outlined" 
+            color="primary" 
+            onClick={() => setErrorDetails(prev => ({...prev, showDetails: false}))}
+          >
+            Ẩn chi tiết
+          </Button>
+        </Box>
+      </Paper>
+    );
   };
 
   const formatDate = (dateString) => {
@@ -103,9 +199,22 @@ const AddToInventory = () => {
       
       {error && (
         <Paper sx={{ p: 2, mb: 3, bgcolor: '#ffebee' }}>
-          <Typography color="error">{error}</Typography>
+          <Typography color="error" sx={{ whiteSpace: 'pre-line' }}>{error}</Typography>
+          {errorDetails.showDetails && (
+            <Button 
+              size="small" 
+              variant="outlined" 
+              color="error" 
+              sx={{ mt: 1 }}
+              onClick={() => setErrorDetails(prev => ({...prev, showDetails: !prev.showDetails}))}
+            >
+              {errorDetails.showDetails ? 'Ẩn chi tiết' : 'Hiển thị chi tiết'}
+            </Button>
+          )}
         </Paper>
       )}
+      
+      {errorDetails.showDetails && renderReceiptItemDetails()}
 
       {loading && receipts.length === 0 ? (
         <Box display="flex" justifyContent="center" my={4}>

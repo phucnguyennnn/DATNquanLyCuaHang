@@ -91,6 +91,49 @@ const goodReceiptController = {
     }
   },
 
+  // Fix the format of receipt items (normalize product/productId fields)
+  fixReceiptFormat: async (req, res) => {
+    try {
+      const receipt = await GoodReceipt.findById(req.params.id);
+      if (!receipt) {
+        return res.status(404).json({ message: "Phiếu nhập không tồn tại." });
+      }
+
+      let updated = false;
+      // Normalize items to use both product and productId fields
+      for (let i = 0; i < receipt.items.length; i++) {
+        const item = receipt.items[i];
+
+        // If productId is missing but product exists, copy product to productId
+        if (!item.productId && item.product) {
+          receipt.items[i].productId = item.product;
+          updated = true;
+        }
+        // If product is missing but productId exists, copy productId to product
+        else if (!item.product && item.productId) {
+          receipt.items[i].product = item.productId;
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        await receipt.save();
+        return res.status(200).json({
+          message: "Đã cập nhật định dạng phiếu nhập thành công.",
+          receipt: receipt
+        });
+      } else {
+        return res.status(200).json({
+          message: "Không cần cập nhật, phiếu nhập đã đúng định dạng.",
+          receipt: receipt
+        });
+      }
+    } catch (error) {
+      console.error("Lỗi khi cập nhật định dạng phiếu nhập:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   // Xác nhận nhập kho và tạo lô hàng
   confirmGoodReceipt: async (req, res) => {
     try {
@@ -104,26 +147,83 @@ const goodReceiptController = {
           .json({ message: "Phiếu nhập đã được xác nhận trước đó." });
       }
 
-      const batchPromises = receipt.items.map(async (item) => {
-        const product = await Product.findById(item.productId);
-        if (!product)
-          throw new Error(`Không tìm thấy sản phẩm ID: ${item.productId}`);
+      // Normalize all items to ensure they have productId
+      for (let i = 0; i < receipt.items.length; i++) {
+        // If productId is missing but product exists, use product as productId
+        if (!receipt.items[i].productId && receipt.items[i].product) {
+          receipt.items[i].productId = receipt.items[i].product;
+        }
+      }
 
-        const supplier = await Supplier.findById(receipt.supplierId);
-        if (!supplier)
-          throw new Error(
-            `Không tìm thấy nhà cung cấp ID: ${receipt.supplierId}`
-          );
+      // Validate all items have valid product IDs before processing
+      for (let i = 0; i < receipt.items.length; i++) {
+        const item = receipt.items[i];
 
-        // Tạo lô hàng mới
+        // Check for both product and productId fields
+        const productIdToCheck = item.productId || item.product;
+
+        // Check if the productId is missing or invalid
+        if (!productIdToCheck) {
+          return res.status(400).json({
+            message: `Sản phẩm có vấn đề tại mục #${i + 1}: ID sản phẩm không xác định.`,
+            itemIndex: i,
+            item: item // Include item data for debugging
+          });
+        }
+
+        // Verify product exists
+        const productExists = await Product.exists({ _id: productIdToCheck });
+        if (!productExists) {
+          return res.status(404).json({
+            message: `Không tìm thấy sản phẩm với ID: ${productIdToCheck} tại mục #${i + 1}.`,
+            itemIndex: i,
+            productId: productIdToCheck,
+            item: item // Include item data for debugging
+          });
+        }
+      }
+
+      // Verify supplier exists before processing batches
+      const supplierIdToCheck = receipt.supplierId || receipt.supplier;
+      const supplierExists = await Supplier.exists({ _id: supplierIdToCheck });
+      if (!supplierExists) {
+        return res.status(404).json({
+          message: `Không tìm thấy nhà cung cấp với ID: ${supplierIdToCheck}.`,
+          supplierId: supplierIdToCheck
+        });
+      }
+
+      const batchPromises = receipt.items.map(async (item, index) => {
+        // Use either productId or product field
+        const productIdToUse = item.productId || item.product;
+        const product = await Product.findById(productIdToUse);
+
+        // We already verified products exist, but keeping this as a safety check
+        if (!product) {
+          throw new Error(`Không tìm thấy sản phẩm ID: ${productIdToUse} tại mục #${index + 1}`);
+        }
+
+        const supplier = await Supplier.findById(supplierIdToCheck);
+        // We already verified supplier exists, but keeping this as a safety check
+        if (!supplier) {
+          throw new Error(`Không tìm thấy nhà cung cấp ID: ${supplierIdToCheck}`);
+        }
+
+        // Use the appropriate date fields
+        const manufactureDate = item.manufacture_day || item.manufactureDate;
+        const expiryDate = item.expiry_day || item.expiryDate;
+
+        // Tạo lô hàng mới với đầy đủ các trường bắt buộc
         const batch = new Batch({
-          manufacture_day: item.manufacture_day,
-          expiry_day: item.expiry_day,
-          quantity: item.quantity,
-          status: "active",
           product: product._id,
           supplier: supplier._id,
-          goodReceiptId: receipt._id,
+          manufacture_day: manufactureDate,
+          expiry_day: expiryDate,
+          initial_quantity: item.quantity,     // Added required field
+          remaining_quantity: item.quantity,   // Added required field
+          status: "active",
+          goodReceipt: receipt._id,            // Fixed field name
+          import_price: item.unitPrice || 0    // Added required field
         });
 
         const savedBatch = await batch.save();
@@ -134,10 +234,10 @@ const goodReceiptController = {
         await product.save();
 
         // Cập nhật tồn kho
-        let inventory = await Inventory.findOne({ productId: item.productId });
+        let inventory = await Inventory.findOne({ product: productIdToUse });
         if (!inventory) {
           inventory = new Inventory({
-            productId: item.productId,
+            product: productIdToUse,  // Changed from productId to product
             warehouse_stock: item.quantity,
             shelf_stock: 0,
             total_stock: item.quantity,
@@ -149,13 +249,21 @@ const goodReceiptController = {
 
         await inventory.save();
 
-        return savedBatch;
+        // Return batch with additional product information for frontend display
+        return {
+          ...savedBatch.toObject(),
+          productName: product.name,
+          unitPrice: item.unitPrice,
+          import_price: item.unitPrice
+        };
       });
 
       const createdBatches = await Promise.all(batchPromises);
 
       // Cập nhật trạng thái phiếu nhập
       receipt.status = "received";
+
+      // Save normalized receipt with any field corrections
       await receipt.save();
 
       res.json({
