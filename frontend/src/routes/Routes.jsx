@@ -74,6 +74,8 @@ const AppRouter = () => {
           <Route path="inventory/add-shipment" element={<AddToInventoy />} />
           <Route path="cart_page" element={<CartPage />} />
           <Route path="categories" element={<CategoryPage />} />
+          <Route path="products_page" element={<ProductsPage />} />
+          <Route path="cart" element={<Cart />} />  
           
         </Route>
         

@@ -1,6 +1,19 @@
 const mongoose = require('mongoose');
 const { isValidObjectId } = require('mongoose');
 
+const unitSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        required: true,
+        enum: {
+            values: ['cái', 'gói', 'bao', 'thùng', 'chai', 'lọ', 'hộp', 'kg', 'gram', 'liter', 'ml'],
+            message: '{VALUE} is not a valid unit'
+        }
+    },
+    ratio: { type: Number, required: true, min: 1 },
+    salePrice: { type: Number, required: true, min: 0 }
+}, { _id: false });
+
 const supplierInfoSchema = new mongoose.Schema({
     supplier: {
         type: mongoose.Schema.Types.ObjectId,
@@ -10,21 +23,6 @@ const supplierInfoSchema = new mongoose.Schema({
             validator: (value) => isValidObjectId(value),
             message: "Invalid supplier ID"
         }
-    },
-    importPrice: {
-        type: Number,
-        required: true,
-        min: 0
-    },
-    minOrderQuantity: {
-        type: Number,
-        min: 1,
-        default: 1
-    },
-    leadTime: {
-        type: Number,
-        min: 0,
-        default: 0
     },
     isPrimary: {
         type: Boolean,
@@ -74,6 +72,29 @@ const productSchema = new mongoose.Schema(
             trim: true,
             maxlength: [100, 'Product name cannot exceed 100 characters']
         },
+        units: {
+            type: [unitSchema],
+            required: true,
+            default: [
+                { name: 'cái', ratio: 1, salePrice: 0 },
+                { name: 'hộp', ratio: 10, salePrice: 0 }
+            ],
+            validate: {
+                validator: function (units) {
+                    const ratioSet = new Set();
+                    let hasRatio1 = false;
+
+                    for (const unit of units) {
+                        if (ratioSet.has(unit.ratio)) return false;
+                        ratioSet.add(unit.ratio);
+                        if (unit.ratio === 1) hasRatio1 = true;
+                    }
+
+                    return hasRatio1;
+                },
+                message: "Units must have unique ratios and include one with ratio = 1"
+            }
+        },
         category: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Category",
@@ -87,15 +108,6 @@ const productSchema = new mongoose.Schema(
             type: String,
             trim: true,
             maxlength: [1000, 'Description cannot exceed 1000 characters']
-        },
-        price: {
-            type: Number,
-            required: [true, 'Price is required'],
-            min: [0, 'Price cannot be negative']
-        },
-        costPrice: {
-            type: Number,
-            min: [0, 'Cost price cannot be negative']
         },
         SKU: {
             type: String,
@@ -111,18 +123,6 @@ const productSchema = new mongoose.Schema(
             unique: true,
             sparse: true,
             maxlength: [50, 'Barcode cannot exceed 50 characters']
-        },
-        unit: {
-            type: String,
-            required: [true, 'Unit is required'],
-            enum: {
-                values: [
-                    "piece", "kg", "g", "liter", "ml",
-                    "box", "set", "bottle", "pack",
-                    "carton", "pair", "dozen", "meter"
-                ],
-                message: "Invalid unit type"
-            }
         },
         minStockLevel: {
             type: Number,
@@ -162,7 +162,7 @@ const productSchema = new mongoose.Schema(
                     const daysSet = new Set();
                     for (const rule of rules) {
                         if (daysSet.has(rule.daysBeforeExpiry)) {
-                            return false;
+                            return false; // Không cho phép trùng lặp daysBeforeExpiry
                         }
                         daysSet.add(rule.daysBeforeExpiry);
                     }
@@ -175,7 +175,16 @@ const productSchema = new mongoose.Schema(
             type: String,
             trim: true
         }],
-        suppliers: [supplierInfoSchema],
+        suppliers: {
+            type: [supplierInfoSchema],
+            validate: {
+                validator: function (suppliers) {
+                    const supplierIds = suppliers.map((s) => s.supplier.toString());
+                    return new Set(supplierIds).size === supplierIds.length; // Ensure no duplicate suppliers
+                },
+                message: "Duplicate suppliers are not allowed",
+            },
+        },
         active: {
             type: Boolean,
             default: true,
@@ -234,7 +243,6 @@ productSchema.pre('save', function (next) {
 productSchema.index({ name: 'text', description: 'text', SKU: 'text', barcode: 'text' });
 productSchema.index({ category: 1 });
 productSchema.index({ active: 1 });
-productSchema.index({ price: 1 });
 productSchema.index({ 'suppliers.supplier': 1 });
 
 productSchema.virtual('primarySupplier').get(function () {
@@ -245,17 +253,15 @@ productSchema.virtual('primarySupplier').get(function () {
 });
 
 productSchema.methods.getDiscountedPrice = function () {
-    if (!this.discount ||
-        new Date() < this.discount.startDate ||
-        new Date() > this.discount.endDate) {
-        return this.price;
+    if (!this.discount || !salePrice) return salePrice;
+    const now = new Date();
+    if (now < this.discount.startDate || now > this.discount.endDate) {
+        return salePrice;
     }
 
-    if (this.discount.type === "percentage") {
-        return this.price * (1 - this.discount.value / 100);
-    } else {
-        return Math.max(0, this.price - this.discount.value);
-    }
+    return this.discount.type === "percentage"
+        ? salePrice * (1 - this.discount.value / 100)
+        : Math.max(0, salePrice - this.discount.value);
 };
 
 productSchema.pre('remove', async function (next) {

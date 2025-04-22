@@ -30,11 +30,9 @@ exports.createProduct = async (req, res) => {
       name,
       category,
       description,
-      price,
-      costPrice,
       SKU,
       barcode,
-      unit,
+      units,
       minStockLevel,
       reorderLevel,
       weight,
@@ -44,29 +42,29 @@ exports.createProduct = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    const requiredFields = { name, category, price, SKU, unit };
+    const requiredFields = { name, category, SKU, units };
     for (const [field, value] of Object.entries(requiredFields)) {
       if (!value) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: `${field} is a required field.` 
+          message: `${field} is a required field.`
         });
       }
     }
 
     if (!isValidObjectId(category)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Invalid category ID format." 
+        message: "Invalid category ID format."
       });
     }
 
     // Check if category exists
     const categoryExists = await Category.exists({ _id: category });
     if (!categoryExists) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Category not found." 
+        message: "Category not found."
       });
     }
 
@@ -78,9 +76,9 @@ exports.createProduct = async (req, res) => {
       ]
     });
     if (existingProduct) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Product with this SKU or barcode already exists." 
+        message: "Product with this SKU or barcode already exists."
       });
     }
 
@@ -114,7 +112,7 @@ exports.createProduct = async (req, res) => {
 
         const supplierExists = await Supplier.exists({ _id: supplier.supplier });
         if (!supplierExists) {
-          return res.status(404).json({ 
+          return res.status(404).json({
             success: false,
             message: `Supplier not found: ${supplier.supplier}`,
             invalidEntry: supplier
@@ -123,9 +121,6 @@ exports.createProduct = async (req, res) => {
 
         supplierInfo.push({
           supplier: supplier.supplier,
-          importPrice: Number(supplier.importPrice) || 0,
-          minOrderQuantity: Number(supplier.minOrderQuantity) || 1,
-          leadTime: Number(supplier.leadTime) || 0,
           isPrimary: Boolean(supplier.isPrimary)
         });
       }
@@ -144,11 +139,9 @@ exports.createProduct = async (req, res) => {
       name,
       category,
       description,
-      price,
-      costPrice,
       SKU,
       barcode,
-      unit,
+      units,
       minStockLevel,
       reorderLevel,
       weight,
@@ -189,7 +182,7 @@ exports.createProduct = async (req, res) => {
 
   } catch (error) {
     console.error("Create product error:", error);
-    
+
     if (error.name === 'ValidationError') {
       const errors = {};
       for (const field in error.errors) {
@@ -220,13 +213,15 @@ exports.createProduct = async (req, res) => {
 
 exports.getAllProducts = async (req, res) => {
   try {
-    const queryObj = { ...req.query, active: true };
+    // const queryObj = { ...req.query, active: true };
+    const queryObj = { ...req.query };
+
     const excludedFields = ['page', 'sort', 'limit', 'fields'];
     excludedFields.forEach(el => delete queryObj[el]);
 
     let queryStr = JSON.stringify(queryObj);
     queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, match => `$${match}`);
-    
+
     let query = Product.find(JSON.parse(queryStr))
       .populate({
         path: 'category',
@@ -267,9 +262,9 @@ exports.getAllProducts = async (req, res) => {
 
   } catch (error) {
     console.error("Get products error:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
-      message: "Internal server error." 
+      message: "Internal server error."
     });
   }
 };
@@ -298,9 +293,9 @@ exports.getAll = async (req, res) => {
 
   } catch (error) {
     console.error("Get all products error:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
-      message: "Internal server error." 
+      message: "Internal server error."
     });
   }
 };
@@ -310,9 +305,9 @@ exports.getProductById = async (req, res) => {
     const { id } = req.params;
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Invalid product ID." 
+        message: "Invalid product ID."
       });
     }
 
@@ -332,9 +327,9 @@ exports.getProductById = async (req, res) => {
       });
 
     if (!product) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Product not found." 
+        message: "Product not found."
       });
     }
 
@@ -351,9 +346,9 @@ exports.getProductById = async (req, res) => {
 
   } catch (error) {
     console.error("Get product error:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
-      message: "Internal server error." 
+      message: "Internal server error."
     });
   }
 };
@@ -364,17 +359,17 @@ exports.updateProduct = async (req, res) => {
     let updates = req.body;
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Invalid product ID." 
+        message: "Invalid product ID."
       });
     }
 
     const product = await Product.findById(id);
     if (!product) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Product not found." 
+        message: "Product not found."
       });
     }
 
@@ -392,17 +387,17 @@ exports.updateProduct = async (req, res) => {
     // Handle category update
     if (updates.category) {
       if (!isValidObjectId(updates.category)) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Invalid category ID." 
+          message: "Invalid category ID."
         });
       }
 
       const categoryExists = await Category.findById(updates.category);
       if (!categoryExists) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           success: false,
-          message: "Category not found." 
+          message: "Category not found."
         });
       }
     }
@@ -422,9 +417,9 @@ exports.updateProduct = async (req, res) => {
       });
 
       if (existingProduct) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Another product with this SKU or barcode already exists." 
+          message: "Another product with this SKU or barcode already exists."
         });
       }
     }
@@ -469,7 +464,7 @@ exports.updateProduct = async (req, res) => {
 
         const supplierExists = await Supplier.findById(supplier.supplier);
         if (!supplierExists) {
-          return res.status(404).json({ 
+          return res.status(404).json({
             success: false,
             message: `Supplier not found: ${supplier.supplier}`,
             invalidEntry: supplier
@@ -478,9 +473,6 @@ exports.updateProduct = async (req, res) => {
 
         validSuppliers.push({
           supplier: supplier.supplier,
-          importPrice: Number(supplier.importPrice) || 0,
-          minOrderQuantity: Number(supplier.minOrderQuantity) || 1,
-          leadTime: Number(supplier.leadTime) || 0,
           isPrimary: Boolean(supplier.isPrimary)
         });
 
@@ -517,8 +509,8 @@ exports.updateProduct = async (req, res) => {
 
     // Update other fields
     const allowedUpdates = [
-      'name', 'category', 'description', 'price', 'costPrice', 
-      'SKU', 'barcode', 'unit', 'minStockLevel', 'reorderLevel',
+      'name', 'category', 'description',
+      'SKU', 'barcode', 'units', 'minStockLevel', 'reorderLevel',
       'weight', 'dimensions', 'taxRate', 'tags', 'expiryDiscountRules',
       'discount', 'active'
     ];
@@ -539,10 +531,10 @@ exports.updateProduct = async (req, res) => {
 
   } catch (error) {
     console.error("Update product error:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
       message: "Internal server error.",
-      error: error.message 
+      error: error.message
     });
   }
 };
@@ -552,9 +544,9 @@ exports.deleteProduct = async (req, res) => {
     const { id } = req.params;
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Invalid product ID." 
+        message: "Invalid product ID."
       });
     }
 
@@ -565,9 +557,9 @@ exports.deleteProduct = async (req, res) => {
     );
 
     if (!product) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Product not found." 
+        message: "Product not found."
       });
     }
 
@@ -585,9 +577,9 @@ exports.deleteProduct = async (req, res) => {
 
   } catch (error) {
     console.error("Delete product error:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
-      message: "Internal server error." 
+      message: "Internal server error."
     });
   }
 };
@@ -597,9 +589,9 @@ exports.getProductInventory = async (req, res) => {
     const { id } = req.params;
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Invalid product ID." 
+        message: "Invalid product ID."
       });
     }
 
@@ -610,9 +602,9 @@ exports.getProductInventory = async (req, res) => {
       });
 
     if (!inventory) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Inventory record not found for this product." 
+        message: "Inventory record not found for this product."
       });
     }
 
@@ -623,9 +615,9 @@ exports.getProductInventory = async (req, res) => {
 
   } catch (error) {
     console.error("Get product inventory error:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
-      message: "Internal server error." 
+      message: "Internal server error."
     });
   }
 };
@@ -636,9 +628,9 @@ exports.getProductBatches = async (req, res) => {
     const { status } = req.query;
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Invalid product ID." 
+        message: "Invalid product ID."
       });
     }
 
@@ -662,9 +654,9 @@ exports.getProductBatches = async (req, res) => {
 
   } catch (error) {
     console.error("Get product batches error:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       success: false,
-      message: "Internal server error." 
+      message: "Internal server error."
     });
   }
 };

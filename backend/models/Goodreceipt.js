@@ -19,7 +19,7 @@ const goodReceiptItemSchema = new mongoose.Schema({
     type: Date,
     required: true,
     validate: {
-      validator: function(value) {
+      validator: function (value) {
         return value <= new Date();
       },
       message: "Manufacture date cannot be in the future"
@@ -29,7 +29,7 @@ const goodReceiptItemSchema = new mongoose.Schema({
     type: Date,
     required: true,
     validate: {
-      validator: function(value) {
+      validator: function (value) {
         return value > this.manufactureDate;
       },
       message: "Expiry date must be after manufacture date"
@@ -83,17 +83,19 @@ goodReceiptSchema.index({ purchaseOrder: 1 });
 goodReceiptSchema.index({ supplier: 1 });
 goodReceiptSchema.index({ receiptDate: -1 });
 goodReceiptSchema.index({ status: 1 });
+// Middleware to update inventory when good receipt is completed
+goodReceiptSchema.pre('save', async function (next) {
 
-goodReceiptSchema.pre('save', async function(next) {
   if (this.isModified('status')) {
     if (this.status === 'received') {
       const Batch = mongoose.model('Batch');
       const Inventory = mongoose.model('Inventory');
 
       for (const item of this.items) {
+
         const batch = new Batch({
           product: item.product,
-          supplier: this.supplier,
+          supplier: this.supplier, // Make sure this is using the correct field name
           manufacture_day: item.manufactureDate,
           expiry_day: item.expiryDate,
           initial_quantity: item.quantity,
@@ -104,6 +106,9 @@ goodReceiptSchema.pre('save', async function(next) {
 
         const savedBatch = await batch.save();
         item.batch = savedBatch._id;
+
+
+        // Update inventory
 
         await Inventory.findOneAndUpdate(
           { product: item.product },

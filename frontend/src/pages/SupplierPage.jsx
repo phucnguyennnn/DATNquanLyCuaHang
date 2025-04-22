@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { 
   Box, 
   Button, 
@@ -29,8 +29,7 @@ import {
   AccordionDetails,
   Autocomplete,
   MenuItem,
-  Checkbox,
-  useMediaQuery 
+  Checkbox
 } from '@mui/material';
 import { 
   Add, 
@@ -88,16 +87,13 @@ const SupplierSchema = yup.object().shape({
   isActive: yup.boolean().required('Bắt buộc chọn trạng thái'),
   suppliedProducts: yup.array().of(
     yup.object().shape({
-      product: yup.string().required('Bắt buộc chọn sản phẩm'),
-      importPrice: yup.number().min(0, 'Không được âm').required('Bắt buộc nhập'),
-      minOrderQuantity: yup.number().min(1, 'Tối thiểu 1'),
-      leadTime: yup.number().min(0, 'Không được âm'),
-      unit: yup.string().required('Bắt buộc chọn đơn vị'),
-      conversionRate: yup.number().min(1, 'Tối thiểu 1').required('Bắt buộc nhập'),
-      isPrimary: yup.boolean()
+      product: yup.string().required('Bắt buộc chọn sản phẩm')
     })
   )
 });
+
+// Memoized TextField component
+const MemoizedTextField = memo((props) => <TextField {...props} />);
 
 const SupplierPage = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -106,22 +102,51 @@ const SupplierPage = () => {
   const [editMode, setEditMode] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  const isMobile = useMediaQuery('(max-width:600px)');
 
-  useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  const [snackbar, setSnackbar] = useState({ 
+    open: false, 
+    message: '', 
+    severity: 'success' 
+  });
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [supplierToDelete, setSupplierToDelete] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Trạng thái đang xử lý
 
   useEffect(() => {
     fetchSuppliers();
     axios.get(PRODUCTS_API, {
       headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` }
-    }).then(({ data }) => setProducts(data.data));
+    }).then(({ data }) => {
+      setProducts(data.data);
+    });
   }, [searchTerm]);
+
+  const isProductBelongsToSupplier = (productId, supplierId) => {
+    if (!productId || !supplierId) return false;
+    
+    const product = products.find(p => p._id === productId);
+    if (!product || !product.suppliers) return false;
+    
+    return product.suppliers.some(s => {
+      if (!s || !s.supplier) return false;
+      const supplierIdToCompare = s.supplier._id || s.supplier;
+      return supplierIdToCompare === supplierId;
+    });
+  };
+
+  const getProductsForSupplier = (supplierId) => {
+    if (!supplierId) return [];
+    
+    return products.filter(product => {
+      if (!product || !product.suppliers) return false;
+      
+      return product.suppliers.some(s => {
+        if (!s || !s.supplier) return false;
+        const supplierIdToCompare = s.supplier._id || s.supplier;
+        return supplierIdToCompare === supplierId;
+      });
+    });
+  };
 
   const fetchSuppliers = async () => {
     try {
@@ -153,7 +178,18 @@ const SupplierPage = () => {
     },
     validationSchema: SupplierSchema,
     onSubmit: async (values) => {
+      if (isSubmitting) return;
+      setIsSubmitting(true);
+
       try {
+        const invalidProducts = values.suppliedProducts.filter(sp => 
+          !sp.product
+        );
+        if (invalidProducts.length > 0) {
+          showSnackbar('Vui lòng chọn sản phẩm', 'error');
+          return;
+        }
+
         const token = localStorage.getItem("authToken");
         const config = { headers: { Authorization: `Bearer ${token}` } };
 
@@ -167,27 +203,57 @@ const SupplierPage = () => {
         handleCloseDialog();
         showSnackbar(`Nhà cung cấp ${editMode ? 'cập nhật' : 'tạo mới'} thành công`);
       } catch (error) {
-        showSnackbar(error.response?.data?.message || 'Thao tác thất bại', 'error');
+        console.error('Error submitting supplier:', error);
+        showSnackbar(
+          error.response?.data?.message || 'Thao tác thất bại', 
+          'error'
+        );
+      } finally {
+        setIsSubmitting(false);
       }
     }
   });
 
   const handleOpenCreate = () => {
     setEditMode(false);
+    setSelectedSupplier(null);
     formik.resetForm();
     setOpenDialog(true);
   };
 
   const handleOpenEdit = (supplier) => {
+    if (!supplier || !supplier._id) {
+      showSnackbar('Không thể chỉnh sửa nhà cung cấp này, thiếu ID', 'error');
+      return;
+    }
+    
     setEditMode(true);
     setSelectedSupplier(supplier);
+    
+    const supplierProducts = getProductsForSupplier(supplier._id);
+    const existingProducts = Array.isArray(supplier.suppliedProducts) 
+      ? supplier.suppliedProducts.map(sp => ({
+          product: sp.product?._id || sp.product || ''
+        })) 
+      : [];
+    
+    const productIds = new Set(existingProducts.map(p => p.product).filter(id => id));
+    const additionalProducts = supplierProducts
+      .filter(p => p._id && !productIds.has(p._id))
+      .map(p => ({ product: p._id }));
+    
     formik.setValues({
       ...supplier,
-      suppliedProducts: supplier.suppliedProducts.map(sp => ({
-        ...sp,
-        product: sp.product._id ? sp.product._id : sp.product
-      }))
+      address: supplier.address || { street: '', city: '', state: '', postalCode: '', country: '' },
+      contact: supplier.contact || { phone: '', mobile: '', email: '', website: '' },
+      primaryContactPerson: supplier.primaryContactPerson || { name: '', position: '', phone: '', email: '' },
+      bankDetails: supplier.bankDetails || { accountName: '', accountNumber: '', bankName: '', branch: '', swiftCode: '' },
+      paymentTerms: supplier.paymentTerms || 30,
+      rating: supplier.rating || 0,
+      isActive: supplier.isActive !== undefined ? supplier.isActive : true,
+      suppliedProducts: [...existingProducts, ...additionalProducts]
     });
+    
     setOpenDialog(true);
   };
 
@@ -213,6 +279,7 @@ const SupplierPage = () => {
   };
 
   return (
+<<<<<<< HEAD
     <Box sx={{ 
       p: { xs: 1, sm: 3 },
       height: '100vh',
@@ -227,29 +294,28 @@ const SupplierPage = () => {
         mb: 3 
       }}>
         <TextField
+=======
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+        <MemoizedTextField
+>>>>>>> b650d09d9241303f305ece7a291b72f7b9c57ac5
           label="Tìm kiếm nhà cung cấp"
           variant="outlined"
           size="small"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          sx={{ 
-            flex: { xs: '1 1 auto', sm: '0 1 300px' },
-            order: { xs: 2, sm: 1 } 
-          }}
+          sx={{ width: 300 }}
         />
         <Button
           variant="contained"
           startIcon={<Add />}
           onClick={handleOpenCreate}
-          sx={{ 
-            order: { xs: 1, sm: 2 },
-            width: { xs: '100%', sm: 'auto' } 
-          }}
         >
           Thêm mới
         </Button>
       </Box>
 
+<<<<<<< HEAD
       <TableContainer 
         component={Paper} 
         sx={{ 
@@ -261,53 +327,48 @@ const SupplierPage = () => {
         }}
       >
         <Table sx={{ minWidth: 800 }}>
+=======
+      <TableContainer component={Paper}>
+        <Table>
+>>>>>>> b650d09d9241303f305ece7a291b72f7b9c57ac5
           <TableHead>
             <TableRow>
               <TableCell>Tên</TableCell>
-              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Mã số thuế</TableCell>
-              <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>Số sản phẩm</TableCell>
+              <TableCell>Mã số thuế</TableCell>
+              <TableCell>Số sản phẩm</TableCell>
               <TableCell>Liên hệ</TableCell>
-              <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>Người liên hệ</TableCell>
+              <TableCell>Người liên hệ</TableCell>
               <TableCell>Điều khoản TT</TableCell>
-              <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Đánh giá</TableCell>
+              <TableCell>Đánh giá</TableCell>
               <TableCell>Trạng thái</TableCell>
               <TableCell>Thao tác</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {suppliers.map((supplier) => (
-              <TableRow key={supplier._id} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                <TableCell sx={{ 
-                  display: 'flex', 
-                  flexDirection: { xs: 'column', sm: 'row' },
-                  alignItems: { xs: 'flex-start', sm: 'center' }
-                }}>
+              <TableRow key={supplier._id}>
+                <TableCell>
                   <Typography fontWeight="bold">{supplier.name}</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ ml: { sm: 1 } }}>
+                  <Typography variant="body2" color="text.secondary">
                     {supplier.company}
                   </Typography>
                 </TableCell>
-                <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>{supplier.taxId}</TableCell>
-                <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                <TableCell>{supplier.taxId}</TableCell>
+                <TableCell>
                   <Chip 
                     label={supplier.suppliedProducts?.length || 0}
                     color="primary"
                     variant="outlined"
-                    size="small"
                   />
                 </TableCell>
                 <TableCell>
-                  <Box sx={{ 
-                    display: 'flex', 
-                    flexDirection: 'column',
-                    fontSize: { xs: '0.875rem', sm: '1rem' }
-                  }}>
+                  <Box>
                     <div>{supplier.contact?.email}</div>
                     <div>{supplier.contact?.phone}</div>
                     <div>{supplier.contact?.mobile}</div>
                   </Box>
                 </TableCell>
-                <TableCell sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                <TableCell>
                   {supplier.primaryContactPerson && (
                     <Box>
                       <div>{supplier.primaryContactPerson.name}</div>
@@ -317,7 +378,7 @@ const SupplierPage = () => {
                   )}
                 </TableCell>
                 <TableCell>{supplier.paymentTerms} ngày</TableCell>
-                <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                <TableCell>
                   <Box display="flex" alignItems="center">
                     <Star fontSize="small" color="warning" />
                     <Typography ml={0.5}>{supplier.rating?.toFixed(1)}</Typography>
@@ -331,18 +392,16 @@ const SupplierPage = () => {
                   />
                 </TableCell>
                 <TableCell>
-                  <Box sx={{ display: 'flex', gap: { xs: 0, sm: 1 } }}>
-                    <Tooltip title="Sửa">
-                      <IconButton onClick={() => handleOpenEdit(supplier)} size="small">
-                        <Edit fontSize={isMobile ? "small" : "medium"} />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Xóa">
-                      <IconButton onClick={() => handleDelete(supplier._id)} size="small">
-                        <Delete fontSize={isMobile ? "small" : "medium"} />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
+                  <Tooltip title="Sửa">
+                    <IconButton onClick={() => handleOpenEdit(supplier)}>
+                      <Edit fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Xóa">
+                    <IconButton onClick={() => handleDelete(supplier._id)}>
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             ))}
@@ -350,62 +409,50 @@ const SupplierPage = () => {
         </Table>
       </TableContainer>
 
-      <Dialog 
-        open={openDialog} 
-        onClose={handleCloseDialog} 
-        maxWidth="lg" 
-        fullWidth
-        fullScreen={windowWidth < 600}
-      >
-        <DialogTitle sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }}>
-          {editMode ? 'Cập nhật nhà cung cấp' : 'Thêm nhà cung cấp mới'}
-        </DialogTitle>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="lg" fullWidth>
+        <DialogTitle>{editMode ? 'Cập nhật nhà cung cấp' : 'Thêm nhà cung cấp mới'}</DialogTitle>
         <form onSubmit={formik.handleSubmit}>
-          <DialogContent dividers sx={{ pt: { xs: 2, sm: 3 } }}>
-            <Grid container spacing={2}>
+          <DialogContent dividers>
+            <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
-                <Accordion defaultExpanded sx={{ mb: 2 }}>
+                <Accordion defaultExpanded>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Business sx={{ mr: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }} />
-                    <Typography sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>Thông tin cơ bản</Typography>
+                    <Business sx={{ mr: 1 }} />
+                    <Typography>Thông tin cơ bản</Typography>
                   </AccordionSummary>
-                  <AccordionDetails sx={{ p: { xs: 1, sm: 2 } }}>
-                    <TextField
+                  <AccordionDetails>
+                    <MemoizedTextField
                       fullWidth
                       label="Tên nhà cung cấp *"
                       name="name"
-                      size="small"
                       value={formik.values.name}
                       onChange={formik.handleChange}
                       error={formik.touched.name && !!formik.errors.name}
                       helperText={formik.touched.name && formik.errors.name}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Tên công ty"
                       name="company"
-                      size="small"
                       value={formik.values.company}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Mã số thuế"
                       name="taxId"
-                      size="small"
                       value={formik.values.taxId}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Mô tả"
                       name="description"
                       multiline
                       rows={3}
-                      size="small"
                       value={formik.values.description}
                       onChange={formik.handleChange}
                       margin="normal"
@@ -413,63 +460,58 @@ const SupplierPage = () => {
                   </AccordionDetails>
                 </Accordion>
 
-                <Accordion sx={{ mb: 2 }}>
+                <Accordion>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    <ContactPhone sx={{ mr: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }} />
-                    <Typography sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>Địa chỉ</Typography>
+                    <ContactPhone sx={{ mr: 1 }} />
+                    <Typography>Địa chỉ</Typography>
                   </AccordionSummary>
-                  <AccordionDetails sx={{ p: { xs: 1, sm: 2 } }}>
-                    <Grid container spacing={1}>
+                  <AccordionDetails>
+                    <Grid container spacing={2}>
                       <Grid item xs={12} md={6}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Đường/Số nhà"
                           name="address.street"
-                          size="small"
                           value={formik.values.address.street}
                           onChange={formik.handleChange}
                           margin="normal"
                         />
                       </Grid>
                       <Grid item xs={12} md={6}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Thành phố"
                           name="address.city"
-                          size="small"
                           value={formik.values.address.city}
                           onChange={formik.handleChange}
                           margin="normal"
                         />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Tỉnh/Thành"
                           name="address.state"
-                          size="small"
                           value={formik.values.address.state}
                           onChange={formik.handleChange}
                           margin="normal"
                         />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Mã bưu điện"
                           name="address.postalCode"
-                          size="small"
                           value={formik.values.address.postalCode}
                           onChange={formik.handleChange}
                           margin="normal"
                         />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Quốc gia"
                           name="address.country"
-                          size="small"
                           value={formik.values.address.country}
                           onChange={formik.handleChange}
                           margin="normal"
@@ -481,46 +523,42 @@ const SupplierPage = () => {
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <Accordion defaultExpanded sx={{ mb: 2 }}>
+                <Accordion defaultExpanded>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    <ContactPhone sx={{ mr: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }} />
-                    <Typography sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>Thông tin liên hệ</Typography>
+                    <ContactPhone sx={{ mr: 1 }} />
+                    <Typography>Thông tin liên hệ</Typography>
                   </AccordionSummary>
-                  <AccordionDetails sx={{ p: { xs: 1, sm: 2 } }}>
-                    <TextField
+                  <AccordionDetails>
+                    <MemoizedTextField
                       fullWidth
                       label="Điện thoại"
                       name="contact.phone"
-                      size="small"
                       value={formik.values.contact.phone}
                       onChange={formik.handleChange}
                       error={formik.touched.contact?.phone && !!formik.errors.contact?.phone}
                       helperText={formik.touched.contact?.phone && formik.errors.contact?.phone}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Di động"
                       name="contact.mobile"
-                      size="small"
                       value={formik.values.contact.mobile}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Email"
                       name="contact.email"
-                      size="small"
                       value={formik.values.contact.email}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Website"
                       name="contact.website"
-                      size="small"
                       value={formik.values.contact.website}
                       onChange={formik.handleChange}
                       margin="normal"
@@ -528,44 +566,40 @@ const SupplierPage = () => {
                   </AccordionDetails>
                 </Accordion>
 
-                <Accordion sx={{ mb: 2 }}>
+                <Accordion>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Person sx={{ mr: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }} />
-                    <Typography sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>Người liên hệ chính</Typography>
+                    <Person sx={{ mr: 1 }} />
+                    <Typography>Người liên hệ chính</Typography>
                   </AccordionSummary>
-                  <AccordionDetails sx={{ p: { xs: 1, sm: 2 } }}>
-                    <TextField
+                  <AccordionDetails>
+                    <MemoizedTextField
                       fullWidth
                       label="Họ tên"
                       name="primaryContactPerson.name"
-                      size="small"
                       value={formik.values.primaryContactPerson.name}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Chức vụ"
                       name="primaryContactPerson.position"
-                      size="small"
                       value={formik.values.primaryContactPerson.position}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Số điện thoại"
                       name="primaryContactPerson.phone"
-                      size="small"
                       value={formik.values.primaryContactPerson.phone}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Email"
                       name="primaryContactPerson.email"
-                      size="small"
                       value={formik.values.primaryContactPerson.email}
                       onChange={formik.handleChange}
                       margin="normal"
@@ -573,53 +607,48 @@ const SupplierPage = () => {
                   </AccordionDetails>
                 </Accordion>
 
-                <Accordion sx={{ mb: 2 }}>
+                <Accordion>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    <AccountBalance sx={{ mr: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }} />
-                    <Typography sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>Thông tin ngân hàng</Typography>
+                    <AccountBalance sx={{ mr: 1 }} />
+                    <Typography>Thông tin ngân hàng</Typography>
                   </AccordionSummary>
-                  <AccordionDetails sx={{ p: { xs: 1, sm: 2 } }}>
-                    <TextField
+                  <AccordionDetails>
+                    <MemoizedTextField
                       fullWidth
                       label="Tên tài khoản"
                       name="bankDetails.accountName"
-                      size="small"
                       value={formik.values.bankDetails.accountName}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Số tài khoản"
                       name="bankDetails.accountNumber"
-                      size="small"
                       value={formik.values.bankDetails.accountNumber}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Tên ngân hàng"
                       name="bankDetails.bankName"
-                      size="small"
                       value={formik.values.bankDetails.bankName}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Chi nhánh"
                       name="bankDetails.branch"
-                      size="small"
                       value={formik.values.bankDetails.branch}
                       onChange={formik.handleChange}
                       margin="normal"
                     />
-                    <TextField
+                    <MemoizedTextField
                       fullWidth
                       label="Mã SWIFT"
                       name="bankDetails.swiftCode"
-                      size="small"
                       value={formik.values.bankDetails.swiftCode}
                       onChange={formik.handleChange}
                       margin="normal"
@@ -629,20 +658,19 @@ const SupplierPage = () => {
               </Grid>
 
               <Grid item xs={12}>
-                <Accordion sx={{ mb: 2 }}>
+                <Accordion>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Payment sx={{ mr: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }} />
-                    <Typography sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>Thông tin bổ sung</Typography>
+                    <Payment sx={{ mr: 1 }} />
+                    <Typography>Thông tin bổ sung</Typography>
                   </AccordionSummary>
-                  <AccordionDetails sx={{ p: { xs: 1, sm: 2 } }}>
-                    <Grid container spacing={1}>
+                  <AccordionDetails>
+                    <Grid container spacing={2}>
                       <Grid item xs={12} md={4}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Điều khoản thanh toán (ngày) *"
                           name="paymentTerms"
                           type="number"
-                          size="small"
                           value={formik.values.paymentTerms}
                           onChange={formik.handleChange}
                           error={formik.touched.paymentTerms && !!formik.errors.paymentTerms}
@@ -653,19 +681,18 @@ const SupplierPage = () => {
                         />
                       </Grid>
                       <Grid item xs={12} md={4}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Đánh giá"
                           name="rating"
                           type="number"
-                          size="small"
                           inputProps={{ min: 0, max: 5, step: 0.1 }}
                           value={formik.values.rating}
                           onChange={formik.handleChange}
                           InputProps={{
                             startAdornment: (
                               <InputAdornment position="start">
-                                <Star color="warning" fontSize="small" />
+                                <Star color="warning" />
                               </InputAdornment>
                             ),
                           }}
@@ -679,7 +706,6 @@ const SupplierPage = () => {
                               checked={formik.values.isActive}
                               onChange={formik.handleChange}
                               color="primary"
-                              size="small"
                             />
                           }
                           label="Đang hoạt động"
@@ -688,13 +714,12 @@ const SupplierPage = () => {
                         />
                       </Grid>
                       <Grid item xs={12}>
-                        <TextField
+                        <MemoizedTextField
                           fullWidth
                           label="Ghi chú"
                           name="notes"
                           multiline
                           rows={4}
-                          size="small"
                           value={formik.values.notes}
                           onChange={formik.handleChange}
                           margin="normal"
@@ -706,40 +731,64 @@ const SupplierPage = () => {
               </Grid>
 
               <Grid item xs={12}>
-                <Accordion sx={{ mb: 2 }}>
+                <Accordion>
                   <AccordionSummary expandIcon={<ExpandMore />}>
-                    <Star sx={{ mr: 1, fontSize: { xs: '1rem', sm: '1.25rem' } }} />
-                    <Typography sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }}>Sản phẩm cung cấp</Typography>
+                    <Star sx={{ mr: 1 }} />
+                    <Typography>Sản phẩm cung cấp</Typography>
                   </AccordionSummary>
-                  <AccordionDetails sx={{ p: { xs: 1, sm: 2 } }}>
+                  <AccordionDetails>
                     <Box sx={{ mb: 2 }}>
                       <Button
                         variant="outlined"
                         startIcon={<Add />}
-                        size="small"
                         onClick={() => {
                           formik.setFieldValue('suppliedProducts', [
                             ...formik.values.suppliedProducts,
                             {
-                              product: '',
-                              importPrice: 0,
-                              minOrderQuantity: 1,
-                              leadTime: 0,
-                              unit: 'cái',
-                              conversionRate: 1,
-                              isPrimary: false
+                              product: ''
                             }
                           ]);
                         }}
                       >
                         Thêm sản phẩm
                       </Button>
+                      
+                      {editMode && selectedSupplier && selectedSupplier._id && (
+                        <Button
+                          variant="outlined"
+                          color="secondary"
+                          sx={{ ml: 2 }}
+                          onClick={() => {
+                            const supplierProducts = getProductsForSupplier(selectedSupplier._id);
+                            const currentProductIds = new Set(
+                              formik.values.suppliedProducts
+                                .filter(p => p && p.product)
+                                .map(p => p.product)
+                            );
+                            
+                            const newProducts = supplierProducts
+                              .filter(p => p._id && !currentProductIds.has(p._id))
+                              .map(p => ({ product: p._id }));
+                              
+                            if (newProducts.length > 0) {
+                              formik.setFieldValue('suppliedProducts', [
+                                ...formik.values.suppliedProducts,
+                                ...newProducts
+                              ]);
+                            } else {
+                              showSnackbar('Đã thêm tất cả sản phẩm của nhà cung cấp này', 'info');
+                            }
+                          }}
+                        >
+                          Tự động thêm sản phẩm từ nhà cung cấp
+                        </Button>
+                      )}
                     </Box>
 
                     {formik.values.suppliedProducts.map((item, index) => (
-                      <Paper key={index} sx={{ p: 1, mb: 2, position: 'relative' }}>
-                        <Grid container spacing={1}>
-                          <Grid item xs={12} md={4}>
+                      <Paper key={index} sx={{ p: 2, mb: 2 }}>
+                        <Grid container spacing={2}>
+                          <Grid item xs={10}>
                             <Autocomplete
                               options={products}
                               getOptionLabel={(option) => option.name}
@@ -747,126 +796,53 @@ const SupplierPage = () => {
                               onChange={(e, value) => {
                                 formik.setFieldValue(`suppliedProducts[${index}].product`, value?._id || '');
                               }}
+                              renderOption={(props, option) => (
+                                <li {...props}>
+                                  <Box display="flex" alignItems="center" width="100%">
+                                    <Typography>{option.name}</Typography>
+                                    {editMode && selectedSupplier && selectedSupplier._id && 
+                                      isProductBelongsToSupplier(option._id, selectedSupplier._id) && (
+                                        <Chip 
+                                          size="small" 
+                                          label="Đã liên kết" 
+                                          color="primary" 
+                                          sx={{ ml: 1 }}
+                                        />
+                                      )
+                                    }
+                                  </Box>
+                                </li>
+                              )}
                               renderInput={(params) => (
-                                <TextField
+                                <MemoizedTextField
                                   {...params}
                                   label="Chọn sản phẩm *"
-                                  size="small"
                                   error={formik.touched.suppliedProducts?.[index]?.product && 
                                          !!formik.errors.suppliedProducts?.[index]?.product}
                                   helperText={formik.touched.suppliedProducts?.[index]?.product && 
-                                            formik.errors.suppliedProducts?.[index]?.product}
+                                             formik.errors.suppliedProducts?.[index]?.product}
                                 />
                               )}
                             />
+                            {editMode && selectedSupplier && selectedSupplier._id && item.product && 
+                             isProductBelongsToSupplier(item.product, selectedSupplier._id) && (
+                              <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
+                                Sản phẩm này đã liên kết với nhà cung cấp trong danh mục sản phẩm
+                              </Typography>
+                            )}
                           </Grid>
 
-                          <Grid item xs={6} sm={4} md={2}>
-                            <TextField
-                              fullWidth
-                              label="Giá nhập *"
-                              type="number"
-                              name={`suppliedProducts[${index}].importPrice`}
-                              size="small"
-                              value={item.importPrice}
-                              onChange={formik.handleChange}
-                              error={formik.touched.suppliedProducts?.[index]?.importPrice && 
-                                    !!formik.errors.suppliedProducts?.[index]?.importPrice}
-                              helperText={formik.touched.suppliedProducts?.[index]?.importPrice && 
-                                       formik.errors.suppliedProducts?.[index]?.importPrice}
-                            />
-                          </Grid>
-
-                          <Grid item xs={6} sm={4} md={2}>
-                            <TextField
-                              fullWidth
-                              label="Số lượng tối thiểu *"
-                              type="number"
-                              name={`suppliedProducts[${index}].minOrderQuantity`}
-                              size="small"
-                              value={item.minOrderQuantity}
-                              onChange={formik.handleChange}
-                              inputProps={{ min: 1 }}
-                            />
-                          </Grid>
-
-                          <Grid item xs={6} sm={4} md={2}>
-                            <TextField
-                              fullWidth
-                              label="Thời gian giao hàng"
-                              type="number"
-                              name={`suppliedProducts[${index}].leadTime`}
-                              size="small"
-                              value={item.leadTime}
-                              onChange={formik.handleChange}
-                              InputProps={{ 
-                                endAdornment: <InputAdornment position="end">ngày</InputAdornment>,
-                              }}
-                            />
-                          </Grid>
-
-                          <Grid item xs={6} sm={4} md={2}>
-                            <TextField
-                              select
-                              fullWidth
-                              label="Đơn vị *"
-                              name={`suppliedProducts[${index}].unit`}
-                              size="small"
-                              value={item.unit}
-                              onChange={formik.handleChange}
-                            >
-                              {['thùng', 'bao', 'chai', 'lọ', 'hộp', 'gói', 'cái', 'kg', 'liter'].map(unit => (
-                                <MenuItem key={unit} value={unit} sx={{ fontSize: '0.875rem' }}>
-                                  {unit}
-                                </MenuItem>
-                              ))}
-                            </TextField>
-                          </Grid>
-
-                          <Grid item xs={6} sm={4} md={2}>
-                            <TextField
-                              fullWidth
-                              label="Tỷ lệ quy đổi *"
-                              type="number"
-                              name={`suppliedProducts[${index}].conversionRate`}
-                              size="small"
-                              value={item.conversionRate}
-                              onChange={formik.handleChange}
-                              inputProps={{ min: 1 }}
-                            />
-                          </Grid>
-
-                          <Grid item xs={12} sm={6} md={2}>
-                            <FormControlLabel
-                              control={
-                                <Checkbox
-                                  name={`suppliedProducts[${index}].isPrimary`}
-                                  checked={item.isPrimary}
-                                  onChange={formik.handleChange}
-                                  size="small"
-                                />
-                              }
-                              label="Nhà cung cấp chính"
-                              sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
-                            />
-                          </Grid>
-
-                          <Box sx={{ 
-                            position: { xs: 'absolute', sm: 'static' }, 
-                            top: 4, 
-                            right: 4 
-                          }}>
+                          <Grid item xs={2} sx={{ textAlign: 'right', display: 'flex', alignItems: 'center' }}>
                             <IconButton
-                              size="small"
                               onClick={() => {
                                 const newProducts = [...formik.values.suppliedProducts];
                                 newProducts.splice(index, 1);
                                 formik.setFieldValue('suppliedProducts', newProducts);
                               }}
                             >
-                              <Delete fontSize="small" color="error" />
+                              <Delete color="error" />
                             </IconButton>
-                          </Box>
+                          </Grid>
                         </Grid>
                       </Paper>
                     ))}
@@ -875,15 +851,15 @@ const SupplierPage = () => {
               </Grid>
             </Grid>
           </DialogContent>
-          <DialogActions sx={{ p: 2 }}>
-            <Button onClick={handleCloseDialog} size={isMobile ? 'small' : 'medium'}>Hủy bỏ</Button>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Hủy bỏ</Button>
             <Button 
               type="submit" 
               variant="contained" 
-              color="primary"
-              size={isMobile ? 'small' : 'medium'}
+              color="primary" 
+              disabled={isSubmitting}
             >
-              {editMode ? 'Cập nhật' : 'Tạo mới'}
+              {isSubmitting ? 'Đang xử lý...' : (editMode ? 'Cập nhật' : 'Tạo mới')}
             </Button>
           </DialogActions>
         </form>
