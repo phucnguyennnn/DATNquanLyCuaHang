@@ -1,16 +1,29 @@
+// models/Batch.js
 const mongoose = require("mongoose");
 
 const batchSchema = new mongoose.Schema(
   {
+    batchCode: {
+      type: String,
+      required: [true, "Mã lô hàng là bắt buộc"],
+      unique: true,
+      trim: true,
+      uppercase: true,
+      maxlength: [50, "Mã lô hàng không vượt quá 50 ký tự"],
+      validate: {
+        validator: function (v) {
+          return /^BATCH-\d+-[A-Z0-9]{7}$/.test(v);
+        },
+        message: "Định dạng mã lô hàng không hợp lệ",
+      },
+    },
     manufacture_day: {
       type: Date,
       required: true,
       validate: {
-        validator: function (value) {
-          return value <= new Date();
-        },
-        message: "Manufacture date cannot be in the future"
-      }
+        validator: (value) => value <= new Date(),
+        message: "Manufacture date cannot be in the future",
+      },
     },
     expiry_day: {
       type: Date,
@@ -28,8 +41,8 @@ const batchSchema = new mongoose.Schema(
       min: 1,
       validate: {
         validator: Number.isInteger,
-        message: '{VALUE} is not an integer value'
-      }
+        message: "{VALUE} is not an integer value",
+      },
     },
     remaining_quantity: {
       type: Number,
@@ -37,8 +50,35 @@ const batchSchema = new mongoose.Schema(
       min: 0,
       validate: {
         validator: Number.isInteger,
-        message: '{VALUE} is not an integer value'
-      }
+        message: "{VALUE} is not an integer value",
+      },
+    },
+    sold_quantity: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: {
+        validator: Number.isInteger,
+        message: "{VALUE} is not an integer value",
+      },
+    },
+    lost_quantity: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: {
+        validator: Number.isInteger,
+        message: "{VALUE} is not an integer value",
+      },
+    },
+    quantity_on_shelf: {
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: {
+        validator: Number.isInteger,
+        message: "{VALUE} is not an integer value",
+      },
     },
     status: {
       type: String,
@@ -55,109 +95,113 @@ const batchSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
       required: true,
+      index: true,
     },
     goodReceipt: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "GoodReceipt",
-      required: true
-    
+      required: true,
     },
     discountInfo: {
-      isDiscounted: {
-        type: Boolean,
-        default: false
-      },
+      isDiscounted: { type: Boolean, default: false },
       discountType: {
         type: String,
         enum: ["percentage", "fixed_amount"],
-        default: "percentage"
+        default: "percentage",
       },
       discountValue: {
         type: Number,
         min: 0,
         max: function () {
-          return this.discountType === "percentage" ? 100 : Number.MAX_SAFE_INTEGER;
-        }
+          return this.discountType === "percentage"
+            ? 100
+            : Number.MAX_SAFE_INTEGER;
+        },
       },
       discountStartDate: Date,
       discountEndDate: Date,
       discountReason: {
         type: String,
         enum: ["near_expiry", "promotion", "other"],
-        default: "near_expiry"
-      }
-    }
+        default: "near_expiry",
+      },
+    },
   },
-  {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true }
-  }
+  { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
-// Virtual field for days until expiry
-batchSchema.virtual('daysUntilExpiry').get(function () {
+batchSchema.virtual("daysUntilExpiry").get(function () {
   const diffTime = Math.abs(this.expiry_day - new Date());
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 });
 
-// Auto-apply discount when nearing expiry
 batchSchema.pre("save", function (next) {
-  // Only apply if not already discounted or current discount is for near expiry
-  if (!this.discountInfo.isDiscounted || this.discountInfo.discountReason === "near_expiry") {
-    const daysLeft = this.daysUntilExpiry;
-
-    if (daysLeft <= 7) { // 1 week before expiry
+  const daysLeft = this.daysUntilExpiry;
+  if (
+    !this.discountInfo.isDiscounted ||
+    this.discountInfo.discountReason === "near_expiry"
+  ) {
+    if (daysLeft <= 7) {
       this.discountInfo = {
         isDiscounted: true,
         discountType: "percentage",
-        discountValue: 30, // 30% discount
+        discountValue: 30,
         discountStartDate: new Date(),
         discountEndDate: this.expiry_day,
-        discountReason: "near_expiry"
+        discountReason: "near_expiry",
       };
-    } else if (daysLeft <= 14) { // 2 weeks before expiry
+    } else if (daysLeft <= 14 && daysLeft > 7) {
       this.discountInfo = {
         isDiscounted: true,
         discountType: "percentage",
-        discountValue: 15, // 15% discount
+        discountValue: 15,
         discountStartDate: new Date(),
         discountEndDate: this.expiry_day,
-        discountReason: "near_expiry"
+        discountReason: "near_expiry",
       };
+    } else if (
+      daysLeft > 14 &&
+      this.discountInfo.discountReason === "near_expiry"
+    ) {
+      this.discountInfo.isDiscounted = false;
+      this.discountInfo.discountValue = 0;
+      this.discountInfo.discountStartDate = undefined;
+      this.discountInfo.discountEndDate = undefined;
+      this.discountInfo.discountReason = undefined;
     }
   }
-
-  // Update status based on conditions
-  if (this.remaining_quantity === 0) {
+  this.remaining_quantity =
+    this.initial_quantity -
+    this.sold_quantity -
+    this.lost_quantity -
+    this.quantity_on_shelf;
+  if (this.remaining_quantity < 0)
+    return next(new Error("Remaining quantity cannot be negative."));
+  if (this.remaining_quantity === 0 && this.initial_quantity > 0)
     this.status = "sold_out";
-  } else if (this.expiry_day < new Date()) {
-    this.status = "expired";
-  } else if (this.status === "active" && this.remaining_quantity < this.initial_quantity * 0.2) {
+  else if (this.expiry_day < new Date()) this.status = "expired";
+  else if (
+    this.status === "active" &&
+    this.remaining_quantity < this.initial_quantity * 0.2
+  )
     this.status = "inactive";
-  }
-
   next();
 });
 
-// Method to get discounted price
 batchSchema.methods.getDiscountedPrice = function (originalPrice) {
-  if (!this.discountInfo.isDiscounted ||
-    new Date() < this.discountInfo.discountStartDate ||
-    new Date() > this.discountInfo.discountEndDate) {
-    return originalPrice;
+  if (this.discountInfo.isDiscounted) {
+    if (this.discountInfo.discountType === "percentage") {
+      return originalPrice * (1 - this.discountInfo.discountValue / 100);
+    } else if (this.discountInfo.discountType === "fixed_amount") {
+      return Math.max(0, originalPrice - this.discountInfo.discountValue);
+    }
   }
-
-  if (this.discountInfo.discountType === "percentage") {
-    return originalPrice * (1 - this.discountInfo.discountValue / 100);
-  } else {
-    return Math.max(0, originalPrice - this.discountInfo.discountValue);
-  }
+  return originalPrice;
 };
 
-// Indexes
-batchSchema.index({ product: 1, status: 1 });
 batchSchema.index({ expiry_day: 1 });
 batchSchema.index({ "discountInfo.isDiscounted": 1 });
+batchSchema.index({ batchCode: 1, unique: true });
+batchSchema.index({ product: 1 });
 
 module.exports = mongoose.model("Batch", batchSchema);

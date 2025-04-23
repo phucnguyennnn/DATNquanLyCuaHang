@@ -1,14 +1,54 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const inventoryController = require('../controllers/inventoryController');
+const inventoryController = require("../controllers/inventoryConttroller");
+const { body } = require("express-validator");
 
-// Thêm hoặc cập nhật tồn kho
-router.post('/add-or-update', inventoryController.addOrUpdateInventory);
+const createInventoryValidation = [
+  body("product").isMongoId().withMessage("ID sản phẩm không hợp lệ."),
+];
 
-// Lấy thông tin tồn kho của sản phẩm
-router.get('/:productId', inventoryController.getInventoryByProductId);
+const updateInventoryValidation = [
+  body("total_warehouse_stock")
+    .isInt({ min: 0 })
+    .optional()
+    .withMessage("Số lượng trong kho không hợp lệ."),
+  body("total_shelf_stock")
+    .isInt({ min: 0 })
+    .optional()
+    .withMessage("Số lượng trên quầy không hợp lệ."),
+  body("reserved_stock")
+    .isInt({ min: 0 })
+    .optional()
+    .withMessage("Số lượng đã giữ không hợp lệ."),
+  body("sold_stock")
+    .isInt({ min: 0 })
+    .optional()
+    .withMessage("Số lượng đã bán không hợp lệ."),
+];
 
-// Trừ tồn kho khi bán sản phẩm
-router.put('/deduct', inventoryController.deductInventory);
+const transferToShelfValidation = [
+  body("productId").isMongoId().withMessage("ID sản phẩm không hợp lệ."),
+  body("quantityToTransfer")
+    .isInt({ min: 1 })
+    .withMessage("Số lượng cần chuyển phải lớn hơn 0."),
+];
+
+router.post(
+  "/",
+  createInventoryValidation,
+  inventoryController.createInventory
+);
+router.get("/", inventoryController.getAllInventories);
+router.get("/:id", inventoryController.getInventoryById);
+router.put(
+  "/:id",
+  updateInventoryValidation,
+  inventoryController.updateInventory
+);
+router.post(
+  "/transfer-to-shelf",
+  transferToShelfValidation,
+  inventoryController.transferToShelf
+);
 
 module.exports = router;

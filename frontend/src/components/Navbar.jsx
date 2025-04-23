@@ -77,7 +77,7 @@ const Navbar = ({ onLogout }) => {
             <AppBar position="sticky" sx={{ backgroundColor: "#1976d2" }}>
                 <Toolbar>
                     <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                        Greeting
+                        
                     </Typography>
 
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -87,7 +87,7 @@ const Navbar = ({ onLogout }) => {
                         ) : error ? (
                             <Typography variant="body1" color="error">{error}</Typography>
                         ) : (
-                            <Typography variant="body1">Hello, {username}</Typography>
+                            <Typography variant="body1">Xin chào, {username}</Typography>
                         )}
 
                         <IconButton color="inherit" onClick={handleLogoutClick}>
@@ -98,18 +98,18 @@ const Navbar = ({ onLogout }) => {
             </AppBar>
 
             <Dialog open={openDialog} onClose={handleCancelLogout}>
-                <DialogTitle>Confirm log out?</DialogTitle>
+                <DialogTitle>Xác nhận đăng xuất?</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Are you sure want to log out?
+                        Bạn chắc chắn muốn đăng xuất khỏi tài khoản của mình?
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCancelLogout} color="inherit">
-                        Cancel
+                        Hủy
                     </Button>
                     <Button onClick={handleConfirmLogout} color="error" autoFocus>
-                        Yes
+                        Xác nhận
                     </Button>
                 </DialogActions>
             </Dialog>
