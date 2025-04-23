@@ -41,16 +41,15 @@ const ProductListPage = () => {
   const [openProductDialog, setOpenProductDialog] = useState(false);
   const [selectedProductDetails, setSelectedProductDetails] = useState(null);
   const navigate = useNavigate();
+
   const fetchProducts = async () => {
     try {
       const response = await axios.get("http://localhost:8000/api/products");
       if (response.data.success) {
         setProducts(response.data.data);
-      } else {
-        console.error("Lỗi từ API (tất cả sản phẩm):", response.data);
       }
     } catch (error) {
-      console.error("Lỗi khi lấy sản phẩm:", error);
+      console.error("Error fetching products:", error);
     } finally {
       setLoading(false);
     }
@@ -63,11 +62,9 @@ const ProductListPage = () => {
       );
       if (response.data.success) {
         setProducts(response.data.data);
-      } else {
-        console.error("Lỗi từ API (lọc theo danh mục):", response.data);
       }
     } catch (error) {
-      console.error("Lỗi khi lấy sản phẩm theo danh mục:", error);
+      console.error("Error fetching products by category:", error);
     }
   };
 
@@ -78,17 +75,13 @@ const ProductListPage = () => {
       );
       setCategories(response.data);
     } catch (error) {
-      console.error("Lỗi khi lấy danh mục:", error);
+      console.error("Error fetching categories:", error);
     }
   };
 
   const handleCategoryClick = (category) => {
     setSelectedCategory(category);
-    if (category) {
-      fetchProductsByCategory(category._id);
-    } else {
-      fetchProducts();
-    }
+    category ? fetchProductsByCategory(category._id) : fetchProducts();
   };
 
   const handleProductClick = (productId) => {
@@ -103,11 +96,13 @@ const ProductListPage = () => {
     setOpenProductDialog(false);
     setSelectedProductDetails(null);
   };
+
   const handleGoToCart = () => {
     navigate("/cart_page");
   };
+
   const handleAddToCart = (product) => {
-    console.log(`Thêm ${product.name} vào giỏ hàng`);
+    console.log("Added to cart:", product);
   };
 
   useEffect(() => {
@@ -115,11 +110,71 @@ const ProductListPage = () => {
     fetchProducts();
   }, []);
 
-  const filteredProducts = Array.isArray(products)
-    ? products.filter((product) =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : [];
+  const getBaseUnitPrice = (product) => {
+    const baseUnit = product.units.find((unit) => unit.ratio === 1);
+    return baseUnit ? baseUnit.salePrice : 0;
+  };
+
+  const calculateDiscountedPrice = (product) => {
+    if (!product.discount || !product.discount.type) return null;
+    const now = new Date();
+    if (
+      product.discount.startDate &&
+      new Date(product.discount.startDate) > now
+    )
+      return null;
+    if (product.discount.endDate && new Date(product.discount.endDate) < now)
+      return null;
+    const basePrice = getBaseUnitPrice(product);
+    return product.discount.type === "percentage"
+      ? basePrice * (1 - product.discount.value / 100)
+      : Math.max(0, basePrice - product.discount.value);
+  };
+
+  const renderPrice = (product) => {
+    const basePrice = getBaseUnitPrice(product);
+    const discountedPrice = calculateDiscountedPrice(product);
+
+    return (
+      <Box>
+        {discountedPrice ? (
+          <>
+            <Typography
+              variant="h6"
+              color={theme.palette.error.main}
+              sx={{ textDecoration: "line-through", fontSize: "0.9rem" }}
+            >
+              {basePrice.toLocaleString("vi-VN", {
+                style: "currency",
+                currency: "VND",
+              })}
+            </Typography>
+            <Typography
+              variant="h6"
+              color={theme.palette.success.main}
+              sx={{ fontWeight: "bold" }}
+            >
+              {discountedPrice.toLocaleString("vi-VN", {
+                style: "currency",
+                currency: "VND",
+              })}
+            </Typography>
+          </>
+        ) : (
+          <Typography
+            variant="h6"
+            color={theme.palette.success.main}
+            sx={{ fontWeight: "bold" }}
+          >
+            {basePrice.toLocaleString("vi-VN", {
+              style: "currency",
+              currency: "VND",
+            })}
+          </Typography>
+        )}
+      </Box>
+    );
+  };
 
   const renderCategories = (categoryList, level = 0) => {
     const marginLeft = level * 16;
@@ -133,9 +188,7 @@ const ProductListPage = () => {
                 selectedCategory?._id === category._id
                   ? activeColor
                   : "transparent",
-              "&:hover": {
-                backgroundColor: hoverColor,
-              },
+              "&:hover": { backgroundColor: hoverColor },
             }}
           >
             <ListItemText
@@ -152,19 +205,19 @@ const ProductListPage = () => {
     ));
   };
 
+  const filteredProducts = products.filter((product) =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <Box
-      sx={{
-        display: "flex",
-        bgcolor: theme.palette.background.default,
-        minHeight: "100vh",
-      }}
-    >
+    <Box sx={{ display: "flex", bgcolor: theme.palette.background.default }}>
       <Box
         sx={{
-          width: 250,
+          width: 300,
           borderRight: `1px solid ${theme.palette.divider}`,
           bgcolor: primaryColor,
+          overflowY: "auto",
+          height: "100vh",
         }}
       >
         <List>
@@ -172,23 +225,25 @@ const ProductListPage = () => {
             <ListItemButton
               onClick={() => handleCategoryClick(null)}
               sx={{
-                backgroundColor:
-                  selectedCategory === null ? activeColor : "transparent",
-                "&:hover": {
-                  backgroundColor: hoverColor,
-                },
+                backgroundColor: !selectedCategory ? activeColor : "transparent",
+                "&:hover": { backgroundColor: hoverColor },
               }}
             >
-              <ListItemText
-                primary="Tất cả sản phẩm"
-                primaryTypographyProps={{ fontWeight: "bold" }}
-              />
+              <ListItemText primary="Tất cả sản phẩm" />
             </ListItemButton>
           </ListItem>
           {renderCategories(categories)}
         </List>
       </Box>
-      <Box sx={{ flexGrow: 1, p: 3 }}>
+
+      <Box
+        sx={{
+          flexGrow: 1,
+          p: 3,
+          overflowY: "auto",
+          height: "100vh",
+        }}
+      >
         <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
           <TextField
             label="Tìm kiếm sản phẩm"
@@ -205,29 +260,18 @@ const ProductListPage = () => {
             </IconButton>
           </Box>
         </Box>
+
         <Grid container spacing={3}>
           {filteredProducts.map((product) => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={product._id}>
-              <Card
-                sx={{
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  boxShadow: 2,
-                }}
-              >
-                {product.images && product.images.length > 0 ? (
-                  <ImageList cols={1} rowHeight={180} sx={{ flexGrow: 1 }}>
+              <Card sx={{ height: "100%", boxShadow: 2 }}>
+                {product.images?.length > 0 ? (
+                  <ImageList cols={1} rowHeight={180}>
                     <ImageListItem>
                       <img
                         src={product.images[0]}
                         alt={product.name}
-                        loading="lazy"
-                        style={{
-                          objectFit: "contain",
-                          maxHeight: "180px",
-                          width: "100%",
-                        }}
+                        style={{ objectFit: "contain", height: 180 }}
                       />
                     </ImageListItem>
                   </ImageList>
@@ -237,54 +281,32 @@ const ProductListPage = () => {
                     height="180"
                     image="https://via.placeholder.com/200"
                     alt={product.name}
-                    sx={{ objectFit: "contain", flexGrow: 1 }}
+                    sx={{ objectFit: "contain" }}
                   />
                 )}
-                <CardContent
-                  sx={{
-                    flexGrow: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Box>
-                    <Typography
-                      gutterBottom
-                      variant="h6"
-                      component="div"
-                      sx={{ fontWeight: "bold", color: primaryColor }}
-                    >
-                      {product.name}
-                    </Typography>
-                    {product.category && (
-                      <Chip
-                        label={product.category.name}
-                        color="secondary"
-                        size="small"
-                        sx={{ mb: 1 }}
-                      />
-                    )}
-                    <Typography variant="body2" color="text.secondary">
-                      {product.description &&
-                        product.description.substring(0, 100)}
-                      ...
-                    </Typography>
-                    <Typography
-                      variant="h6"
-                      color={theme.palette.success.main}
-                      sx={{ fontWeight: "bold" }}
-                    >
-                      {product.price.toLocaleString("vi-VN", {
-                        style: "currency",
-                        currency: "VND",
-                      })}
-                    </Typography>
-                  </Box>
+
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Typography gutterBottom variant="h6">
+                    {product.name}
+                  </Typography>
+                  {product.category && (
+                    <Chip
+                      label={product.category.name}
+                      color="secondary"
+                      size="small"
+                      sx={{ mb: 1 }}
+                    />
+                  )}
+                  <Typography variant="body2" color="text.secondary">
+                    {product.description?.substring(0, 100)}...
+                  </Typography>
+                  {renderPrice(product)}
+                  <Typography variant="caption" color="text.secondary">
+                    Đơn vị: {product.units.find((u) => u.ratio === 1)?.name}
+                  </Typography>
                   <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                     <Button
                       variant="contained"
-                      color="primary"
                       onClick={() => handleAddToCart(product)}
                       sx={{ flexGrow: 1 }}
                     >
@@ -314,78 +336,72 @@ const ProductListPage = () => {
           <>
             <DialogTitle>{selectedProductDetails.name}</DialogTitle>
             <DialogContent>
-              {selectedProductDetails.images &&
-              selectedProductDetails.images.length > 0 ? (
-                <ImageList cols={1} rowHeight={200} sx={{ mb: 2 }}>
-                  <ImageListItem>
-                    <img
-                      src={selectedProductDetails.images[0]}
-                      alt={selectedProductDetails.name}
-                      loading="lazy"
-                      style={{
-                        objectFit: "contain",
-                        maxHeight: "200px",
-                        width: "100%",
-                      }}
-                    />
-                  </ImageListItem>
-                </ImageList>
+              {selectedProductDetails.images?.length > 0 ? (
+                <img
+                  src={selectedProductDetails.images[0]}
+                  alt={selectedProductDetails.name}
+                  style={{ width: "100%", maxHeight: 200, objectFit: "contain" }}
+                />
               ) : (
                 <CardMedia
                   component="img"
                   height="200"
                   image="https://via.placeholder.com/200"
                   alt={selectedProductDetails.name}
-                  sx={{ objectFit: "contain", mb: 2 }}
+                  sx={{ objectFit: "contain" }}
                 />
               )}
-              <Typography
-                variant="subtitle1"
-                color="text.secondary"
-                gutterBottom
-              >
-                Giá:{" "}
-                {selectedProductDetails.price?.toLocaleString("vi-VN", {
-                  style: "currency",
-                  currency: "VND",
-                })}
+
+              <Typography variant="subtitle1" gutterBottom>
+                {renderPrice(selectedProductDetails)}
               </Typography>
-              {selectedProductDetails.category && (
-                <Chip
-                  label={selectedProductDetails.category.name}
-                  color="secondary"
-                  size="small"
-                  sx={{ mb: 1 }}
-                />
+
+              {selectedProductDetails.units?.map((unit, index) => (
+                <Typography key={index} variant="body2">
+                  {unit.name} ({unit.ratio}):{" "}
+                  {unit.salePrice.toLocaleString("vi-VN", {
+                    style: "currency",
+                    currency: "VND",
+                  })}
+                </Typography>
+              ))}
+
+              {selectedProductDetails.discount && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: theme.palette.action.hover }}>
+                  <Typography variant="subtitle2">
+                    Khuyến mãi: {selectedProductDetails.discount.reason}
+                  </Typography>
+                  <Typography variant="body2">
+                    Giảm {selectedProductDetails.discount.value}{" "}
+                    {selectedProductDetails.discount.type === "percentage"
+                      ? "%"
+                      : "₫"}
+                  </Typography>
+                  <Typography variant="caption">
+                    Từ{" "}
+                    {new Date(
+                      selectedProductDetails.discount.startDate
+                    ).toLocaleDateString()}{" "}
+                    đến{" "}
+                    {new Date(
+                      selectedProductDetails.discount.endDate
+                    ).toLocaleDateString()}
+                  </Typography>
+                </Box>
               )}
-              <Typography variant="body1" gutterBottom>
+
+              <Typography variant="body2" sx={{ mt: 2 }}>
                 {selectedProductDetails.description}
               </Typography>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                Đơn vị tính: {selectedProductDetails.unit}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                SKU: {selectedProductDetails.SKU}
-              </Typography>
-              {selectedProductDetails.tags &&
-                selectedProductDetails.tags.length > 0 && (
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="subtitle2" color="text.secondary">
-                      Tags: {selectedProductDetails.tags.join(", ")}
-                    </Typography>
-                  </Box>
-                )}
             </DialogContent>
+
             <DialogActions>
-              <Button onClick={handleCloseProductDialog} color="primary">
-                Đóng
-              </Button>
+              <Button onClick={handleCloseProductDialog}>Đóng</Button>
               <Button
                 onClick={() => handleAddToCart(selectedProductDetails)}
                 color="primary"
-                autoFocus
               >
-                Thêm vào giỏ hàng
+                Thêm vào giỏ
               </Button>
             </DialogActions>
           </>

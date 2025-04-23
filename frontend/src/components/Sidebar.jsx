@@ -31,6 +31,7 @@ import {
   PointOfSale,
   Category,
   Handshake,
+  Storefront,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -131,19 +132,25 @@ const Sidebar = () => {
             </ListItemButton>
 
             {/* Products - Hiển thị cho tất cả các role */}
-            <ListItemButton onClick={() => navigate("/sales")}>
+            <ListItemButton onClick={() => navigate("/Sales_page")}>
               <ListItemIcon>
                 <PointOfSale />
               </ListItemIcon>
               <ListItemText primary="Bán hàng" />
             </ListItemButton>
-
+            {/* Products - Hiển thị cho tất cả các role */}
+            <ListItemButton onClick={() => navigate("/Shelf_page")}>
+              <ListItemIcon>
+                <Storefront />
+              </ListItemIcon>
+              <ListItemText primary="Kho hàng tổng" />
+            </ListItemButton>
             {/* Products - Hiển thị cho tất cả các role */}
             <ListItemButton onClick={() => navigate("/products_manager")}>
               <ListItemIcon>
                 <ShoppingCart />
               </ListItemIcon>
-              <ListItemText primary="Quản lý sản phẩm" />
+              <ListItemText primary="Danh mục sản phẩm" />
             </ListItemButton>
 
             {/* Inventory và các mục con - Hiển thị cho admin và staff */}
@@ -155,7 +162,7 @@ const Sidebar = () => {
                   <ListItemIcon>
                     <Warehouse />
                   </ListItemIcon>
-                  <ListItemText primary="Kho hàng" />
+                  <ListItemText primary="Nhập hàng" />
                   {openInventory ? <ExpandLess /> : <ExpandMore />}
                 </ListItemButton>
 
@@ -179,6 +186,7 @@ const Sidebar = () => {
                       </ListItemIcon>
                       <ListItemText primary="Tạo phiếu nhập kho" />
                     </ListItemButton>
+
                     <ListItemButton
                       sx={{ pl: 4 }}
                       onClick={() => navigate("/inventory/add-shipment")}
@@ -188,6 +196,15 @@ const Sidebar = () => {
                       </ListItemIcon>
                       <ListItemText primary="Thêm lô hàng" />
                     </ListItemButton>
+                    {/* <ListItemButton
+                      sx={{ pl: 4 }}
+                      onClick={() => navigate("/inventory/Inventories")}
+                    >
+                      <ListItemIcon>
+                        <AddBox />
+                      </ListItemIcon>
+                      <ListItemText primary="Hàng trong kho" />
+                    </ListItemButton> */}
                   </List>
                 </Collapse>
               </>
@@ -209,7 +226,7 @@ const Sidebar = () => {
                 <ListItemIcon>
                   <Category />
                 </ListItemIcon>
-                <ListItemText primary="Danh mục hàng hóa" />
+                <ListItemText primary="Loại sản phẩm" />
               </ListItemButton>
             )}
             {/* List User - Chỉ hiển thị cho admin */}
@@ -230,7 +247,7 @@ const Sidebar = () => {
                 <ListItemText primary="Nhân viên" />
               </ListItemButton>
             )}
-          
+
             {/* Profile - Hiển thị cho tất cả các role */}
             <ListItemButton onClick={() => navigate("/profile")}>
               <ListItemIcon>
@@ -244,7 +261,7 @@ const Sidebar = () => {
           {/* Nút Logout */}
           <List>
             <Divider />
-              {/* Settings - Hiển thị cho tất cả các role */}
+            {/* Settings - Hiển thị cho tất cả các role */}
             <ListItemButton onClick={() => navigate("/settings")}>
               <ListItemIcon>
                 <Settings />
