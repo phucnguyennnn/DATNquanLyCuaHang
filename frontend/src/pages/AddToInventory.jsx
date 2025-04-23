@@ -33,10 +33,10 @@ const AddToInventory = () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await axios.get('http://localhost:8000/api/goodreceipt',
+      const res = await axios.get('http://localhost:8000/api/goodReceipt',
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('accessToken')}`
+            Authorization: `Bearer ${localStorage.getItem('authToken')}`
           }
         }
       );

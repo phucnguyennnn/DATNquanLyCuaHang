@@ -289,10 +289,11 @@ const PurchaseOrderManagement = () => {
     }
 
     try {
+      // Use totalPrice for consistency
       const payload = {
         supplier: selectedSupplier,
-        supplierName: suppliers.find(s => s._id === selectedSupplier)?.name || "",
-        items: orderItems.map(({ product, name, SKU, quantity, unit, unitPrice, totalPrice }) => ({
+        supplierName: suppliers.find((s) => s._id === selectedSupplier)?.name || "",
+        items: orderItems.map(({ product, name, SKU, quantity, unit, unitPrice }) => ({
           product,
           productName: name,
           productSKU: SKU,
@@ -300,9 +301,9 @@ const PurchaseOrderManagement = () => {
           unit,
           unitPrice,
           totalPrice: quantity * unitPrice,
-          conversionRate: products.find(p => p._id === product)?.units.find(u => u.name === unit)?.ratio || 1,
+          conversionRate: products.find((p) => p._id === product)?.units.find((u) => u.name === unit)?.ratio || 1,
         })),
-        totalAmount: totalPrice,
+        totalAmount: totalPrice, // Use totalPrice directly
         sendEmailFlag: sendEmail,
         expectedDeliveryDate,
         notes,
@@ -379,10 +380,11 @@ const PurchaseOrderManagement = () => {
       const isNewlyApproved = editOrder.status === "approved" && 
                              (editOrder.originalStatus && editOrder.originalStatus !== "approved");
       
+      // Use totalPrice for consistency
       const payload = {
         ...editOrder,
         supplier: editOrder.supplier._id,
-        supplierName: suppliers.find(s => s._id === editOrder.supplier._id)?.name || editOrder.supplierName,
+        supplierName: suppliers.find((s) => s._id === editOrder.supplier._id)?.name || editOrder.supplierName,
         items: editOrderItems.map(({ product, quantity, unit, unitPrice }) => ({
           product: product._id,
           productName: product.name || "",
@@ -391,10 +393,10 @@ const PurchaseOrderManagement = () => {
           unit,
           unitPrice,
           totalPrice: quantity * unitPrice,
-          conversionRate: products.find(p => p._id === product._id)?.units.find(u => u.name === unit)?.ratio || 1,
+          conversionRate: products.find((p) => p._id === product._id)?.units.find((u) => u.name === unit)?.ratio || 1,
         })),
         approvalDate: isNewlyApproved ? new Date().toISOString() : editOrder.approvalDate,
-        totalAmount: editOrderItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0),
+        totalAmount: editOrderItems.reduce((sum, item) => sum + item.totalPrice, 0), // Use totalPrice for consistency
       };
 
       // console.log("Dữ liệu gửi đi khi cập nhật phiếu:", payload);
@@ -923,8 +925,9 @@ const PurchaseOrderManagement = () => {
                       {order.approvalDate ? new Date(order.approvalDate).toLocaleDateString() : "Chưa duyệt"}
                     </TableCell> */}
                     <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
-                   
-                    <TableCell>{order.totalAmount.toLocaleString()} đ</TableCell>
+                    <TableCell>
+                      {(Number(order.totalAmount) || 0).toLocaleString()} đ
+                    </TableCell>
                     <TableCell>
                       {STATUSES.find((status) => status.value === order.status)?.label || "Không xác định"}
                     </TableCell>
