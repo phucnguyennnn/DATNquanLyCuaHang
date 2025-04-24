@@ -1,221 +1,414 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
   Box,
-  Drawer,
+  TextField,
+  IconButton,
   List,
   ListItem,
   ListItemButton,
   ListItemText,
-  Stack,
+  Grid,
   Card,
   CardMedia,
   CardContent,
   Typography,
   Button,
-  IconButton,
-  Badge,
-  CircularProgress,
-  Tooltip,
-  Divider,
-} from '@mui/material';
-import {
-  ShoppingCart,
-  Person,
-  Category as CategoryIcon
-} from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+  useTheme,
+  Chip,
+  Stack,
+  ImageList,
+  ImageListItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+} from "@mui/material";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import { useNavigate } from "react-router-dom";
 
-const ProductPage = () => {
-  const [products, setProducts] = useState([]);
+const ProductListPage = () => {
   const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [cartItems, setCartItems] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const theme = useTheme();
+  const primaryColor = "#ADD8E6";
+  const activeColor = theme.palette.action.selected;
+  const hoverColor = theme.palette.action.hover;
+  const [openProductDialog, setOpenProductDialog] = useState(false);
+  const [selectedProductDetails, setSelectedProductDetails] = useState(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [productsRes, categoriesRes] = await Promise.all([
-          fetch('http://localhost:8000/api/products'),
-          fetch('http://localhost:8000/api/categories')
-        ]);
-
-        if (!productsRes.ok || !categoriesRes.ok) {
-          throw new Error('Failed to fetch data from API');
-        }
-
-        const [productsData, categoriesData] = await Promise.all([
-          productsRes.json(),
-          categoriesRes.json()
-        ]);
-
-        // Log dữ liệu trả về để kiểm tra
-        console.log('Products:', productsData);
-        console.log('Categories:', categoriesData);
-
-        setProducts(Array.isArray(productsData) ? productsData : []);
-        setCategories(Array.isArray(categoriesData) ? categoriesData : []);
-        setLoading(false);
-      } catch (err) {
-        console.error('Fetch error:', err);
-        setLoading(false);
+  const fetchProducts = async () => {
+    try {
+      const response = await axios.get("http://localhost:8000/api/products");
+      if (response.data.success) {
+        setProducts(response.data.data);
       }
-    };
-    fetchData();
-  }, []);
-
-  const filteredProducts = Array.isArray(products)
-    ? selectedCategory
-      ? products.filter(product => product.category?._id === selectedCategory)
-      : products
-    : [];
-
-  const handleAddToCart = (product) => {
-    setCartItems(prev => {
-      const existing = prev.find(item => item.product._id === product._id);
-      return existing
-        ? prev.map(item =>
-            item.product._id === product._id
-              ? { ...item, quantity: item.quantity + 1 }
-              : item
-          )
-        : [...prev, { product, quantity: 1 }];
-    });
+    } catch (error) {
+      console.error("Error fetching products:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const totalCartItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const fetchProductsByCategory = async (categoryId) => {
+    try {
+      const response = await axios.get(
+        `http://localhost:8000/api/products?category=${categoryId}`
+      );
+      if (response.data.success) {
+        setProducts(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching products by category:", error);
+    }
+  };
 
-  if (loading) {
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(
+        "http://localhost:8000/api/categories/tree"
+      );
+      setCategories(response.data);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+    }
+  };
+
+  const handleCategoryClick = (category) => {
+    setSelectedCategory(category);
+    category ? fetchProductsByCategory(category._id) : fetchProducts();
+  };
+
+  const handleProductClick = (productId) => {
+    const productDetails = products.find(
+      (product) => product._id === productId
+    );
+    setSelectedProductDetails(productDetails);
+    setOpenProductDialog(true);
+  };
+
+  const handleCloseProductDialog = () => {
+    setOpenProductDialog(false);
+    setSelectedProductDetails(null);
+  };
+
+  const handleGoToCart = () => {
+    navigate("/cart_page");
+  };
+
+  const handleAddToCart = (product) => {
+    console.log("Added to cart:", product);
+  };
+
+  useEffect(() => {
+    fetchCategories();
+    fetchProducts();
+  }, []);
+
+  const getBaseUnitPrice = (product) => {
+    const baseUnit = product.units.find((unit) => unit.ratio === 1);
+    return baseUnit ? baseUnit.salePrice : 0;
+  };
+
+  const calculateDiscountedPrice = (product) => {
+    if (!product.discount || !product.discount.type) return null;
+    const now = new Date();
+    if (
+      product.discount.startDate &&
+      new Date(product.discount.startDate) > now
+    )
+      return null;
+    if (product.discount.endDate && new Date(product.discount.endDate) < now)
+      return null;
+    const basePrice = getBaseUnitPrice(product);
+    return product.discount.type === "percentage"
+      ? basePrice * (1 - product.discount.value / 100)
+      : Math.max(0, basePrice - product.discount.value);
+  };
+
+  const renderPrice = (product) => {
+    const basePrice = getBaseUnitPrice(product);
+    const discountedPrice = calculateDiscountedPrice(product);
+
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
-        <CircularProgress />
+      <Box>
+        {discountedPrice ? (
+          <>
+            <Typography
+              variant="h6"
+              color={theme.palette.error.main}
+              sx={{ textDecoration: "line-through", fontSize: "0.9rem" }}
+            >
+              {basePrice.toLocaleString("vi-VN", {
+                style: "currency",
+                currency: "VND",
+              })}
+            </Typography>
+            <Typography
+              variant="h6"
+              color={theme.palette.success.main}
+              sx={{ fontWeight: "bold" }}
+            >
+              {discountedPrice.toLocaleString("vi-VN", {
+                style: "currency",
+                currency: "VND",
+              })}
+            </Typography>
+          </>
+        ) : (
+          <Typography
+            variant="h6"
+            color={theme.palette.success.main}
+            sx={{ fontWeight: "bold" }}
+          >
+            {basePrice.toLocaleString("vi-VN", {
+              style: "currency",
+              currency: "VND",
+            })}
+          </Typography>
+        )}
       </Box>
     );
-  }
+  };
+
+  const renderCategories = (categoryList, level = 0) => {
+    const marginLeft = level * 16;
+    return categoryList.map((category) => (
+      <React.Fragment key={category._id}>
+        <ListItem disablePadding style={{ marginLeft }}>
+          <ListItemButton
+            onClick={() => handleCategoryClick(category)}
+            sx={{
+              backgroundColor:
+                selectedCategory?._id === category._id
+                  ? activeColor
+                  : "transparent",
+              "&:hover": { backgroundColor: hoverColor },
+            }}
+          >
+            <ListItemText
+              primary={category.name}
+              primaryTypographyProps={{
+                style: { fontWeight: level === 0 ? "bold" : "normal" },
+              }}
+            />
+          </ListItemButton>
+        </ListItem>
+        {category.subcategories &&
+          renderCategories(category.subcategories, level + 1)}
+      </React.Fragment>
+    ));
+  };
+
+  const filteredProducts = products.filter((product) =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <Box sx={{ display: 'flex', bgcolor: '#f5f5f5' }}>
-      {/* Sidebar */}
-      <Drawer
-        variant="permanent"
+    <Box sx={{ display: "flex", bgcolor: theme.palette.background.default }}>
+      <Box
         sx={{
-          width: 260,
-          flexShrink: 0,
-          [`& .MuiDrawer-paper`]: {
-            width: 260,
-            boxSizing: 'border-box',
-            marginTop: '64px',
-            paddingTop: 2,
-            bgcolor: '#ffffff',
-            borderRight: '1px solid #e0e0e0'
-          }
+          width: 300,
+          borderRight: `1px solid ${theme.palette.divider}`,
+          bgcolor: primaryColor,
+          overflowY: "auto",
+          height: "100vh",
         }}
       >
-        <Typography variant="h6" fontWeight="bold" pl={2} mb={2}>
-          <CategoryIcon sx={{ mr: 1 }} />
-          Danh mục
-        </Typography>
-        <Divider />
         <List>
           <ListItem disablePadding>
-            <ListItemButton 
-              onClick={() => setSelectedCategory(null)}
-              selected={!selectedCategory}
+            <ListItemButton
+              onClick={() => handleCategoryClick(null)}
+              sx={{
+                backgroundColor: !selectedCategory ? activeColor : "transparent",
+                "&:hover": { backgroundColor: hoverColor },
+              }}
             >
               <ListItemText primary="Tất cả sản phẩm" />
             </ListItemButton>
           </ListItem>
-          {categories.map((cat) => (
-            <ListItem key={cat._id} disablePadding>
-              <ListItemButton
-                onClick={() => setSelectedCategory(cat._id)}
-                selected={selectedCategory === cat._id}
-              >
-                <ListItemText primary={cat.category_name} />
-              </ListItemButton>
-            </ListItem>
-          ))}
+          {renderCategories(categories)}
         </List>
-      </Drawer>
+      </Box>
 
-      {/* Main Content */}
-      <Box component="main" sx={{ flexGrow: 1, p: 4 }}>
-        {/* Header */}
-        <Box display="flex" justifyContent="flex-end" mb={4} gap={2}>
-          <Tooltip title="Hồ sơ cá nhân">
-            <IconButton onClick={() => navigate('/profile')}>
-              <Person fontSize="large" />
+      <Box
+        sx={{
+          flexGrow: 1,
+          p: 3,
+          overflowY: "auto",
+          height: "100vh",
+        }}
+      >
+        <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+          <TextField
+            label="Tìm kiếm sản phẩm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            sx={{ width: "70%" }}
+          />
+          <Box>
+            <IconButton color="primary" onClick={handleGoToCart}>
+              <ShoppingCartIcon />
             </IconButton>
-          </Tooltip>
-          <Tooltip title="Giỏ hàng">
-            <IconButton onClick={() => navigate('/cart_page')}>
-              <Badge badgeContent={totalCartItems} color="error">
-                <ShoppingCart fontSize="large" />
-              </Badge>
+            <IconButton color="primary">
+              <AccountCircleIcon />
             </IconButton>
-          </Tooltip>
+          </Box>
         </Box>
 
-        {/* Product Grid */}
-        <Stack direction="row" flexWrap="wrap" gap={4} justifyContent="flex-start">
-          {Array.isArray(filteredProducts) &&
-            filteredProducts.map(product => (
-              <Card
-                key={product._id}
-                sx={{
-                  width: 260,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  boxShadow: 4,
-                  borderRadius: 4,
-                  overflow: 'hidden',
-                  bgcolor: '#ffffff',
-                  transition: 'transform 0.3s ease',
-                  '&:hover': {
-                    transform: 'translateY(-5px)',
-                  }
-                }}
-              >
-                {product.images?.[0] && (
+        <Grid container spacing={3}>
+          {filteredProducts.map((product) => (
+            <Grid item xs={12} sm={6} md={4} lg={3} key={product._id}>
+              <Card sx={{ height: "100%", boxShadow: 2 }}>
+                {product.images?.length > 0 ? (
+                  <ImageList cols={1} rowHeight={180}>
+                    <ImageListItem>
+                      <img
+                        src={product.images[0]}
+                        alt={product.name}
+                        style={{ objectFit: "contain", height: 180 }}
+                      />
+                    </ImageListItem>
+                  </ImageList>
+                ) : (
                   <CardMedia
                     component="img"
-                    image={product.images[0]}
+                    height="180"
+                    image="https://via.placeholder.com/200"
                     alt={product.name}
-                    sx={{ height: 200, objectFit: 'contain', p: 2 }}
+                    sx={{ objectFit: "contain" }}
                   />
                 )}
+
                 <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                  <Typography gutterBottom variant="h6">
                     {product.name}
                   </Typography>
+                  {product.category && (
+                    <Chip
+                      label={product.category.name}
+                      color="secondary"
+                      size="small"
+                      sx={{ mb: 1 }}
+                    />
+                  )}
                   <Typography variant="body2" color="text.secondary">
-                    {product.category?.category_name || 'Không rõ danh mục'}
+                    {product.description?.substring(0, 100)}...
                   </Typography>
-                  <Typography variant="h6" color="primary" mt={1}>
-                    {new Intl.NumberFormat('vi-VN', {
-                      style: 'currency',
-                      currency: 'VND',
-                    }).format(product.price)}
+                  {renderPrice(product)}
+                  <Typography variant="caption" color="text.secondary">
+                    Đơn vị: {product.units.find((u) => u.ratio === 1)?.name}
                   </Typography>
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <Button
+                      variant="contained"
+                      onClick={() => handleAddToCart(product)}
+                      sx={{ flexGrow: 1 }}
+                    >
+                      Thêm
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={() => handleProductClick(product._id)}
+                    >
+                      Chi tiết
+                    </Button>
+                  </Stack>
                 </CardContent>
-                <Box p={2} pt={0}>
-                  <Button
-                    variant="contained"
-                    fullWidth
-                    color="primary"
-                    onClick={() => handleAddToCart(product)}
-                    sx={{ fontWeight: 'bold', borderRadius: 2 }}
-                  >
-                    Thêm vào giỏ
-                  </Button>
-                </Box>
               </Card>
-            ))}
-        </Stack>
+            </Grid>
+          ))}
+        </Grid>
       </Box>
+
+      <Dialog
+        open={openProductDialog}
+        onClose={handleCloseProductDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        {selectedProductDetails && (
+          <>
+            <DialogTitle>{selectedProductDetails.name}</DialogTitle>
+            <DialogContent>
+              {selectedProductDetails.images?.length > 0 ? (
+                <img
+                  src={selectedProductDetails.images[0]}
+                  alt={selectedProductDetails.name}
+                  style={{ width: "100%", maxHeight: 200, objectFit: "contain" }}
+                />
+              ) : (
+                <CardMedia
+                  component="img"
+                  height="200"
+                  image="https://via.placeholder.com/200"
+                  alt={selectedProductDetails.name}
+                  sx={{ objectFit: "contain" }}
+                />
+              )}
+
+              <Typography variant="subtitle1" gutterBottom>
+                {renderPrice(selectedProductDetails)}
+              </Typography>
+
+              {selectedProductDetails.units?.map((unit, index) => (
+                <Typography key={index} variant="body2">
+                  {unit.name} ({unit.ratio}):{" "}
+                  {unit.salePrice.toLocaleString("vi-VN", {
+                    style: "currency",
+                    currency: "VND",
+                  })}
+                </Typography>
+              ))}
+
+              {selectedProductDetails.discount && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: theme.palette.action.hover }}>
+                  <Typography variant="subtitle2">
+                    Khuyến mãi: {selectedProductDetails.discount.reason}
+                  </Typography>
+                  <Typography variant="body2">
+                    Giảm {selectedProductDetails.discount.value}{" "}
+                    {selectedProductDetails.discount.type === "percentage"
+                      ? "%"
+                      : "₫"}
+                  </Typography>
+                  <Typography variant="caption">
+                    Từ{" "}
+                    {new Date(
+                      selectedProductDetails.discount.startDate
+                    ).toLocaleDateString()}{" "}
+                    đến{" "}
+                    {new Date(
+                      selectedProductDetails.discount.endDate
+                    ).toLocaleDateString()}
+                  </Typography>
+                </Box>
+              )}
+
+              <Typography variant="body2" sx={{ mt: 2 }}>
+                {selectedProductDetails.description}
+              </Typography>
+            </DialogContent>
+
+            <DialogActions>
+              <Button onClick={handleCloseProductDialog}>Đóng</Button>
+              <Button
+                onClick={() => handleAddToCart(selectedProductDetails)}
+                color="primary"
+              >
+                Thêm vào giỏ
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Box>
   );
 };
 
-export default ProductPage;
+export default ProductListPage;

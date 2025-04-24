@@ -13,6 +13,7 @@ const goodReceiptRouter = require('./routers/goodReceiptRouter');
 const userRouter = require('./routers/userRouter');
 const cartRouter = require('./routers/cartRouter');
 const orderRouter = require('./routers/orderRouter');
+const inventoriesRouter = require('./routers/inventoryRouter');
 const session = require('express-session');
 
 dotenv.config();
@@ -35,7 +36,7 @@ const connectDB = async () => {
 connectDB();
 
 app.use(cors({
-    origin: ["http://localhost:3001", "http://localhost:3000"],
+    origin: ["http://localhost:3001", "http://localhost:8000"],
     credentials: true,
 }));
 
@@ -68,3 +69,4 @@ app.use('/api/purchaseOrder', purchaseOrderRouter);
 app.use('/api/goodReceipt', goodReceiptRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/orders', orderRouter);
+app.use('/api/inventories', inventoriesRouter);

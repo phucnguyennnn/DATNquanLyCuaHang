@@ -12,9 +12,9 @@ import ForgotPassword from "../pages/ForgotPassword";
 import MainLayout from "../layouts/MainLayout"; // Layout chứa Sidebar
 import HomePage from "../pages/HomePage";
 import ProductManager from "../pages/ProductManager";
+import ProductsPage from "../pages/ProductsPage";
 import Settings from "../pages/Settings";
 import Profile from "../pages/Profile";
-import Supplier from "../pages/SupplierPage";
 import User from "../pages/User";
 import PurchaseOrder from "../pages/PurchaseOrder";
 import GoodReceipt from "../pages/GoodReceipt";
@@ -22,8 +22,13 @@ import AddToInventoy from "../pages/AddToInventory";
 import Cart from "../pages/Cart";
 import ProductPage from "../pages/ProductsPage";
 import CartPage from "../pages/Cart";
-import Category from "../pages/CategoryPage"; 
+import CategoryPage from "../pages/CategoryPage";
+import SupplierPage from "../pages/SupplierPage";
+import VerifyOTPPage from "../pages/VerifyOTPPage";
+import VerifyResetOTPPage from "../pages/VerifyResetOTP";
 import SalesPage from "../pages/SalesPage";
+import Inventories from "../pages/Inventories";
+import ShelfPage from "../pages/ShelfPage";
 
 
 const useAuth = () => {
@@ -52,7 +57,9 @@ const AppRouter = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        
+        <Route path="verify-otp" element={<VerifyOTPPage />} />
+        <Route path="verify-reset-otp" element={<VerifyResetOTPPage />} />
+        <Route path="products_page" element={<ProductPage />} />
         {/* Protected routes with layout */}
         <Route
           path="/"
@@ -61,19 +68,20 @@ const AppRouter = () => {
           <Route index element={<HomePage />} />
           <Route path="homepage" element={<HomePage />} />
           <Route path="products_manager" element={<ProductManager />} />
-          <Route path="products_page" element={<ProductPage />} />
           <Route path="settings" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
-          <Route path="supplier" element={<Supplier />} />
+          <Route path="suppliers" element={<SupplierPage />} />
           <Route path="users" element={<User />} />
           <Route path="inventory/purchase-order" element={<PurchaseOrder />} />
           <Route path="inventory/receipt" element={<GoodReceipt />} />
           <Route path="inventory/add-shipment" element={<AddToInventoy />} />
           <Route path="cart_page" element={<CartPage />} />
-          <Route path="cart" element={<Cart />} />
-          <Route path="categorie" element={<Category />} />
-          <Route path="sales" element={<SalesPage />} />
-          
+          <Route path="categories" element={<CategoryPage />} />
+          <Route path="products_page" element={<ProductsPage />} />
+          <Route path="cart" element={<Cart />} />  
+          <Route path="Sales_page" element={<SalesPage />} />
+          <Route path="inventory/Inventories" element={<Inventories />} />
+          <Route path="Shelf_page" element={<ShelfPage/>} />
         </Route>
         
         {/* 404 page */}

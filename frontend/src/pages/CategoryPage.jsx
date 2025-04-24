@@ -128,18 +128,27 @@ const CategoryManager = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h4">Category Management</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={handleOpenAdd}>Add</Button>
+        <Typography variant="h4">Quản lý loại sản phẩm</Typography>
+        <Button variant="contained" startIcon={<Add />} onClick={handleOpenAdd}>Thêm loại sản phẩm</Button>
       </Box>
 
-      <TableContainer component={Paper}>
+      <TableContainer 
+        component={Paper} 
+        sx={{ 
+          maxHeight: 'calc(100vh - 190px)', 
+          overflow: 'auto',
+          '&::-webkit-scrollbar': { width: 8 },
+          '&::-webkit-scrollbar-thumb': { backgroundColor: '#888', borderRadius: 4 }
+        }}
+        stickyHeader
+      >
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Actions</TableCell>
+              <TableCell>Tên</TableCell>
+              <TableCell>Mô tả</TableCell>
+              <TableCell>Trạng thái</TableCell>
+              <TableCell>Thao tác</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>{renderCategories(categories)}</TableBody>
@@ -182,4 +191,4 @@ const CategoryManager = () => {
   );
 };
 
-export default CategoryManager;
+export default CategoryManager; 

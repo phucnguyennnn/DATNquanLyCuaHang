@@ -31,6 +31,10 @@ import {
   PointOfSale,
   Category,
   Handshake,
+  Storefront,
+  DashboardCustomize,
+  Inventory2,
+  MoveToInbox,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -40,6 +44,7 @@ const drawerWidth = 240;
 const Sidebar = () => {
   const navigate = useNavigate();
   const [openInventory, setOpenInventory] = useState(false);
+  const [openDashboard, setOpenDashboard] = useState(false);
   const [openLogoutDialog, setOpenLogoutDialog] = useState(false);
 
   const role = localStorage.getItem("userRole"); // Lấy role từ localStorage
@@ -131,31 +136,23 @@ const Sidebar = () => {
             </ListItemButton>
 
             {/* Products - Hiển thị cho tất cả các role */}
-            <ListItemButton onClick={() => navigate("/sales")}>
+            <ListItemButton onClick={() => navigate("/Sales_page")}>
               <ListItemIcon>
                 <PointOfSale />
               </ListItemIcon>
               <ListItemText primary="Bán hàng" />
             </ListItemButton>
 
-            {/* Products - Hiển thị cho tất cả các role */}
-            <ListItemButton onClick={() => navigate("/products_manager")}>
-              <ListItemIcon>
-                <ShoppingCart />
-              </ListItemIcon>
-              <ListItemText primary="Quản lý sản phẩm" />
-            </ListItemButton>
-
-            {/* Inventory và các mục con - Hiển thị cho admin và staff */}
+          {/* Inventory và các mục con - Hiển thị cho admin và staff */}
             {(role === "admin" || role === "employee") && (
               <>
                 <ListItemButton
                   onClick={() => setOpenInventory(!openInventory)}
                 >
                   <ListItemIcon>
-                    <Warehouse />
+                    <MoveToInbox />
                   </ListItemIcon>
-                  <ListItemText primary="Kho hàng" />
+                  <ListItemText primary="Nhập hàng" />
                   {openInventory ? <ExpandLess /> : <ExpandMore />}
                 </ListItemButton>
 
@@ -179,6 +176,7 @@ const Sidebar = () => {
                       </ListItemIcon>
                       <ListItemText primary="Tạo phiếu nhập kho" />
                     </ListItemButton>
+
                     <ListItemButton
                       sx={{ pl: 4 }}
                       onClick={() => navigate("/inventory/add-shipment")}
@@ -193,6 +191,87 @@ const Sidebar = () => {
               </>
             )}
 
+                        {/* Products - Hiển thị cho tất cả các role */}
+            <ListItemButton onClick={() => navigate("/Shelf_page")}>
+              <ListItemIcon>
+                <Warehouse />
+              </ListItemIcon>
+              <ListItemText primary="Số lượng tồn" />
+            </ListItemButton>
+
+            {(role === "admin" || role === "employee") && (
+              <>
+                <ListItemButton
+                  onClick={() => setOpenDashboard(!openDashboard)}
+                >
+                  <ListItemIcon>
+                    <DashboardCustomize />
+                  </ListItemIcon>
+                  <ListItemText primary="Quản lý chung" />
+                  {openDashboard ? <ExpandLess /> : <ExpandMore />}
+                </ListItemButton>
+
+                <Collapse in={openDashboard} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding>
+                    <ListItemButton
+                      sx={{ pl: 4 }}
+                      onClick={() => navigate("products_manager")}
+                    >
+                      <ListItemIcon>
+                        <Inventory2 />
+                      </ListItemIcon>
+                      <ListItemText primary="Danh mục sản phẩm" />
+                    </ListItemButton>
+                    <ListItemButton
+                      sx={{ pl: 4 }}
+                      onClick={() => navigate("/categories")}
+                    >
+                      <ListItemIcon>
+                        <Category />
+                      </ListItemIcon>
+                      <ListItemText primary="Loại sản phẩm" />
+                    </ListItemButton>
+
+                    <ListItemButton
+                      sx={{ pl: 4 }}
+                      onClick={() => navigate("/suppliers")}
+                    >
+                      <ListItemIcon>
+                        <Handshake />
+                      </ListItemIcon>
+                      <ListItemText primary="Nhà cung cấp" />
+                    </ListItemButton>
+                    <ListItemButton
+                      sx={{ pl: 4 }}
+                      onClick={() => navigate("/users")}
+                    >
+                      <ListItemIcon>
+                        <RecentActors />
+                      </ListItemIcon>
+                      <ListItemText primary="Nhân viên" />
+                    </ListItemButton>
+                    <ListItemButton
+                      sx={{ pl: 4 }}
+                      onClick={() => navigate("/profile")}
+                    >
+                      <ListItemIcon>
+                        <AccountCircle />
+                      </ListItemIcon>
+                      <ListItemText primary="Hồ sơ" />
+                    </ListItemButton>
+
+                  </List>
+                </Collapse>
+              </>
+            )}
+
+          </List>
+          {/* Phần đẩy nút Logout xuống dưới cùng */}
+          <Box sx={{ flexGrow: 1 }} /> {/* Chiếm hết không gian còn lại */}
+          {/* Nút Logout */}
+          <List>
+            <Divider />
+
             {/* Providers - Chỉ hiển thị cho admin */}
             {role === "admin" && (
               <ListItemButton onClick={() => navigate("/products_page")}>
@@ -203,48 +282,7 @@ const Sidebar = () => {
               </ListItemButton>
             )}
 
-            {/* List User - Chỉ hiển thị cho admin */}
-            {role === "admin" && (
-              <ListItemButton onClick={() => navigate("/categorie")}>
-                <ListItemIcon>
-                  <Category />
-                </ListItemIcon>
-                <ListItemText primary="Danh mục hàng hóa" />
-              </ListItemButton>
-            )}
-            {/* List User - Chỉ hiển thị cho admin */}
-            {role === "admin" && (
-              <ListItemButton onClick={() => navigate("/supplier")}>
-                <ListItemIcon>
-                  <Handshake />
-                </ListItemIcon>
-                <ListItemText primary="Nhà cung cấp" />
-              </ListItemButton>
-            )}
-            {/* List User - Chỉ hiển thị cho admin */}
-            {role === "admin" && (
-              <ListItemButton onClick={() => navigate("/users")}>
-                <ListItemIcon>
-                  <RecentActors />
-                </ListItemIcon>
-                <ListItemText primary="Nhân viên" />
-              </ListItemButton>
-            )}
-          
-            {/* Profile - Hiển thị cho tất cả các role */}
-            <ListItemButton onClick={() => navigate("/profile")}>
-              <ListItemIcon>
-                <AccountCircle />
-              </ListItemIcon>
-              <ListItemText primary="Hồ sơ" />
-            </ListItemButton>
-          </List>
-          {/* Phần đẩy nút Logout xuống dưới cùng */}
-          <Box sx={{ flexGrow: 1 }} /> {/* Chiếm hết không gian còn lại */}
-          {/* Nút Logout */}
-          <List>
-            <Divider />
-              {/* Settings - Hiển thị cho tất cả các role */}
+            {/* Settings - Hiển thị cho tất cả các role */}
             <ListItemButton onClick={() => navigate("/settings")}>
               <ListItemIcon>
                 <Settings />

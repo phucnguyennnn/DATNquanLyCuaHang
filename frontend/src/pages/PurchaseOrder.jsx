@@ -75,6 +75,7 @@ const PurchaseOrderManagement = () => {
 
   const token = localStorage.getItem("authToken");
 
+  // gắn xác thực người dùng vào các request axios
   useEffect(() => {
     const interceptor = axios.interceptors.request.use((config) => {
       const token = localStorage.getItem("authToken");
@@ -112,7 +113,7 @@ const PurchaseOrderManagement = () => {
     try {
       const response = await axios.get("http://localhost:8000/api/suppliers",
         {
-          headers: { Authorization: `Bearer ${token}` },
+          // headers: { Authorization: `Bearer ${token}` },
         }
       );
       setSuppliers(response.data);
@@ -126,7 +127,7 @@ const PurchaseOrderManagement = () => {
     try {
       const response = await axios.get("http://localhost:8000/api/products",
         {
-          headers: { Authorization: `Bearer ${token}` },
+          // headers: { Authorization: `Bearer ${token}` },
         }
       );
       const activeProducts = response.data.data.filter(product => product.active !== false);
@@ -135,7 +136,7 @@ const PurchaseOrderManagement = () => {
       if (selectedSupplier) {
         const supplierData = await axios.get(
           `http://localhost:8000/api/suppliers/${selectedSupplier}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          // { headers: { Authorization: `Bearer ${token}` } }
         );
         
         if (supplierData.data && supplierData.data.suppliedProducts) {
@@ -926,7 +927,7 @@ const PurchaseOrderManagement = () => {
                     </TableCell> */}
                     <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      {(Number(order.totalAmount) || 0).toLocaleString()} đ
+                      {(order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)).toLocaleString()} đ
                     </TableCell>
                     <TableCell>
                       {STATUSES.find((status) => status.value === order.status)?.label || "Không xác định"}

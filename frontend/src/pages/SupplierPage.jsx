@@ -27,9 +27,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Autocomplete,
-  MenuItem,
-  Checkbox
+  Autocomplete
 } from '@mui/material';
 import { 
   Add, 
@@ -92,7 +90,6 @@ const SupplierSchema = yup.object().shape({
   )
 });
 
-// Memoized TextField component
 const MemoizedTextField = memo((props) => <TextField {...props} />);
 
 const SupplierPage = () => {
@@ -102,15 +99,12 @@ const SupplierPage = () => {
   const [editMode, setEditMode] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-
   const [snackbar, setSnackbar] = useState({ 
     open: false, 
     message: '', 
     severity: 'success' 
   });
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [supplierToDelete, setSupplierToDelete] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Trạng thái đang xử lý
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchSuppliers();
@@ -123,10 +117,8 @@ const SupplierPage = () => {
 
   const isProductBelongsToSupplier = (productId, supplierId) => {
     if (!productId || !supplierId) return false;
-    
     const product = products.find(p => p._id === productId);
     if (!product || !product.suppliers) return false;
-    
     return product.suppliers.some(s => {
       if (!s || !s.supplier) return false;
       const supplierIdToCompare = s.supplier._id || s.supplier;
@@ -136,10 +128,8 @@ const SupplierPage = () => {
 
   const getProductsForSupplier = (supplierId) => {
     if (!supplierId) return [];
-    
     return products.filter(product => {
       if (!product || !product.suppliers) return false;
-      
       return product.suppliers.some(s => {
         if (!s || !s.supplier) return false;
         const supplierIdToCompare = s.supplier._id || s.supplier;
@@ -180,11 +170,8 @@ const SupplierPage = () => {
     onSubmit: async (values) => {
       if (isSubmitting) return;
       setIsSubmitting(true);
-
       try {
-        const invalidProducts = values.suppliedProducts.filter(sp => 
-          !sp.product
-        );
+        const invalidProducts = values.suppliedProducts.filter(sp => !sp.product);
         if (invalidProducts.length > 0) {
           showSnackbar('Vui lòng chọn sản phẩm', 'error');
           return;
@@ -203,11 +190,7 @@ const SupplierPage = () => {
         handleCloseDialog();
         showSnackbar(`Nhà cung cấp ${editMode ? 'cập nhật' : 'tạo mới'} thành công`);
       } catch (error) {
-        console.error('Error submitting supplier:', error);
-        showSnackbar(
-          error.response?.data?.message || 'Thao tác thất bại', 
-          'error'
-        );
+        showSnackbar(error.response?.data?.message || 'Thao tác thất bại', 'error');
       } finally {
         setIsSubmitting(false);
       }
@@ -222,14 +205,13 @@ const SupplierPage = () => {
   };
 
   const handleOpenEdit = (supplier) => {
-    if (!supplier || !supplier._id) {
+    if (!supplier?._id) {
       showSnackbar('Không thể chỉnh sửa nhà cung cấp này, thiếu ID', 'error');
       return;
     }
     
     setEditMode(true);
     setSelectedSupplier(supplier);
-    
     const supplierProducts = getProductsForSupplier(supplier._id);
     const existingProducts = Array.isArray(supplier.suppliedProducts) 
       ? supplier.suppliedProducts.map(sp => ({
@@ -279,8 +261,20 @@ const SupplierPage = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+    <Box sx={{ 
+      p: { xs: 1, sm: 3 },
+      height: '100vh',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: { xs: 'column', sm: 'row' }, 
+        gap: 2, 
+        mb: 3,
+        justifyContent: 'space-between' 
+      }}>
         <MemoizedTextField
           label="Tìm kiếm nhà cung cấp"
           variant="outlined"
@@ -298,8 +292,17 @@ const SupplierPage = () => {
         </Button>
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
+      <TableContainer 
+        component={Paper} 
+        sx={{ 
+          overflowX: 'auto',
+          flex: 1,
+          maxHeight: 'calc(100vh - 160px)',
+          '&::-webkit-scrollbar': { width: '8px', height: '8px' },
+          '&::-webkit-scrollbar-thumb': { bgcolor: 'grey.400' }
+        }}
+      >
+        <Table sx={{ minWidth: 800 }}>
           <TableHead>
             <TableRow>
               <TableCell>Tên</TableCell>
@@ -713,16 +716,14 @@ const SupplierPage = () => {
                         onClick={() => {
                           formik.setFieldValue('suppliedProducts', [
                             ...formik.values.suppliedProducts,
-                            {
-                              product: ''
-                            }
+                            { product: '' }
                           ]);
                         }}
                       >
                         Thêm sản phẩm
                       </Button>
                       
-                      {editMode && selectedSupplier && selectedSupplier._id && (
+                      {editMode && selectedSupplier?._id && (
                         <Button
                           variant="outlined"
                           color="secondary"
@@ -731,7 +732,7 @@ const SupplierPage = () => {
                             const supplierProducts = getProductsForSupplier(selectedSupplier._id);
                             const currentProductIds = new Set(
                               formik.values.suppliedProducts
-                                .filter(p => p && p.product)
+                                .filter(p => p?.product)
                                 .map(p => p.product)
                             );
                             
@@ -739,14 +740,10 @@ const SupplierPage = () => {
                               .filter(p => p._id && !currentProductIds.has(p._id))
                               .map(p => ({ product: p._id }));
                               
-                            if (newProducts.length > 0) {
-                              formik.setFieldValue('suppliedProducts', [
-                                ...formik.values.suppliedProducts,
-                                ...newProducts
-                              ]);
-                            } else {
-                              showSnackbar('Đã thêm tất cả sản phẩm của nhà cung cấp này', 'info');
-                            }
+                            formik.setFieldValue('suppliedProducts', [
+                              ...formik.values.suppliedProducts,
+                              ...newProducts
+                            ]);
                           }}
                         >
                           Tự động thêm sản phẩm từ nhà cung cấp
@@ -769,7 +766,7 @@ const SupplierPage = () => {
                                 <li {...props}>
                                   <Box display="flex" alignItems="center" width="100%">
                                     <Typography>{option.name}</Typography>
-                                    {editMode && selectedSupplier && selectedSupplier._id && 
+                                    {editMode && selectedSupplier?._id && 
                                       isProductBelongsToSupplier(option._id, selectedSupplier._id) && (
                                         <Chip 
                                           size="small" 
@@ -793,7 +790,7 @@ const SupplierPage = () => {
                                 />
                               )}
                             />
-                            {editMode && selectedSupplier && selectedSupplier._id && item.product && 
+                            {editMode && selectedSupplier?._id && item.product && 
                              isProductBelongsToSupplier(item.product, selectedSupplier._id) && (
                               <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
                                 Sản phẩm này đã liên kết với nhà cung cấp trong danh mục sản phẩm

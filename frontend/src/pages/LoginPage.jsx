@@ -55,7 +55,7 @@ const LoginPage = () => {
 
       // Kiểm tra userRole và chuyển hướng phù hợp
       if (response.data.role === "customer") {
-        navigate("/products");
+        navigate("/products_page");
       } else {
         navigate("/homepage");
       }

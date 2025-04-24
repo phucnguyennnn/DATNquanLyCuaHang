@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     AppBar,
     Toolbar,
@@ -10,24 +10,66 @@ import {
     DialogContent,
     DialogContentText,
     DialogActions,
-    Button
+    Button,
+    CircularProgress,
 } from "@mui/material";
 import { Logout, AccountCircle } from "@mui/icons-material";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 const Navbar = ({ onLogout }) => {
     const [openDialog, setOpenDialog] = useState(false);
+    const [username, setUsername] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        const fetchUserData = async () => {
+            const userId = localStorage.getItem('userID');
+            const authToken = localStorage.getItem('authToken');
+
+            if (!userId || !authToken) {
+                setUsername("Guest");
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
+            setError(null);
+            try {
+                const response = await axios.get(`http://localhost:8000/api/user/${userId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                    },
+                });
+                setUsername(response.data.username); // Giả sử API trả về username
+            } catch (error) {
+                console.error("Lỗi khi lấy thông tin người dùng:", error);
+                setError("Không thể tải thông tin người dùng.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchUserData();
+    }, []); // Chỉ chạy một lần sau khi component mount
 
     const handleLogoutClick = () => {
-        setOpenDialog(true); // Mở hộp thoại xác nhận
+        setOpenDialog(true);
     };
 
     const handleConfirmLogout = () => {
         setOpenDialog(false);
-        onLogout(); // Gọi hàm đăng xuất từ props
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('userID');
+        localStorage.removeItem('userRole');
+        onLogout(); // Gọi hàm đăng xuất từ props (nếu có logic cụ thể nào đó ở component cha)
+        navigate('/login'); // Chuyển hướng về trang đăng nhập
     };
 
     const handleCancelLogout = () => {
-        setOpenDialog(false); // Đóng dialog nếu người dùng chọn không
+        setOpenDialog(false);
     };
 
     return (
@@ -35,33 +77,39 @@ const Navbar = ({ onLogout }) => {
             <AppBar position="sticky" sx={{ backgroundColor: "#1976d2" }}>
                 <Toolbar>
                     <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                        Greating
+                        
                     </Typography>
 
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                         <AccountCircle />
-                        <Typography variant="body1">Hello, username</Typography>
+                        {loading ? (
+                            <CircularProgress size={20} color="inherit" />
+                        ) : error ? (
+                            <Typography variant="body1" color="error">{error}</Typography>
+                        ) : (
+                            <Typography variant="body1">Xin chào, {username}</Typography>
+                        )}
 
-                        {/* <IconButton color="inherit" onClick={handleLogoutClick}>
+                        <IconButton color="inherit" onClick={handleLogoutClick}>
                             <Logout />
-                        </IconButton> */}
+                        </IconButton>
                     </Box>
                 </Toolbar>
             </AppBar>
 
             <Dialog open={openDialog} onClose={handleCancelLogout}>
-                <DialogTitle>Confirm log out?</DialogTitle>
+                <DialogTitle>Xác nhận đăng xuất?</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Are you sure want to log out?
+                        Bạn chắc chắn muốn đăng xuất khỏi tài khoản của mình?
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleCancelLogout} color="inherit">
-                        cancel
+                        Hủy
                     </Button>
                     <Button onClick={handleConfirmLogout} color="error" autoFocus>
-                        Yes
+                        Xác nhận
                     </Button>
                 </DialogActions>
             </Dialog>
