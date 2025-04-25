@@ -13,6 +13,9 @@ import {
   Grid,
   useMediaQuery,
   useTheme,
+  Divider,
+  Chip,
+  CircularProgress,
 } from "@mui/material";
 import axios from "axios";
 
@@ -21,6 +24,7 @@ const CreateGoodReceipt = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [receiptItems, setReceiptItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [createdBatches, setCreatedBatches] = useState([]);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -124,6 +128,31 @@ const CreateGoodReceipt = () => {
         }
       );
       console.log("Phản hồi từ server:", response.data);
+      
+      // Store created batches if returned from the API
+      if (response.data.batches && Array.isArray(response.data.batches)) {
+        setCreatedBatches(response.data.batches.map(batch => ({
+          ...batch,
+          productName: receiptItems.find(item => item.product === batch.product)?.productName || "Sản phẩm",
+          productSKU: receiptItems.find(item => item.product === batch.product)?.productSKU || "",
+        })));
+      } else if (response.data.receipt?.items) {
+        // Alternative approach if batches are inside receipt items
+        const newBatches = response.data.receipt.items
+          .filter(item => item.batch)
+          .map(item => ({
+            _id: item.batch,
+            product: item.product._id || item.product,
+            productName: item.product.name || receiptItems.find(ri => ri.product === item.product)?.productName,
+            productSKU: item.product.SKU || receiptItems.find(ri => ri.product === item.product)?.productSKU,
+            quantity: item.quantity,
+            manufactureDate: item.manufactureDate,
+            expiryDate: item.expiryDate,
+            unitPrice: item.unitPrice || selectedOrder.items.find(oi => oi.product._id === item.product)?.unitPrice,
+          }));
+        setCreatedBatches(newBatches);
+      }
+      
       alert("Tạo phiếu nhập kho thành công!");
       setSelectedOrder(null);
       setReceiptItems([]);
@@ -141,6 +170,16 @@ const CreateGoodReceipt = () => {
       alert(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('vi-VN');
+    } catch (error) {
+      return dateString;
     }
   };
 
@@ -255,11 +294,76 @@ const CreateGoodReceipt = () => {
               onClick={handleSubmit}
               disabled={loading}
               size="large"
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
             >
-              {loading ? "Đang xử lý..." : "Tạo phiếu nhập kho"}
+              {loading ? "Đang xử lý..." : "Tạo phiếu và nhập hàng vào kho"}
             </Button>
           </Box>
         </Paper>
+      )}
+
+      {createdBatches.length > 0 && (
+        <Box mt={5}>
+          <Divider />
+          <Typography variant="h6" mt={3} mb={2} fontWeight="bold">
+            Lô hàng đã được tạo:
+          </Typography>
+          <Stack spacing={2}>
+            {createdBatches.map((batch) => (
+              <Paper
+                key={batch._id}
+                sx={{
+                  p: 3,
+                  bgcolor: "#f1f8e9",
+                  borderLeft: "4px solid #689f38",
+                }}
+              >
+                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
+                  Lô hàng ID: {batch._id}
+                </Typography>
+                <Stack
+                  direction={isMobile ? "column" : "row"}
+                  spacing={3}
+                  flexWrap="wrap"
+                >
+                  <Box minWidth={200}>
+                    <Typography>
+                      <strong>Sản phẩm:</strong>{" "}
+                      {batch.productName || "Sản phẩm"}
+                    </Typography>
+                    <Typography>
+                      <strong>Mã SKU:</strong> {batch.productSKU || "N/A"}
+                    </Typography>
+                    <Typography>
+                      <strong>Số lượng:</strong> {batch.quantity}
+                    </Typography>
+                  </Box>
+                  <Box minWidth={200}>
+                    <Typography>
+                      <strong>Ngày SX:</strong>{" "}
+                      {formatDate(batch.manufactureDate)}
+                    </Typography>
+                    <Typography>
+                      <strong>Hạn SD:</strong> {formatDate(batch.expiryDate)}
+                    </Typography>
+                    <Typography>
+                      <strong>Đơn giá nhập:</strong>{" "}
+                      {batch.unitPrice?.toLocaleString() || batch.import_price?.toLocaleString() || "N/A"} đ
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Chip 
+                      label={batch.status || "Hoạt động"} 
+                      color="success" 
+                      size="small"
+                      sx={{ mt: 1 }}
+                    />
+                  </Box>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+        </Box>
       )}
     </Box>
   );

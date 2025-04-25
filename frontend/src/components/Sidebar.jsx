@@ -135,13 +135,6 @@ const Sidebar = () => {
               <ListItemText primary="Trang chủ" />
             </ListItemButton>
 
-            {/* Products - Hiển thị cho tất cả các role */}
-            <ListItemButton onClick={() => navigate("/Sales_page")}>
-              <ListItemIcon>
-                <PointOfSale />
-              </ListItemIcon>
-              <ListItemText primary="Bán hàng" />
-            </ListItemButton>
 
           {/* Inventory và các mục con - Hiển thị cho admin và staff */}
             {(role === "admin" || role === "employee") && (
@@ -190,6 +183,15 @@ const Sidebar = () => {
                 </Collapse>
               </>
             )}
+
+            
+            {/* Products - Hiển thị cho tất cả các role */}
+            <ListItemButton onClick={() => navigate("/Sales_page")}>
+              <ListItemIcon>
+                <PointOfSale />
+              </ListItemIcon>
+              <ListItemText primary="Bán hàng" />
+            </ListItemButton>
 
                         {/* Products - Hiển thị cho tất cả các role */}
             <ListItemButton onClick={() => navigate("/Shelf_page")}>
