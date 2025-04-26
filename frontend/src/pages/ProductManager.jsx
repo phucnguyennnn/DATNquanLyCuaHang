@@ -63,7 +63,6 @@ const productSchema = yup.object({
 
 const defaultUnits = [
     { name: "cái", ratio: 1, salePrice: 0 },
-    { name: "hộp", ratio: 10, salePrice: 0 },
 ];
 
 const validateUnits = (units) => {
@@ -653,6 +652,7 @@ const ProductManager = () => {
                                                     formik.setFieldValue("units", newUnits);
                                                 }}
                                                 error={!unit.name}
+                                                // disabled={unit.ratio === 1}
                                             >
                                                 {["cái", "gói", "bao", "thùng", "chai", "lọ", "hộp", "kg", "gram", "liter", "ml"].map(
                                                     (unitName) => (
@@ -684,6 +684,7 @@ const ProductManager = () => {
                                             helperText={
                                                 (!unit.ratio || unit.ratio < 1) && "Tỷ lệ phải lớn hơn hoặc bằng 1"
                                             }
+                                            disabled={unit.ratio === 1}
                                         />
                                     </Grid>
                                     <Grid item xs={3}>
@@ -713,7 +714,7 @@ const ProductManager = () => {
                                                 newUnits.splice(index, 1);
                                                 formik.setFieldValue("units", newUnits);
                                             }}
-                                            disabled={formik.values.units.length === 1}
+                                            disabled={formik.values.units.length === 1 || unit.ratio === 1}
                                         >
                                             Xóa
                                         </Button>
@@ -724,12 +725,14 @@ const ProductManager = () => {
                                 <Button
                                     variant="outlined"
                                     size="small"
-                                    onClick={() =>
+                                    onClick={() => {
+                                        // Ensure new units don't have ratio 1
+                                        const hasRatio1 = formik.values.units.some(unit => unit.ratio === 1);
                                         formik.setFieldValue("units", [
                                             ...formik.values.units,
-                                            { name: "", ratio: 1, salePrice: 0 },
-                                        ])
-                                    }
+                                            { name: "", ratio: hasRatio1 ? 2 : 1, salePrice: 0 },
+                                        ]);
+                                    }}
                                 >
                                     Thêm đơn vị
                                 </Button>
