@@ -16,6 +16,7 @@ import {
   Divider,
   Chip,
   CircularProgress,
+  Alert,
 } from "@mui/material";
 import axios from "axios";
 
@@ -25,6 +26,14 @@ const CreateGoodReceipt = () => {
   const [receiptItems, setReceiptItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [createdBatches, setCreatedBatches] = useState([]);
+  const [createdReceiptId, setCreatedReceiptId] = useState(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [errorDetails, setErrorDetails] = useState({
+    receiptId: null,
+    itemIndex: null,
+    showDetails: false,
+  });
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -117,6 +126,7 @@ const CreateGoodReceipt = () => {
 
     try {
       setLoading(true);
+      setError(null);
       const response = await axios.post(
         "http://localhost:8000/api/goodReceipt/from-po",
         requestData,
@@ -128,6 +138,13 @@ const CreateGoodReceipt = () => {
         }
       );
       console.log("Phản hồi từ server:", response.data);
+      
+      let receiptId = null;
+      // Store created receipt ID for automatic confirmation
+      if (response.data.receipt && response.data.receipt._id) {
+        receiptId = response.data.receipt._id;
+        setCreatedReceiptId(receiptId);
+      }
       
       // Store created batches if returned from the API
       if (response.data.batches && Array.isArray(response.data.batches)) {
@@ -153,10 +170,13 @@ const CreateGoodReceipt = () => {
         setCreatedBatches(newBatches);
       }
       
-      alert("Tạo phiếu nhập kho thành công!");
-      setSelectedOrder(null);
-      setReceiptItems([]);
-      fetchOrders();
+      // Automatically confirm and add to inventory right after creating receipt
+      if (receiptId) {
+        await confirmReceipt(receiptId);
+      } else {
+        alert("Tạo phiếu nhập kho thành công! Tuy nhiên không thể tự động xác nhận nhập kho.");
+      }
+      
     } catch (error) {
       console.error("Lỗi khi tạo phiếu nhập kho:", error);
       let errorMessage = "Tạo phiếu nhập kho thất bại!";
@@ -167,10 +187,89 @@ const CreateGoodReceipt = () => {
       } else {
         errorMessage += ` ${error.message}`;
       }
+      setError(errorMessage);
       alert(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  // New function for automatic confirmation
+  const confirmReceipt = async (receiptId) => {
+    if (!receiptId) {
+      return;
+    }
+
+    try {
+      setConfirmLoading(true);
+      
+      const config = {
+        headers: { Authorization: `Bearer ${token}` },
+      };
+
+      const res = await axios.patch(
+        `http://localhost:8000/api/goodreceipt/confirm/${receiptId}`,
+        {},
+        config
+      );
+
+      if (res.data.batches && Array.isArray(res.data.batches)) {
+        const formattedBatches = res.data.batches.map(batch => ({
+          ...batch,
+          productName: receiptItems.find(item => item.product === batch.product)?.productName || "Sản phẩm",
+          productSKU: receiptItems.find(item => item.product === batch.product)?.productSKU || "",
+          manufactureDate: batch.manufacture_day || batch.manufactureDate,
+          expiryDate: batch.expiry_day || batch.expiryDate,
+          import_price: batch.import_price !== undefined ? batch.import_price : batch.unitPrice !== undefined ? batch.unitPrice : 0,
+          batchStatus: batch.status,
+        }));
+        setCreatedBatches(formattedBatches);
+      }
+
+      alert("Phiếu nhập kho đã được tạo và xác nhận thành công! Hàng hóa đã được nhập vào kho.");
+      setCreatedReceiptId(null);
+      setSelectedOrder(null);
+      setReceiptItems([]);
+      fetchOrders();
+    } catch (error) {
+      console.error("Lỗi khi xác nhận phiếu nhập kho:", error);
+      
+      let errorMessage = "Xác nhận thất bại: ";
+
+      if (error.response?.data?.itemIndex !== undefined) {
+        const itemIndex = error.response.data.itemIndex;
+        errorMessage += `${error.response.data.message}\n\n`;
+        errorMessage += `Vui lòng kiểm tra lại thông tin phiếu nhập kho và đảm bảo tất cả sản phẩm có ID hợp lệ.`;
+
+        setErrorDetails({
+          receiptId: receiptId,
+          itemIndex: itemIndex,
+          showDetails: true,
+        });
+      } else {
+        errorMessage +=
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          "Đã xảy ra lỗi không xác định";
+      }
+
+      setError(errorMessage);
+      
+      // Keep the receipt ID so the user can try to confirm manually
+      setCreatedReceiptId(receiptId);
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
+
+  // We keep the manual confirmation function for fallback purposes
+  const handleConfirmReceipt = async () => {
+    if (!createdReceiptId) {
+      alert("Không có phiếu nhập kho để xác nhận!");
+      return;
+    }
+
+    await confirmReceipt(createdReceiptId);
   };
 
   const formatDate = (dateString) => {
@@ -183,6 +282,56 @@ const CreateGoodReceipt = () => {
     }
   };
 
+  const renderErrorDetails = () => {
+    if (!errorDetails.showDetails) return null;
+
+    const item = receiptItems[errorDetails.itemIndex];
+    if (!item) return null;
+
+    return (
+      <Paper sx={{ p: 2, mb: 3, bgcolor: "#fff3e0", mt: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Chi tiết mục có vấn đề:
+        </Typography>
+        <Box ml={2}>
+          <Typography>
+            <strong>Tên sản phẩm:</strong> {item.productName || "N/A"}
+          </Typography>
+          <Typography>
+            <strong>Mã SKU:</strong> {item.productSKU || "Không có SKU"}
+          </Typography>
+          <Typography>
+            <strong>ID sản phẩm:</strong> {item.product || "Không xác định"}
+          </Typography>
+          <Typography>
+            <strong>Số lượng:</strong> {item.quantity}
+          </Typography>
+          <Typography>
+            <strong>Ngày sản xuất:</strong> {formatDate(item.manufactureDate)}
+          </Typography>
+          <Typography>
+            <strong>Hạn sử dụng:</strong> {formatDate(item.expiryDate)}
+          </Typography>
+        </Box>
+        <Box mt={1} p={1} bgcolor="#fff8e1" borderRadius={1}>
+          <Typography color="error">
+            <strong>Vấn đề:</strong> ID sản phẩm không tồn tại hoặc không hợp lệ. Vui lòng kiểm tra lại phiếu đặt hàng gốc và đảm bảo mã sản phẩm chính xác.
+          </Typography>
+        </Box>
+        <Box mt={2} display="flex" justifyContent="flex-end">
+          <Button
+            size="small"
+            variant="outlined"
+            color="primary"
+            onClick={() => setErrorDetails((prev) => ({ ...prev, showDetails: false }))}
+          >
+            Ẩn chi tiết
+          </Button>
+        </Box>
+      </Paper>
+    );
+  };
+
   return (
     <Box
       sx={{
@@ -193,8 +342,27 @@ const CreateGoodReceipt = () => {
       }}
     >
       <Typography variant="h5" gutterBottom fontWeight="bold">
-        Chuyển phiếu đặt mua thành phiếu nhập kho
+        Tạo và xác nhận phiếu nhập kho
       </Typography>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 3, whiteSpace: "pre-line" }}>
+          {error}
+          {errorDetails.showDetails && (
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              sx={{ mt: 1, ml: 2 }}
+              onClick={() => setErrorDetails((prev) => ({ ...prev, showDetails: !prev.showDetails }))}
+            >
+              {errorDetails.showDetails ? "Ẩn chi tiết" : "Hiển thị chi tiết"}
+            </Button>
+          )}
+        </Alert>
+      )}
+
+      {errorDetails.showDetails && renderErrorDetails()}
 
       <FormControl fullWidth sx={{ mb: 3 }}>
         <InputLabel>Chọn phiếu đặt mua</InputLabel>
@@ -292,13 +460,35 @@ const CreateGoodReceipt = () => {
               variant="contained"
               color="primary"
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || confirmLoading}
               size="large"
-              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
+              startIcon={(loading || confirmLoading) ? <CircularProgress size={20} color="inherit" /> : null}
             >
-              {loading ? "Đang xử lý..." : "Tạo phiếu và nhập hàng vào kho"}
+              {loading ? "Đang xử lý..." : confirmLoading ? "Đang xác nhận..." : "Tạo phiếu và nhập hàng vào kho"}
             </Button>
           </Box>
+        </Paper>
+      )}
+
+      {createdReceiptId && (
+        <Paper elevation={3} sx={{ p: 3, mb: 4, bgcolor: "#ffebee" }}>
+          <Typography variant="h6" gutterBottom fontWeight="bold" color="error.main">
+            Xác nhận tự động thất bại!
+          </Typography>
+          <Typography variant="body1" paragraph>
+            Phiếu nhập kho đã được tạo nhưng chưa được xác nhận. Bạn có thể thử xác nhận lại thủ công.
+          </Typography>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmReceipt}
+            disabled={confirmLoading}
+            size="large"
+            startIcon={confirmLoading ? <CircularProgress size={20} color="inherit" /> : null}
+            sx={{ mt: 2 }}
+          >
+            {confirmLoading ? "Đang xử lý..." : "Thử xác nhận lại"}
+          </Button>
         </Paper>
       )}
 
@@ -348,12 +538,12 @@ const CreateGoodReceipt = () => {
                     </Typography>
                     <Typography>
                       <strong>Đơn giá nhập:</strong>{" "}
-                      {batch.unitPrice?.toLocaleString() || batch.import_price?.toLocaleString() || "N/A"} đ
+                      {batch.import_price?.toLocaleString() || batch.unitPrice?.toLocaleString() || "N/A"} đ
                     </Typography>
                   </Box>
                   <Box>
                     <Chip 
-                      label={batch.status || "Hoạt động"} 
+                      label={batch.batchStatus || batch.status || "Hoạt động"} 
                       color="success" 
                       size="small"
                       sx={{ mt: 1 }}

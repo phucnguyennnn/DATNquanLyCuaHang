@@ -27,7 +27,9 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Autocomplete
+  Autocomplete,
+  MenuItem,
+  Checkbox
 } from '@mui/material';
 import { 
   Add, 
@@ -90,6 +92,7 @@ const SupplierSchema = yup.object().shape({
   )
 });
 
+// Memoized TextField component
 const MemoizedTextField = memo((props) => <TextField {...props} />);
 
 const SupplierPage = () => {
@@ -99,12 +102,15 @@ const SupplierPage = () => {
   const [editMode, setEditMode] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+
   const [snackbar, setSnackbar] = useState({ 
     open: false, 
     message: '', 
     severity: 'success' 
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [supplierToDelete, setSupplierToDelete] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Trạng thái đang xử lý
 
   useEffect(() => {
     fetchSuppliers();
@@ -117,8 +123,10 @@ const SupplierPage = () => {
 
   const isProductBelongsToSupplier = (productId, supplierId) => {
     if (!productId || !supplierId) return false;
+    
     const product = products.find(p => p._id === productId);
     if (!product || !product.suppliers) return false;
+    
     return product.suppliers.some(s => {
       if (!s || !s.supplier) return false;
       const supplierIdToCompare = s.supplier._id || s.supplier;
@@ -128,8 +136,10 @@ const SupplierPage = () => {
 
   const getProductsForSupplier = (supplierId) => {
     if (!supplierId) return [];
+    
     return products.filter(product => {
       if (!product || !product.suppliers) return false;
+      
       return product.suppliers.some(s => {
         if (!s || !s.supplier) return false;
         const supplierIdToCompare = s.supplier._id || s.supplier;
@@ -167,31 +177,63 @@ const SupplierPage = () => {
       suppliedProducts: []
     },
     validationSchema: SupplierSchema,
-    onSubmit: async (values) => {
-      if (isSubmitting) return;
+    onSubmit: async (values, { setSubmitting }) => {
+      console.log('Form submission started with values:', values); 
+      if (isSubmitting) {
+        console.log('Already submitting, ignoring additional submit request');
+        return;
+      }
+      
       setIsSubmitting(true);
       try {
         const invalidProducts = values.suppliedProducts.filter(sp => !sp.product);
         if (invalidProducts.length > 0) {
+          console.log('Invalid products found:', invalidProducts);
           showSnackbar('Vui lòng chọn sản phẩm', 'error');
+          setIsSubmitting(false);
           return;
         }
 
         const token = localStorage.getItem("authToken");
-        const config = { headers: { Authorization: `Bearer ${token}` } };
-
-        if (editMode) {
-          await axios.put(`${API_URL}/${selectedSupplier._id}`, values, config);
-        } else {
-          await axios.post(API_URL, values, config);
+        if (!token) {
+          console.error('Auth token is missing');
+          showSnackbar('Thiếu token xác thực', 'error');
+          setIsSubmitting(false);
+          return;
         }
 
-        fetchSuppliers();
+        const config = { 
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          } 
+        };
+        
+        console.log('Sending request with config:', config);
+        let response;
+        
+        if (editMode) {
+          console.log(`Updating supplier with ID: ${selectedSupplier._id}`);
+          response = await axios.put(`${API_URL}/${selectedSupplier._id}`, values, config);
+        } else {
+          console.log('Creating new supplier');
+          response = await axios.post(API_URL, values, config);
+        }
+        
+        console.log('Request succeeded with response:', response);
+        await fetchSuppliers();
         handleCloseDialog();
         showSnackbar(`Nhà cung cấp ${editMode ? 'cập nhật' : 'tạo mới'} thành công`);
       } catch (error) {
-        showSnackbar(error.response?.data?.message || 'Thao tác thất bại', 'error');
+        console.error('Error submitting supplier:', error);
+        console.error('Error details:', error.response?.data);
+        showSnackbar(
+          error.response?.data?.message || 
+          `Thao tác thất bại: ${error.message || 'Lỗi không xác định'}`, 
+          'error'
+        );
       } finally {
+        console.log('Form submission process completed');
         setIsSubmitting(false);
       }
     }
@@ -205,13 +247,14 @@ const SupplierPage = () => {
   };
 
   const handleOpenEdit = (supplier) => {
-    if (!supplier?._id) {
+    if (!supplier || !supplier._id) {
       showSnackbar('Không thể chỉnh sửa nhà cung cấp này, thiếu ID', 'error');
       return;
     }
     
     setEditMode(true);
     setSelectedSupplier(supplier);
+    
     const supplierProducts = getProductsForSupplier(supplier._id);
     const existingProducts = Array.isArray(supplier.suppliedProducts) 
       ? supplier.suppliedProducts.map(sp => ({
@@ -253,7 +296,6 @@ const SupplierPage = () => {
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
-    formik.resetForm();
   };
 
   const showSnackbar = (message, severity = 'success') => {
@@ -261,20 +303,8 @@ const SupplierPage = () => {
   };
 
   return (
-    <Box sx={{ 
-      p: { xs: 1, sm: 3 },
-      height: '100vh',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: { xs: 'column', sm: 'row' }, 
-        gap: 2, 
-        mb: 3,
-        justifyContent: 'space-between' 
-      }}>
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
         <MemoizedTextField
           label="Tìm kiếm nhà cung cấp"
           variant="outlined"
@@ -295,25 +325,36 @@ const SupplierPage = () => {
       <TableContainer 
         component={Paper} 
         sx={{ 
-          overflowX: 'auto',
-          flex: 1,
-          maxHeight: 'calc(100vh - 160px)',
-          '&::-webkit-scrollbar': { width: '8px', height: '8px' },
-          '&::-webkit-scrollbar-thumb': { bgcolor: 'grey.400' }
+          maxHeight: 'calc(100vh - 150px)', 
+          overflow: 'auto',
+          '&::-webkit-scrollbar': {
+            width: '8px',
+            height: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            backgroundColor: '#f1f1f1',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: '#888',
+            borderRadius: '4px',
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            backgroundColor: '#555',
+          },
         }}
       >
-        <Table sx={{ minWidth: 800 }}>
+        <Table stickyHeader>
           <TableHead>
             <TableRow>
-              <TableCell>Tên</TableCell>
-              <TableCell>Mã số thuế</TableCell>
-              <TableCell>Số sản phẩm</TableCell>
-              <TableCell>Liên hệ</TableCell>
-              <TableCell>Người liên hệ</TableCell>
-              <TableCell>Điều khoản TT</TableCell>
-              <TableCell>Đánh giá</TableCell>
-              <TableCell>Trạng thái</TableCell>
-              <TableCell>Thao tác</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Tên</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Mã số thuế</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Số sản phẩm</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Liên hệ</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Người liên hệ</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Điều khoản TT</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Đánh giá</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Trạng thái</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Thao tác</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -383,7 +424,21 @@ const SupplierPage = () => {
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="lg" fullWidth>
         <DialogTitle>{editMode ? 'Cập nhật nhà cung cấp' : 'Thêm nhà cung cấp mới'}</DialogTitle>
-        <form onSubmit={formik.handleSubmit}>
+        <form onSubmit={(e) => {
+          console.log('Form submit event triggered');
+          e.preventDefault();
+          console.log('Form validation status:', formik.isValid);
+          if (!formik.isValid) {
+            console.log('Form validation errors:', formik.errors);
+            showSnackbar('Vui lòng kiểm tra lại thông tin form', 'error');
+            // Touch all fields to show validation errors
+            Object.keys(formik.values).forEach(key => {
+              formik.setFieldTouched(key, true, true);
+            });
+            return;
+          }
+          formik.handleSubmit(e);
+        }}>
           <DialogContent dividers>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
@@ -716,14 +771,16 @@ const SupplierPage = () => {
                         onClick={() => {
                           formik.setFieldValue('suppliedProducts', [
                             ...formik.values.suppliedProducts,
-                            { product: '' }
+                            {
+                              product: ''
+                            }
                           ]);
                         }}
                       >
                         Thêm sản phẩm
                       </Button>
                       
-                      {editMode && selectedSupplier?._id && (
+                      {editMode && selectedSupplier && selectedSupplier._id && (
                         <Button
                           variant="outlined"
                           color="secondary"
@@ -732,7 +789,7 @@ const SupplierPage = () => {
                             const supplierProducts = getProductsForSupplier(selectedSupplier._id);
                             const currentProductIds = new Set(
                               formik.values.suppliedProducts
-                                .filter(p => p?.product)
+                                .filter(p => p && p.product)
                                 .map(p => p.product)
                             );
                             
@@ -740,10 +797,14 @@ const SupplierPage = () => {
                               .filter(p => p._id && !currentProductIds.has(p._id))
                               .map(p => ({ product: p._id }));
                               
-                            formik.setFieldValue('suppliedProducts', [
-                              ...formik.values.suppliedProducts,
-                              ...newProducts
-                            ]);
+                            if (newProducts.length > 0) {
+                              formik.setFieldValue('suppliedProducts', [
+                                ...formik.values.suppliedProducts,
+                                ...newProducts
+                              ]);
+                            } else {
+                              showSnackbar('Đã thêm tất cả sản phẩm của nhà cung cấp này', 'info');
+                            }
                           }}
                         >
                           Tự động thêm sản phẩm từ nhà cung cấp
@@ -766,7 +827,7 @@ const SupplierPage = () => {
                                 <li {...props}>
                                   <Box display="flex" alignItems="center" width="100%">
                                     <Typography>{option.name}</Typography>
-                                    {editMode && selectedSupplier?._id && 
+                                    {editMode && selectedSupplier && selectedSupplier._id && 
                                       isProductBelongsToSupplier(option._id, selectedSupplier._id) && (
                                         <Chip 
                                           size="small" 
@@ -790,7 +851,7 @@ const SupplierPage = () => {
                                 />
                               )}
                             />
-                            {editMode && selectedSupplier?._id && item.product && 
+                            {editMode && selectedSupplier && selectedSupplier._id && item.product && 
                              isProductBelongsToSupplier(item.product, selectedSupplier._id) && (
                               <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 1 }}>
                                 Sản phẩm này đã liên kết với nhà cung cấp trong danh mục sản phẩm
@@ -818,12 +879,13 @@ const SupplierPage = () => {
             </Grid>
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseDialog}>Hủy bỏ</Button>
+            <Button onClick={handleCloseDialog} type="button">Hủy bỏ</Button>
             <Button 
               type="submit" 
               variant="contained" 
               color="primary" 
               disabled={isSubmitting}
+              onClick={() => console.log('Submit button clicked')}
             >
               {isSubmitting ? 'Đang xử lý...' : (editMode ? 'Cập nhật' : 'Tạo mới')}
             </Button>

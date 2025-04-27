@@ -319,11 +319,6 @@ exports.getProductById = async (req, res) => {
       .populate({
         path: 'suppliers.supplier',
         select: 'name company contact.phone contact.email paymentTerms'
-      })
-      .populate({
-        path: 'batches',
-        match: { status: 'active' },
-        select: 'manufacture_day expiry_day remaining_quantity status import_price discountInfo'
       });
 
     if (!product) {
@@ -333,6 +328,12 @@ exports.getProductById = async (req, res) => {
       });
     }
 
+    // Fetch batches separately since they're not in the Product schema
+    const batches = await Batch.find({
+      product: id,
+      status: 'active'
+    }).select('manufacture_day expiry_day remaining_quantity status import_price discountInfo');
+
     const inventory = await Inventory.findOne({ product: id })
       .select('warehouse_stock shelf_stock reserved_stock sold_stock stock_status');
 
@@ -340,6 +341,7 @@ exports.getProductById = async (req, res) => {
       success: true,
       data: {
         ...product.toObject(),
+        batches,
         inventory
       }
     });
