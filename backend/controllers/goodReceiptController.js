@@ -4,7 +4,6 @@ const GoodReceipt = require("../models/GoodReceipt");
 const Batch = require("../models/Batch");
 const Product = require("../models/Product");
 const PurchaseOrder = require("../models/PurchaseOrder");
-const Inventory = require("../models/Inventory");
 const Supplier = require("../models/Supplier");
 const { v4: uuidv4 } = require("uuid");
 
@@ -88,9 +87,8 @@ const goodReceiptController = {
         const item = receipt.items[i];
         if (!item.product) {
           return res.status(400).json({
-            message: `Sản phẩm có vấn đề tại mục #${
-              i + 1
-            }: ID sản phẩm không xác định.`,
+            message: `Sản phẩm có vấn đề tại mục #${i + 1
+              }: ID sản phẩm không xác định.`,
             itemIndex: i,
             item: item,
           });
@@ -98,9 +96,8 @@ const goodReceiptController = {
         const productExists = await Product.exists({ _id: item.product });
         if (!productExists) {
           return res.status(404).json({
-            message: `Không tìm thấy sản phẩm với ID: ${
-              item.product
-            } tại mục #${i + 1}.`,
+            message: `Không tìm thấy sản phẩm với ID: ${item.product
+              } tại mục #${i + 1}.`,
             itemIndex: i,
             productId: item.product,
             item: item,
@@ -147,19 +144,6 @@ const goodReceiptController = {
           product.batches = product.batches || [];
           product.batches.push(savedBatch._id);
           await product.save();
-          let inventory = await Inventory.findOne({ product: product._id });
-          if (!inventory) {
-            inventory = new Inventory({
-              product: product._id,
-              total_warehouse_stock: item.quantity,
-              total_shelf_stock: 0,
-              sold_stock: 0,
-              reserved_stock: 0,
-            });
-          } else {
-            inventory.total_warehouse_stock += item.quantity;
-            await inventory.save();
-          }
           return {
             ...savedBatch.toObject(),
             productName: product.name,

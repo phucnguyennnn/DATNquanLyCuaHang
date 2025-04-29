@@ -2,7 +2,6 @@ const Product = require("../models/Product");
 const Category = require("../models/Category");
 const Supplier = require("../models/Supplier");
 const Batch = require("../models/Batch");
-const Inventory = require("../models/Inventory");
 const { isValidObjectId } = require("mongoose");
 
 // Helper function to parse JSON fields
@@ -164,16 +163,6 @@ exports.createProduct = async (req, res) => {
       );
     }
 
-    // Create initial inventory record
-    const newInventory = new Inventory({
-      product: newProduct._id,
-      warehouse_stock: 0,
-      shelf_stock: 0,
-      reserved_stock: 0,
-      sold_stock: 0
-    });
-    await newInventory.save();
-
     return res.status(201).json({
       success: true,
       message: "Product created successfully.",
@@ -261,10 +250,10 @@ exports.getAllProducts = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Get products error:", error);
+    console.error("Get all products error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error."
+      message: "Lỗi máy chủ nội bộ." // Internal server error
     });
   }
 };
@@ -295,7 +284,7 @@ exports.getAll = async (req, res) => {
     console.error("Get all products error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error."
+      message: "Lỗi máy chủ nội bộ." // Internal server error
     });
   }
 };
@@ -307,7 +296,7 @@ exports.getProductById = async (req, res) => {
     if (!isValidObjectId(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid product ID."
+        message: "ID sản phẩm không hợp lệ." // Invalid product ID
       });
     }
 
@@ -324,7 +313,7 @@ exports.getProductById = async (req, res) => {
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: "Product not found."
+        message: "Không tìm thấy sản phẩm." // Product not found
       });
     }
 
@@ -334,15 +323,11 @@ exports.getProductById = async (req, res) => {
       status: 'active'
     }).select('manufacture_day expiry_day remaining_quantity status import_price discountInfo');
 
-    const inventory = await Inventory.findOne({ product: id })
-      .select('warehouse_stock shelf_stock reserved_stock sold_stock stock_status');
-
     return res.status(200).json({
       success: true,
       data: {
         ...product.toObject(),
-        batches,
-        inventory
+        batches
       }
     });
 
@@ -350,7 +335,7 @@ exports.getProductById = async (req, res) => {
     console.error("Get product error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error."
+      message: "Lỗi máy chủ nội bộ." // Internal server error
     });
   }
 };
@@ -579,44 +564,6 @@ exports.deleteProduct = async (req, res) => {
 
   } catch (error) {
     console.error("Delete product error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error."
-    });
-  }
-};
-
-exports.getProductInventory = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!isValidObjectId(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid product ID."
-      });
-    }
-
-    const inventory = await Inventory.findOne({ product: id })
-      .populate({
-        path: 'product',
-        select: 'name SKU barcode'
-      });
-
-    if (!inventory) {
-      return res.status(404).json({
-        success: false,
-        message: "Inventory record not found for this product."
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      data: inventory
-    });
-
-  } catch (error) {
-    console.error("Get product inventory error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error."

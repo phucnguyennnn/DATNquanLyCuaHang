@@ -68,14 +68,14 @@ const orderSchema = new mongoose.Schema(
       name: {
         type: String,
         trim: true,
-        required: function() {
+        required: function () {
           return !this.customer;
         }
       },
       phone: {
         type: String,
         trim: true,
-        required: function() {
+        required: function () {
           return !this.customer;
         }
       },
@@ -153,7 +153,7 @@ const orderSchema = new mongoose.Schema(
 );
 
 // Generate order number before saving
-orderSchema.pre('save', async function(next) {
+orderSchema.pre('save', async function (next) {
   if (!this.orderNumber) {
     const Order = mongoose.model('Order');
     const count = await Order.countDocuments();
@@ -163,30 +163,30 @@ orderSchema.pre('save', async function(next) {
 });
 
 // Calculate prices and discounts before saving
-orderSchema.pre('save', async function(next) {
+orderSchema.pre('save', async function (next) {
   if (this.isModified('items')) {
     const Product = mongoose.model('Product');
     const Batch = mongoose.model('Batch');
-    
+
     let totalAmount = 0;
     let totalDiscount = 0;
-    
+
     for (const item of this.items) {
       const product = await Product.findById(item.product);
       if (!product) {
         throw new Error(`Product ${item.product} not found`);
       }
-      
+
       item.originalPrice = product.price;
-      
+
       if (item.batch) {
         const batch = await Batch.findById(item.batch);
         if (!batch) {
           throw new Error(`Batch ${item.batch} not found`);
         }
-        
+
         item.unitPrice = product.getBatchDiscountedPrice(batch);
-        
+
         if (batch.discountInfo.isDiscounted) {
           const discountAmount = product.price - item.unitPrice;
           item.appliedDiscount = {
@@ -198,7 +198,7 @@ orderSchema.pre('save', async function(next) {
         }
       } else {
         item.unitPrice = product.getDiscountedPrice();
-        
+
         if (product.discount) {
           const discountAmount = product.price - item.unitPrice;
           item.appliedDiscount = {
@@ -209,40 +209,26 @@ orderSchema.pre('save', async function(next) {
           totalDiscount += discountAmount * item.quantity;
         }
       }
-      
+
       item.totalPrice = item.unitPrice * item.quantity;
       totalAmount += item.originalPrice * item.quantity;
     }
-    
+
     this.totalAmount = totalAmount;
     this.totalDiscount = totalDiscount;
     this.finalAmount = totalAmount - totalDiscount + this.taxAmount + this.shippingFee;
   }
-  
+
   next();
 });
 
-// Update inventory when order status changes
-orderSchema.pre('save', async function(next) {
+// Update batch quantities when order status changes
+orderSchema.pre('save', async function (next) {
   if (this.isModified('status')) {
-    const Inventory = mongoose.model('Inventory');
     const Batch = mongoose.model('Batch');
-    
+
     if (this.status === 'completed' && this.previous('status') !== 'completed') {
       for (const item of this.items) {
-        // Deduct from inventory
-        await Inventory.findOneAndUpdate(
-          { product: item.product },
-          { 
-            $inc: { 
-              shelf_stock: -item.quantity,
-              sold_stock: item.quantity,
-              reserved_stock: item.batch ? -item.quantity : 0
-            },
-            last_sold: new Date()
-          }
-        );
-        
         // Update batch remaining quantity if batch is specified
         if (item.batch) {
           await Batch.findByIdAndUpdate(
@@ -252,19 +238,8 @@ orderSchema.pre('save', async function(next) {
         }
       }
     } else if (this.status === 'cancelled' && this.previous('status') === 'completed') {
-      // Restore inventory if order is cancelled after being completed
+      // Restore batch quantities if order is cancelled after being completed
       for (const item of this.items) {
-        await Inventory.findOneAndUpdate(
-          { product: item.product },
-          { 
-            $inc: { 
-              shelf_stock: item.quantity,
-              sold_stock: -item.quantity,
-              reserved_stock: item.batch ? item.quantity : 0
-            }
-          }
-        );
-        
         if (item.batch) {
           await Batch.findByIdAndUpdate(
             item.batch,

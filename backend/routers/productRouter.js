@@ -15,7 +15,6 @@ router.post('/', upload.array('images', 5), productController.createProduct);
 router.get('/all/products', productController.getAll);
 router.patch('/:id', upload.array('images', 5), productController.updateProduct);
 router.delete('/:id', productController.deleteProduct);
-router.get('/:id/inventory', productController.getProductInventory);
 router.get('/:id/batches', productController.getProductBatches);
 
 module.exports = router;

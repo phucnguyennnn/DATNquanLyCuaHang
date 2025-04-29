@@ -27,7 +27,6 @@ import SupplierPage from "../pages/SupplierPage";
 import VerifyOTPPage from "../pages/VerifyOTPPage";
 import VerifyResetOTPPage from "../pages/VerifyResetOTP";
 import SalesPage from "../pages/SalesPage";
-import Inventories from "../pages/Inventories";
 import ShelfPage from "../pages/ShelfPage";
 
 
@@ -80,7 +79,6 @@ const AppRouter = () => {
           <Route path="products_page" element={<ProductsPage />} />
           <Route path="cart" element={<Cart />} />  
           <Route path="Sales_page" element={<SalesPage />} />
-          <Route path="inventory/Inventories" element={<Inventories />} />
           <Route path="Shelf_page" element={<ShelfPage/>} />
         </Route>
         
