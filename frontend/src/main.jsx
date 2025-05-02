@@ -2,6 +2,7 @@ import React, { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import AppRouter from "./routes/Routes";
+import { CartProvider } from "./context/CartContext";
 
 const AppWrapper = () => {
   const [key, setKey] = useState(0);
@@ -18,7 +19,11 @@ const AppWrapper = () => {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  return <AppRouter key={key} />;
+  return (
+    <CartProvider>
+      <AppRouter key={key} />
+    </CartProvider>
+  );
 };
 
 createRoot(document.getElementById("root")).render(

@@ -169,8 +169,8 @@ const Sidebar = () => {
                       </ListItemIcon>
                       <ListItemText primary="Tạo phiếu nhập kho" />
                     </ListItemButton>
-{/* 
-                    <ListItemButton
+
+                    {/* <ListItemButton
                       sx={{ pl: 4 }}
                       onClick={() => navigate("/inventory/add-shipment")}
                     >
