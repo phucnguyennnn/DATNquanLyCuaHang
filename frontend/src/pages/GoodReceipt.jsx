@@ -51,7 +51,7 @@ const CreateGoodReceipt = () => {
   const fetchOrders = async () => {
     if (!isTokenValid()) return;
     try {
-      const res = await axios.get("http://localhost:8000/api/purchaseorder", {
+      const res = await axios.get("http://localhost:8000/api/purchaseOrder", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
