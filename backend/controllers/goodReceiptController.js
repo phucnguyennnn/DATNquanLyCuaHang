@@ -88,9 +88,8 @@ const goodReceiptController = {
         const item = receipt.items[i];
         if (!item.product) {
           return res.status(400).json({
-            message: `Sản phẩm có vấn đề tại mục #${
-              i + 1
-            }: ID sản phẩm không xác định.`,
+            message: `Sản phẩm có vấn đề tại mục #${i + 1
+              }: ID sản phẩm không xác định.`,
             itemIndex: i,
             item: item,
           });
@@ -98,9 +97,8 @@ const goodReceiptController = {
         const productExists = await Product.exists({ _id: item.product });
         if (!productExists) {
           return res.status(404).json({
-            message: `Không tìm thấy sản phẩm với ID: ${
-              item.product
-            } tại mục #${i + 1}.`,
+            message: `Không tìm thấy sản phẩm với ID: ${item.product
+              } tại mục #${i + 1}.`,
             itemIndex: i,
             productId: item.product,
             item: item,
