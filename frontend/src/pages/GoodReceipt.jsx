@@ -16,30 +16,24 @@ import {
   Divider,
   Chip,
   CircularProgress,
-  Alert,
 } from "@mui/material";
 import axios from "axios";
+import { format } from 'date-fns';
 
 const CreateGoodReceipt = () => {
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [receiptItems, setReceiptItems] = useState([]);
+  const [batchInfo, setBatchInfo] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [createdBatches, setCreatedBatches] = useState([]);
-  const [createdReceiptId, setCreatedReceiptId] = useState(null);
-  const [confirmLoading, setConfirmLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [errorDetails, setErrorDetails] = useState({
-    receiptId: null,
-    itemIndex: null,
-    showDetails: false,
-  });
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const token = localStorage.getItem("authToken");
-  const userID = localStorage.getItem("userID");
 
+  // Hàm kiểm tra token
   const isTokenValid = () => {
     if (!token) {
       alert("Vui lòng đăng nhập để tiếp tục.");
@@ -48,6 +42,7 @@ const CreateGoodReceipt = () => {
     return true;
   };
 
+  // Hàm fetchOrders được tách ra để tái sử dụng
   const fetchOrders = async () => {
     if (!isTokenValid()) return;
     try {
@@ -58,8 +53,16 @@ const CreateGoodReceipt = () => {
       });
       const approvedOrders = res.data.filter((o) => o.status === "approved");
       setOrders(approvedOrders);
+      console.log("Approved orders:", approvedOrders);
+      // Log the first order to see its structure
+      if (approvedOrders.length > 0) {
+        console.log(
+          "First order structure:",
+          JSON.stringify(approvedOrders[0], null, 2)
+        );
+      }
     } catch (error) {
-      console.error("Lỗi khi lấy danh sách phiếu đặt mua:", error);
+      console.error(error);
     }
   };
 
@@ -67,8 +70,10 @@ const CreateGoodReceipt = () => {
     fetchOrders();
   }, []);
 
+  // Khi chọn phiếu đặt mua
   const handleSelectOrder = async (orderId) => {
     if (!isTokenValid()) return;
+
     try {
       const res = await axios.get(
         `http://localhost:8000/api/purchaseorder/${orderId}`,
@@ -78,8 +83,11 @@ const CreateGoodReceipt = () => {
           },
         }
       );
+      console.log("Chi tiết phiếu đặt hàng:", res.data);
       setSelectedOrder(res.data);
-      setReceiptItems(
+
+      // Khởi tạo batch info - sử dụng optional chaining để tránh lỗi nếu dữ liệu không có cấu trúc như mong đợi
+      setBatchInfo(
         res.data.items.map((item) => ({
           product: item.product?._id || item.product,
           productName: item.product?.name || item.productName,
@@ -88,8 +96,8 @@ const CreateGoodReceipt = () => {
           unit: item.unit,
           unitPrice: item.unitPrice,
           totalPrice: item.totalPrice,
-          manufactureDate: new Date().toISOString().split('T')[0], // Giá trị mặc định
-          expiryDate: new Date(new Date().setMonth(new Date().getMonth() + 6)).toISOString().split('T')[0], // Giá trị mặc định
+          manufacture_day: "",
+          expiry_day: "",
         }))
       );
     } catch (error) {
@@ -98,37 +106,101 @@ const CreateGoodReceipt = () => {
     }
   };
 
-  const handleItemChange = (index, field, value) => {
-    const updatedItems = [...receiptItems];
-    updatedItems[index][field] = value;
-    setReceiptItems(updatedItems);
+  // Xử lý thay đổi thông tin lô hàng
+  const handleBatchChange = (index, field, value) => {
+    const updated = [...batchInfo];
+    updated[index][field] = value;
+    setBatchInfo(updated);
   };
 
+  // Format date helper function
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return format(new Date(dateString), 'dd/MM/yyyy');
+    } catch (error) {
+      return dateString;
+    }
+  };
+
+  // Gửi phiếu nhập kho và xác nhận nhập kho luôn
   const handleSubmit = async () => {
-    if (!isTokenValid() || !selectedOrder || !userID) {
-      alert("Vui lòng chọn phiếu đặt mua và đảm bảo bạn đã đăng nhập!");
+    
+    if (!isTokenValid() || !selectedOrder) {
+      alert("Vui lòng chọn phiếu đặt mua trước khi tạo phiếu nhập kho!");
       return;
     }
 
-    const itemsToSend = receiptItems.map(item => ({
-      product: item.product,
-      quantity: Number(item.quantity),
-      manufactureDate: item.manufactureDate,
-      expiryDate: item.expiryDate,
-    }));
+    // Prevent double submission
+    if (loading || confirming) {
+      console.log("Đang xử lý, vui lòng đợi...");
+      return;
+    }
 
-    const requestData = {
-      purchaseOrderId: selectedOrder._id,
-      supplier: selectedOrder.supplier._id,
-      receivedBy: userID,
-      items: itemsToSend,
-    };
+    // Kiểm tra dữ liệu trước khi gửi
+    const isDataComplete = batchInfo.every(
+      (item) =>
+        item.product &&
+        item.quantity > 0 &&
+        item.manufacture_day &&
+        item.expiry_day
+    );
+
+    if (!isDataComplete) {
+      alert(
+        "Vui lòng nhập đầy đủ thông tin cho tất cả sản phẩm (số lượng, ngày sản xuất, hạn sử dụng)!"
+      );
+      return;
+    }
+
+    // Kiểm tra ngày hết hạn phải sau ngày sản xuất
+    const hasValidDates = batchInfo.every((item) => {
+      const mfgDate = new Date(item.manufacture_day);
+      const expDate = new Date(item.expiry_day);
+      return expDate > mfgDate;
+    });
+
+    if (!hasValidDates) {
+      alert("Ngày hết hạn phải sau ngày sản xuất cho tất cả sản phẩm!");
+      return;
+    }
 
     try {
       setLoading(true);
       setError(null);
+
+      // Đảm bảo các trường bắt buộc có giá trị
+      const userID = localStorage.getItem("userID");
+      if (!userID) {
+        alert("Không thể xác định người dùng, vui lòng đăng nhập lại");
+        setLoading(false);
+        return;
+      }
+
+      // Đảm bảo dữ liệu gửi đi đáp ứng yêu cầu của API
+      const requestData = {
+        purchaseOrderId: selectedOrder._id,
+        supplierId: selectedOrder.supplier?._id || selectedOrder.supplierId,
+        receivedBy: userID,
+        totalAmount: selectedOrder.totalAmount,
+        items: batchInfo.map(item => ({
+          productId: item.product,
+          quantity: Number(item.quantity),
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+          totalPrice: item.unitPrice * Number(item.quantity),
+          manufactureDate: item.manufacture_day,
+          expiryDate: item.expiry_day,
+          productName: item.productName,
+          productSKU: item.productSKU
+        }))
+      };
+
+      console.log("Dữ liệu gửi đi:", JSON.stringify(requestData, null, 2));
+
+      // Bước 1: Tạo phiếu nhập kho
       const response = await axios.post(
-        "http://localhost:8000/api/goodReceipt/from-po",
+        "http://localhost:8000/api/goodreceipt/from-po",
         requestData,
         {
           headers: {
@@ -137,199 +209,52 @@ const CreateGoodReceipt = () => {
           },
         }
       );
-      console.log("Phản hồi từ server:", response.data);
-      
-      let receiptId = null;
-      // Store created receipt ID for automatic confirmation
-      if (response.data.receipt && response.data.receipt._id) {
-        receiptId = response.data.receipt._id;
-        setCreatedReceiptId(receiptId);
-      }
-      
-      // Store created batches if returned from the API
-      if (response.data.batches && Array.isArray(response.data.batches)) {
-        setCreatedBatches(response.data.batches.map(batch => ({
-          ...batch,
-          productName: receiptItems.find(item => item.product === batch.product)?.productName || "Sản phẩm",
-          productSKU: receiptItems.find(item => item.product === batch.product)?.productSKU || "",
-        })));
-      } else if (response.data.receipt?.items) {
-        // Alternative approach if batches are inside receipt items
-        const newBatches = response.data.receipt.items
-          .filter(item => item.batch)
-          .map(item => ({
-            _id: item.batch,
-            product: item.product._id || item.product,
-            productName: item.product.name || receiptItems.find(ri => ri.product === item.product)?.productName,
-            productSKU: item.product.SKU || receiptItems.find(ri => ri.product === item.product)?.productSKU,
-            quantity: item.quantity,
-            manufactureDate: item.manufactureDate,
-            expiryDate: item.expiryDate,
-            unitPrice: item.unitPrice || selectedOrder.items.find(oi => oi.product._id === item.product)?.unitPrice,
-          }));
-        setCreatedBatches(newBatches);
-      }
-      
-      // Automatically confirm and add to inventory right after creating receipt
-      if (receiptId) {
-        await confirmReceipt(receiptId);
-      } else {
-        alert("Tạo phiếu nhập kho thành công! Tuy nhiên không thể tự động xác nhận nhập kho.");
-      }
+
+      // Bước 2: Xác nhận phiếu nhập kho để tạo batch ngay lập tức
+      setConfirming(true);
+      const confirmResponse = await axios.patch(
+        `http://localhost:8000/api/goodreceipt/confirm/${response.data._id}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Lưu và hiển thị batches đã tạo
+      // if (confirmResponse.data.batches && confirmResponse.data.batches.length > 0) {
+      //   setCreatedBatches(confirmResponse.data.batches);
+      // }
+
+      alert("Tạo phiếu nhập kho và nhập hàng vào kho thành công!");
+      setSelectedOrder(null);
+      setBatchInfo([]);
+      fetchOrders();
       
     } catch (error) {
       console.error("Lỗi khi tạo phiếu nhập kho:", error);
-      let errorMessage = "Tạo phiếu nhập kho thất bại!";
+      
+      // Hiển thị thông tin lỗi chi tiết hơn
+      let errorMessage = "Tạo phiếu thất bại";
       if (error.response) {
-        errorMessage += ` ${error.response.status} - ${error.response.data?.message || JSON.stringify(error.response.data)}`;
+        console.log("Dữ liệu lỗi:", error.response.data);
+        errorMessage += `: ${error.response.status} - ${
+          error.response.data.message || JSON.stringify(error.response.data)
+        }`;
       } else if (error.request) {
-        errorMessage += " Không có phản hồi từ server.";
+        errorMessage += ": Không nhận được phản hồi từ server";
       } else {
-        errorMessage += ` ${error.message}`;
+        errorMessage += `: ${error.message}`;
       }
+
       setError(errorMessage);
       alert(errorMessage);
     } finally {
       setLoading(false);
+      setConfirming(false);
     }
-  };
-
-  // New function for automatic confirmation
-  const confirmReceipt = async (receiptId) => {
-    if (!receiptId) {
-      return;
-    }
-
-    try {
-      setConfirmLoading(true);
-      
-      const config = {
-        headers: { Authorization: `Bearer ${token}` },
-      };
-
-      const res = await axios.patch(
-        `http://localhost:8000/api/goodreceipt/confirm/${receiptId}`,
-        {},
-        config
-      );
-
-      if (res.data.batches && Array.isArray(res.data.batches)) {
-        const formattedBatches = res.data.batches.map(batch => ({
-          ...batch,
-          productName: receiptItems.find(item => item.product === batch.product)?.productName || "Sản phẩm",
-          productSKU: receiptItems.find(item => item.product === batch.product)?.productSKU || "",
-          manufactureDate: batch.manufacture_day || batch.manufactureDate,
-          expiryDate: batch.expiry_day || batch.expiryDate,
-          import_price: batch.import_price !== undefined ? batch.import_price : batch.unitPrice !== undefined ? batch.unitPrice : 0,
-          batchStatus: batch.status,
-        }));
-        setCreatedBatches(formattedBatches);
-      }
-
-      alert("Phiếu nhập kho đã được tạo và xác nhận thành công! Hàng hóa đã được nhập vào kho.");
-      setCreatedReceiptId(null);
-      setSelectedOrder(null);
-      setReceiptItems([]);
-      fetchOrders();
-    } catch (error) {
-      console.error("Lỗi khi xác nhận phiếu nhập kho:", error);
-      
-      let errorMessage = "Xác nhận thất bại: ";
-
-      if (error.response?.data?.itemIndex !== undefined) {
-        const itemIndex = error.response.data.itemIndex;
-        errorMessage += `${error.response.data.message}\n\n`;
-        errorMessage += `Vui lòng kiểm tra lại thông tin phiếu nhập kho và đảm bảo tất cả sản phẩm có ID hợp lệ.`;
-
-        setErrorDetails({
-          receiptId: receiptId,
-          itemIndex: itemIndex,
-          showDetails: true,
-        });
-      } else {
-        errorMessage +=
-          error.response?.data?.message ||
-          error.response?.data?.error ||
-          "Đã xảy ra lỗi không xác định";
-      }
-
-      setError(errorMessage);
-      
-      // Keep the receipt ID so the user can try to confirm manually
-      setCreatedReceiptId(receiptId);
-    } finally {
-      setConfirmLoading(false);
-    }
-  };
-
-  // We keep the manual confirmation function for fallback purposes
-  const handleConfirmReceipt = async () => {
-    if (!createdReceiptId) {
-      alert("Không có phiếu nhập kho để xác nhận!");
-      return;
-    }
-
-    await confirmReceipt(createdReceiptId);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "N/A";
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('vi-VN');
-    } catch (error) {
-      return dateString;
-    }
-  };
-
-  const renderErrorDetails = () => {
-    if (!errorDetails.showDetails) return null;
-
-    const item = receiptItems[errorDetails.itemIndex];
-    if (!item) return null;
-
-    return (
-      <Paper sx={{ p: 2, mb: 3, bgcolor: "#fff3e0", mt: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Chi tiết mục có vấn đề:
-        </Typography>
-        <Box ml={2}>
-          <Typography>
-            <strong>Tên sản phẩm:</strong> {item.productName || "N/A"}
-          </Typography>
-          <Typography>
-            <strong>Mã SKU:</strong> {item.productSKU || "Không có SKU"}
-          </Typography>
-          <Typography>
-            <strong>ID sản phẩm:</strong> {item.product || "Không xác định"}
-          </Typography>
-          <Typography>
-            <strong>Số lượng:</strong> {item.quantity}
-          </Typography>
-          <Typography>
-            <strong>Ngày sản xuất:</strong> {formatDate(item.manufactureDate)}
-          </Typography>
-          <Typography>
-            <strong>Hạn sử dụng:</strong> {formatDate(item.expiryDate)}
-          </Typography>
-        </Box>
-        <Box mt={1} p={1} bgcolor="#fff8e1" borderRadius={1}>
-          <Typography color="error">
-            <strong>Vấn đề:</strong> ID sản phẩm không tồn tại hoặc không hợp lệ. Vui lòng kiểm tra lại phiếu đặt hàng gốc và đảm bảo mã sản phẩm chính xác.
-          </Typography>
-        </Box>
-        <Box mt={2} display="flex" justifyContent="flex-end">
-          <Button
-            size="small"
-            variant="outlined"
-            color="primary"
-            onClick={() => setErrorDetails((prev) => ({ ...prev, showDetails: false }))}
-          >
-            Ẩn chi tiết
-          </Button>
-        </Box>
-      </Paper>
-    );
   };
 
   return (
@@ -342,28 +267,16 @@ const CreateGoodReceipt = () => {
       }}
     >
       <Typography variant="h5" gutterBottom fontWeight="bold">
-        Tạo và xác nhận phiếu nhập kho
+        Chuyển phiếu đặt mua thành phiếu nhập kho
       </Typography>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3, whiteSpace: "pre-line" }}>
-          {error}
-          {errorDetails.showDetails && (
-            <Button
-              size="small"
-              variant="outlined"
-              color="error"
-              sx={{ mt: 1, ml: 2 }}
-              onClick={() => setErrorDetails((prev) => ({ ...prev, showDetails: !prev.showDetails }))}
-            >
-              {errorDetails.showDetails ? "Ẩn chi tiết" : "Hiển thị chi tiết"}
-            </Button>
-          )}
-        </Alert>
+        <Paper sx={{ p: 2, mb: 3, bgcolor: '#ffebee' }}>
+          <Typography color="error">{error}</Typography>
+        </Paper>
       )}
 
-      {errorDetails.showDetails && renderErrorDetails()}
-
+      {/* Chọn phiếu đặt mua */}
       <FormControl fullWidth sx={{ mb: 3 }}>
         <InputLabel>Chọn phiếu đặt mua</InputLabel>
         <Select
@@ -379,36 +292,38 @@ const CreateGoodReceipt = () => {
         </Select>
       </FormControl>
 
-      {selectedOrder && selectedOrder.items && receiptItems.length > 0 && (
+      {/* Hiển thị chi tiết sản phẩm */}
+      {selectedOrder && selectedOrder.items && (
         <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom fontWeight="bold">
-            Thông tin chi tiết phiếu nhập kho
+            Danh sách sản phẩm
           </Typography>
+
           <Stack spacing={3}>
-            {receiptItems.map((item, index) => (
+            {selectedOrder.items.map((item, index) => (
               <Paper
-                key={item.product || index}
+                key={item.product?._id || index}
                 elevation={2}
                 sx={{ p: 2, backgroundColor: "#fff" }}
               >
                 <Box mb={2}>
                   <Typography fontWeight="bold" variant="h6">
-                    {item.productName || "Sản phẩm không xác định"}
+                    {item.product?.name || item.productName || "Sản phẩm không xác định"}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Mã sản phẩm: {item.productSKU || "N/A"}
+                    Mã sản phẩm: {item.product?.SKU || item.productSKU || "N/A"}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Đơn vị: {item.unit || "N/A"}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Số lượng đặt: {selectedOrder.items[index]?.quantity || 0}
+                    Số lượng đặt: {item.quantity || 0}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Đơn giá: {item.unitPrice?.toLocaleString() || 0} đ
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Thành tiền: {(selectedOrder.items[index]?.quantity * item.unitPrice)?.toLocaleString() || 0} đ
+                    Thành tiền: {(item.quantity * item.unitPrice)?.toLocaleString() || 0} đ
                   </Typography>
                 </Box>
 
@@ -418,8 +333,10 @@ const CreateGoodReceipt = () => {
                       label="Số lượng nhập"
                       type="number"
                       fullWidth
-                      value={item.quantity}
-                      onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
+                      value={batchInfo[index]?.quantity || ""}
+                      onChange={(e) =>
+                        handleBatchChange(index, "quantity", e.target.value)
+                      }
                       helperText="Số lượng nhập hàng thực tế"
                     />
                   </Grid>
@@ -429,8 +346,24 @@ const CreateGoodReceipt = () => {
                       type="date"
                       fullWidth
                       InputLabelProps={{ shrink: true }}
-                      value={item.manufactureDate}
-                      onChange={(e) => handleItemChange(index, "manufactureDate", e.target.value)}
+                      value={batchInfo[index]?.manufacture_day || ""}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        handleBatchChange(index, "manufacture_day", newDate);
+                        
+                        // Tự động điều chỉnh ngày hết hạn nếu cần
+                        const current = batchInfo[index];
+                        if (current.expiry_day && new Date(current.expiry_day) <= new Date(newDate)) {
+                          // Tính ngày hết hạn mặc định (6 tháng sau ngày sản xuất)
+                          const expDate = new Date(newDate);
+                          expDate.setMonth(expDate.getMonth() + 6);
+                          handleBatchChange(
+                            index,
+                            "expiry_day",
+                            expDate.toISOString().split('T')[0]
+                          );
+                        }
+                      }}
                       required
                       helperText="Ngày sản xuất của lô hàng"
                     />
@@ -440,11 +373,21 @@ const CreateGoodReceipt = () => {
                       label="Hạn sử dụng"
                       type="date"
                       fullWidth
+                      error={batchInfo[index]?.manufacture_day && batchInfo[index]?.expiry_day && 
+                             new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)}
                       InputLabelProps={{ shrink: true }}
-                      value={item.expiryDate}
-                      onChange={(e) => handleItemChange(index, "expiryDate", e.target.value)}
+                      value={batchInfo[index]?.expiry_day || ""}
+                      onChange={(e) => 
+                        handleBatchChange(index, "expiry_day", e.target.value)
+                      }
                       required
-                      helperText="Hạn sử dụng của lô hàng"
+                      helperText={
+                        batchInfo[index]?.manufacture_day && 
+                        batchInfo[index]?.expiry_day && 
+                        new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)
+                          ? "Hạn sử dụng phải sau ngày sản xuất"
+                          : "Hạn sử dụng của lô hàng"
+                      }
                     />
                   </Grid>
                 </Grid>
@@ -460,38 +403,17 @@ const CreateGoodReceipt = () => {
               variant="contained"
               color="primary"
               onClick={handleSubmit}
-              disabled={loading || confirmLoading}
+              disabled={loading || confirming}
               size="large"
-              startIcon={(loading || confirmLoading) ? <CircularProgress size={20} color="inherit" /> : null}
+              startIcon={loading || confirming ? <CircularProgress size={20} color="inherit" /> : null}
             >
-              {loading ? "Đang xử lý..." : confirmLoading ? "Đang xác nhận..." : "Tạo phiếu và nhập hàng vào kho"}
+              {loading ? "Đang tạo phiếu..." : confirming ? "Đang nhập kho..." : "Tạo phiếu và nhập kho"}
             </Button>
           </Box>
         </Paper>
       )}
 
-      {createdReceiptId && (
-        <Paper elevation={3} sx={{ p: 3, mb: 4, bgcolor: "#ffebee" }}>
-          <Typography variant="h6" gutterBottom fontWeight="bold" color="error.main">
-            Xác nhận tự động thất bại!
-          </Typography>
-          <Typography variant="body1" paragraph>
-            Phiếu nhập kho đã được tạo nhưng chưa được xác nhận. Bạn có thể thử xác nhận lại thủ công.
-          </Typography>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleConfirmReceipt}
-            disabled={confirmLoading}
-            size="large"
-            startIcon={confirmLoading ? <CircularProgress size={20} color="inherit" /> : null}
-            sx={{ mt: 2 }}
-          >
-            {confirmLoading ? "Đang xử lý..." : "Thử xác nhận lại"}
-          </Button>
-        </Paper>
-      )}
-
+      {/* Hiển thị lô hàng đã tạo */}
       {createdBatches.length > 0 && (
         <Box mt={5}>
           <Divider />
@@ -500,56 +422,31 @@ const CreateGoodReceipt = () => {
           </Typography>
           <Stack spacing={2}>
             {createdBatches.map((batch) => (
-              <Paper
-                key={batch._id}
-                sx={{
-                  p: 3,
-                  bgcolor: "#f1f8e9",
-                  borderLeft: "4px solid #689f38",
-                }}
-              >
+              <Paper key={batch._id} sx={{ p: 3, bgcolor: '#f1f8e9', borderLeft: '4px solid #689f38' }}>
                 <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
                   Lô hàng ID: {batch._id}
                 </Typography>
-                <Stack
-                  direction={isMobile ? "column" : "row"}
-                  spacing={3}
-                  flexWrap="wrap"
-                >
+                <Stack direction={isMobile ? "column" : "row"} spacing={3} flexWrap="wrap">
                   <Box minWidth={200}>
-                    <Typography>
-                      <strong>Sản phẩm:</strong>{" "}
-                      {batch.productName || "Sản phẩm"}
-                    </Typography>
-                    <Typography>
-                      <strong>Mã SKU:</strong> {batch.productSKU || "N/A"}
-                    </Typography>
-                    <Typography>
-                      <strong>Số lượng:</strong> {batch.quantity}
-                    </Typography>
+                    <Typography><strong>Sản phẩm:</strong> {batch.productName}</Typography>
+                    <Typography><strong>Số lượng:</strong> {batch.quantity}</Typography>
                   </Box>
                   <Box minWidth={200}>
-                    <Typography>
-                      <strong>Ngày SX:</strong>{" "}
-                      {formatDate(batch.manufactureDate)}
-                    </Typography>
-                    <Typography>
-                      <strong>Hạn SD:</strong> {formatDate(batch.expiryDate)}
-                    </Typography>
-                    <Typography>
-                      <strong>Đơn giá nhập:</strong>{" "}
-                      {batch.import_price?.toLocaleString() || batch.unitPrice?.toLocaleString() || "N/A"} đ
-                    </Typography>
+                    <Typography><strong>Ngày SX:</strong> {formatDate(batch.manufactureDate)}</Typography>
+                    <Typography><strong>Hạn SD:</strong> {formatDate(batch.expiryDate)}</Typography>
                   </Box>
                   <Box>
-                    <Chip 
-                      label={batch.batchStatus || batch.status || "Hoạt động"} 
-                      color="success" 
-                      size="small"
-                      sx={{ mt: 1 }}
-                    />
+                    <Typography><strong>Đơn giá:</strong> {batch.import_price?.toLocaleString('vi-VN')} đ</Typography>
+                    <Typography><strong>Trạng thái:</strong> {batch.status || 'active'}</Typography>
                   </Box>
                 </Stack>
+                <Box mt={1}>
+                  <Chip
+                    label="Đã nhập kho thành công"
+                    color="success"
+                    size="small"
+                  />
+                </Box>
               </Paper>
             ))}
           </Stack>
