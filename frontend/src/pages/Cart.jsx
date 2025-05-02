@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Typography,
@@ -7,215 +7,272 @@ import {
   Card,
   CardMedia,
   CardContent,
-  CardActions,
-  Button,
   IconButton,
   TextField,
   Divider,
   Paper,
-  CircularProgress
+  Button,
+  CircularProgress,
+  Stack,
+  Alert
 } from '@mui/material';
-import { Delete as DeleteIcon, ShoppingCart as ShoppingCartIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, ShoppingCart as ShoppingCartIcon, Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useSnackbar } from 'notistack';
+import { useCart } from '../context/CartContext';
 
 const CartPage = () => {
-  const [cart, setCart] = useState({ items: [], total: 0 });
-  const [loading, setLoading] = useState(true);
+  const { cartItems, updateCartItem, removeFromCart, clearCart } = useCart();
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { enqueueSnackbar } = useSnackbar();
 
-  useEffect(() => {
-    const fetchCart = async () => {
-      try {
-        // Giả sử chúng ta có API endpoint /api/cart
-        const response = await fetch('http://localhost:8000/api/cart', {
-          credentials: 'include' // Để gửi cookie nếu sử dụng session
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch cart');
-        }
-        
-        const data = await response.json();
-        setCart(data);
-      } catch (error) {
-        enqueueSnackbar('Failed to load cart', { variant: 'error' });
-        console.error('Fetch cart error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchCart();
-  }, []);
-
-  const handleQuantityChange = async (productId, newQuantity) => {
+  const handleQuantityChange = (productId, newQuantity) => {
     if (newQuantity < 1) return;
-    
-    try {
-      const response = await fetch('http://localhost:8000/api/cart', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          productId,
-          quantity: newQuantity
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update cart');
-      }
-      
-      const updatedCart = await response.json();
-      setCart(updatedCart.cart);
-      enqueueSnackbar('Cart updated', { variant: 'success' });
-    } catch (error) {
-      enqueueSnackbar('Failed to update cart', { variant: 'error' });
-      console.error('Update cart error:', error);
-    }
+    updateCartItem(productId, newQuantity);
   };
 
-  const handleRemoveItem = async (productId) => {
-    try {
-      const response = await fetch(`http://localhost:8000/api/cart/${productId}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to remove item');
-      }
-      
-      const updatedCart = await response.json();
-      setCart(updatedCart.cart);
-      enqueueSnackbar('Item removed from cart', { variant: 'success' });
-    } catch (error) {
-      enqueueSnackbar('Failed to remove item', { variant: 'error' });
-      console.error('Remove item error:', error);
-    }
+  const handleRemoveItem = (productId) => {
+    removeFromCart(productId);
   };
 
   const handleCheckout = () => {
-    navigate('/checkout');
+    setLoading(true);
+    // Xử lý thanh toán
+    setTimeout(() => {
+      setLoading(false);
+      alert('Chức năng thanh toán đang được phát triển!');
+    }, 1000);
+  };
+
+  const handleContinueShopping = () => {
+    navigate('/products_page');
+  };
+
+  const calculateTotal = () => {
+    return cartItems.reduce((total, item) => {
+      // Sử dụng giá đã giảm giá nếu có
+      const price = getItemPrice(item.product);
+      return total + (price * item.quantity);
+    }, 0);
+  };
+
+  const getItemPrice = (product) => {
+    // Kiểm tra nếu có discount
+    if (product.discount && product.discount.type) {
+      const now = new Date();
+      if (
+        product.discount.startDate &&
+        new Date(product.discount.startDate) > now
+      ) return product.price;
+      
+      if (product.discount.endDate && 
+          new Date(product.discount.endDate) < now
+      ) return product.price;
+      
+      // Tính giá sau khi giảm giá
+      return product.discount.type === "percentage"
+        ? product.price * (1 - product.discount.value / 100)
+        : Math.max(0, product.price - product.discount.value);
+    }
+    return product.price;
+  };
+
+  const formatCurrency = (amount) => {
+    return amount.toLocaleString('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    });
   };
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
+      <Container maxWidth="lg" sx={{ py: 4, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
         <CircularProgress />
       </Container>
     );
   }
 
-  if (cart.items.length === 0) {
+  if (cartItems.length === 0) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center' }}>
-        <ShoppingCartIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
+      <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <ShoppingCartIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2, mx: 'auto' }} />
         <Typography variant="h5" gutterBottom>
-          Your cart is empty
+          Giỏ hàng của bạn đang trống
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Looks like you haven't added any items to your cart yet.
+          Bạn chưa thêm sản phẩm nào vào giỏ hàng.
         </Typography>
         <Button
           variant="contained"
           color="primary"
-          onClick={() => navigate('/products_page')}
+          onClick={handleContinueShopping}
+          sx={{ maxWidth: 300, mx: 'auto' }}
         >
-          Continue Shopping
+          Tiếp tục mua sắm
         </Button>
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Shopping Cart
-      </Typography>
-      
-      <Grid container spacing={4}>
-        <Grid item xs={12} md={8}>
-          {cart.items.map((item) => (
-            <Card key={item.product._id} sx={{ mb: 3 }}>
-              <Grid container>
-                <Grid item xs={4} sm={3}>
-                  <CardMedia
-                    component="img"
-                    image={item.product.images?.[0] || 'https://placehold.co/300x200?text=No+Image'}
-                    alt={item.product.name}
-                    sx={{ height: 140, objectFit: 'contain', p: 1 }}
-                  />
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            mb: 2 
+          }}
+        >
+          <Typography variant="h4" component="h1" gutterBottom>
+            Giỏ hàng của bạn
+          </Typography>
+
+          <Button
+            variant="outlined"
+            onClick={handleContinueShopping}
+          >
+            Tiếp tục mua sắm
+          </Button>
+        </Box>
+        
+        <Grid container spacing={4}>
+          <Grid item xs={12} md={8}>
+            <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="subtitle1">
+                  {cartItems.length} sản phẩm trong giỏ hàng
+                </Typography>
+                <Button color="error" startIcon={<DeleteIcon />} onClick={() => clearCart()}>
+                  Xóa tất cả
+                </Button>
+              </Box>
+            </Paper>
+            
+            <Box 
+              sx={{ 
+              maxHeight: '70vh', 
+              overflowY: 'auto',
+              pr: 1,
+              '&::-webkit-scrollbar': {
+                width: '8px',
+              },
+              '&::-webkit-scrollbar-track': {
+                backgroundColor: '#f1f1f1',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                backgroundColor: '#888',
+                borderRadius: '4px',
+              },
+              '&::-webkit-scrollbar-thumb:hover': {
+                backgroundColor: '#555',
+              },
+            }}
+          >
+            {cartItems.map((item) => (
+              <Card key={item.product._id} sx={{ mb: 2, overflow: 'visible' }}>
+                <Grid container alignItems="center" spacing={1}>
+                  <Grid item xs={3} sm={2}>
+                    <CardMedia
+                      component="img"
+                      image={item.product.images?.[0] || 'https://placehold.co/300x200?text=No+Image'}
+                      alt={item.product.name}
+                      sx={{ height: 100, objectFit: 'contain', p: 1 }}
+                    />
+                  </Grid>
+                  <Grid item xs={9} sm={10}>
+                    <CardContent sx={{ py: 1, px: 2, '&:last-child': { pb: 1 } }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <Typography variant="subtitle1" component="h3" noWrap sx={{ maxWidth: { xs: '150px', sm: '300px' } }}>
+                          {item.product.name}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleRemoveItem(item.product._id)}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                      
+                      <Typography variant="body2" color="text.secondary">
+                        Đơn vị: {item.product.selectedUnit}
+                      </Typography>
+                      
+                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
+                        <Box>
+                          {item.product.discount && (
+                            <Typography variant="caption" color="error" sx={{ textDecoration: 'line-through', display: 'block' }}>
+                              {formatCurrency(item.product.price)}
+                            </Typography>
+                          )}
+                          <Typography variant="body1" color="primary" fontWeight="bold">
+                            {formatCurrency(getItemPrice(item.product))}
+                          </Typography>
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleQuantityChange(item.product._id, item.quantity - 1)}
+                            disabled={item.quantity <= 1}
+                          >
+                            <RemoveIcon fontSize="small" />
+                          </IconButton>
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={item.quantity}
+                            onChange={(e) => handleQuantityChange(item.product._id, parseInt(e.target.value) || 1)}
+                            inputProps={{ min: 1, style: { textAlign: 'center', padding: '4px' } }}
+                            sx={{ width: 40, mx: 1 }}
+                          />
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleQuantityChange(item.product._id, item.quantity + 1)}
+                          >
+                            <AddIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      </Stack>
+                      
+                      <Typography variant="body2" align="right" sx={{ mt: 1 }}>
+                        Thành tiền: <b>{formatCurrency(getItemPrice(item.product) * item.quantity)}</b>
+                      </Typography>
+                    </CardContent>
+                  </Grid>
                 </Grid>
-                <Grid item xs={8} sm={9}>
-                  <CardContent>
-                    <Typography variant="h6" component="h3">
-                      {item.product.name}
-                    </Typography>
-                    <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-                      Price: {new Intl.NumberFormat('vi-VN', {
-                        style: 'currency',
-                        currency: 'VND'
-                      }).format(item.product.price)}
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={item.quantity}
-                        onChange={(e) => handleQuantityChange(item.product._id, parseInt(e.target.value))}
-                        inputProps={{ min: 1 }}
-                        sx={{ width: 80, mr: 2 }}
-                      />
-                      <IconButton
-                        color="error"
-                        onClick={() => handleRemoveItem(item.product._id)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Box>
-                  </CardContent>
-                </Grid>
-              </Grid>
-            </Card>
-          ))}
+              </Card>
+            ))}
+          </Box>
+          
+          
         </Grid>
         
         <Grid item xs={12} md={4}>
-          <Paper elevation={3} sx={{ p: 3 }}>
+          <Paper elevation={3} sx={{ p: 3, position: 'sticky', top: 20 }}>
             <Typography variant="h6" gutterBottom>
-              Order Summary
+              Tóm tắt đơn hàng
             </Typography>
             <Divider sx={{ my: 2 }} />
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography>Subtotal ({cart.items.reduce((sum, item) => sum + item.quantity, 0)} items)</Typography>
+              <Typography>Tạm tính ({cartItems.reduce((sum, item) => sum + item.quantity, 0)} sản phẩm)</Typography>
               <Typography>
-                {new Intl.NumberFormat('vi-VN', {
-                  style: 'currency',
-                  currency: 'VND'
-                }).format(cart.total)}
+                {formatCurrency(calculateTotal())}
               </Typography>
             </Box>
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Typography>Shipping</Typography>
-              <Typography>Free</Typography>
+              <Typography>Phí vận chuyển</Typography>
+              <Typography>Miễn phí</Typography>
             </Box>
             
             <Divider sx={{ my: 2 }} />
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-              <Typography variant="h6">Total</Typography>
-              <Typography variant="h6">
-                {new Intl.NumberFormat('vi-VN', {
-                  style: 'currency',
-                  currency: 'VND'
-                }).format(cart.total)}
+              <Typography variant="h6">Tổng cộng</Typography>
+              <Typography variant="h6" color="primary">
+                {formatCurrency(calculateTotal())}
               </Typography>
             </Box>
             
@@ -226,8 +283,12 @@ const CartPage = () => {
               color="primary"
               onClick={handleCheckout}
             >
-              Proceed to Checkout
+              Tiến hành thanh toán
             </Button>
+            
+            <Alert severity="info" sx={{ mt: 3 }}>
+              Đơn hàng sẽ được xử lý và vận chuyển trong vòng 24h
+            </Alert>
           </Paper>
         </Grid>
       </Grid>

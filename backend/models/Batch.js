@@ -3,20 +3,20 @@ const mongoose = require("mongoose");
 
 const batchSchema = new mongoose.Schema(
   {
-    batchCode: {
-      type: String,
-      required: [true, "Mã lô hàng là bắt buộc"],
-      unique: true,
-      trim: true,
-      uppercase: true,
-      maxlength: [50, "Mã lô hàng không vượt quá 50 ký tự"],
-      validate: {
-        validator: function (v) {
-          return /^BATCH-\d+-[A-Z0-9]{7}$/.test(v);
-        },
-        message: "Định dạng mã lô hàng không hợp lệ",
-      },
-    },
+    // batchCode: {
+    //   type: String,
+    //   required: [true, "Mã lô hàng là bắt buộc"],
+    //   unique: true,
+    //   trim: true,
+    //   uppercase: true,
+    //   maxlength: [50, "Mã lô hàng không vượt quá 50 ký tự"],
+    //   validate: {
+    //     validator: function (v) {
+    //       return /^BATCH-\d+-[A-Z0-9]{7}$/.test(v);
+    //     },
+    //     message: "Định dạng mã lô hàng không hợp lệ",
+    //   },
+    // },
     manufacture_day: {
       type: Date,
       required: true,
@@ -136,6 +136,12 @@ batchSchema.virtual("daysUntilExpiry").get(function () {
 });
 
 batchSchema.pre("save", function (next) {
+  // Generate batchCode if not provided
+  if (!this.batchCode) {
+    const randomCode = Math.random().toString(36).substring(2, 9).toUpperCase();
+    this.batchCode = `BATCH-${Date.now()}-${randomCode}`;
+  }
+
   const daysLeft = this.daysUntilExpiry;
   if (
     !this.discountInfo.isDiscounted ||

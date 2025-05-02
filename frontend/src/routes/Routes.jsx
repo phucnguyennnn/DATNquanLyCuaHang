@@ -19,7 +19,6 @@ import User from "../pages/User";
 import PurchaseOrder from "../pages/PurchaseOrder";
 import GoodReceipt from "../pages/GoodReceipt";
 import AddToInventoy from "../pages/AddToInventory";
-import Cart from "../pages/Cart";
 import ProductPage from "../pages/ProductsPage";
 import CartPage from "../pages/Cart";
 import CategoryPage from "../pages/CategoryPage";
@@ -78,7 +77,6 @@ const AppRouter = () => {
           <Route path="cart_page" element={<CartPage />} />
           <Route path="categories" element={<CategoryPage />} />
           <Route path="products_page" element={<ProductsPage />} />
-          <Route path="cart" element={<Cart />} />  
           <Route path="Sales_page" element={<SalesPage />} />
           <Route path="inventory/Inventories" element={<Inventories />} />
           <Route path="Shelf_page" element={<ShelfPage/>} />

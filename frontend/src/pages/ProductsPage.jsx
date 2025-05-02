@@ -23,10 +23,18 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Snackbar,
+  Alert,
+  Badge,
+  Popover,
+  ButtonGroup,
 } from "@mui/material";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
 import { useNavigate } from "react-router-dom";
+import { useCart } from "../context/CartContext";
 
 const ProductListPage = () => {
   const [categories, setCategories] = useState([]);
@@ -41,6 +49,12 @@ const ProductListPage = () => {
   const [openProductDialog, setOpenProductDialog] = useState(false);
   const [selectedProductDetails, setSelectedProductDetails] = useState(null);
   const navigate = useNavigate();
+  const { cartItems, addToCart } = useCart();
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
+  const [currentProduct, setCurrentProduct] = useState(null);
 
   const fetchProducts = async () => {
     try {
@@ -101,8 +115,63 @@ const ProductListPage = () => {
     navigate("/cart_page");
   };
 
-  const handleAddToCart = (product) => {
-    console.log("Added to cart:", product);
+  const handleAddToCartClick = (event, product) => {
+    event.stopPropagation();
+    setAnchorEl(event.currentTarget);
+    setCurrentProduct(product);
+    setSelectedQuantity(1);
+  };
+
+  const handleAddToCart = () => {
+    if (!currentProduct) return;
+
+    const baseUnit = currentProduct.units.find((unit) => unit.ratio === 1);
+    if (!baseUnit) {
+      setSnackbarMessage("Không thể thêm sản phẩm: không tìm thấy đơn vị cơ bản");
+      setSnackbarOpen(true);
+      return;
+    }
+
+    try {
+      const productForCart = {
+        ...currentProduct,
+        price: baseUnit.salePrice,
+        selectedUnit: baseUnit.name,
+      };
+
+      addToCart(productForCart, selectedQuantity);
+      setSnackbarMessage(
+        `Đã thêm ${selectedQuantity} ${currentProduct.name} vào giỏ hàng`
+      );
+      setSnackbarOpen(true);
+      handleCloseQuantityPopover();
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      setSnackbarMessage("Không thể thêm sản phẩm vào giỏ hàng");
+      setSnackbarOpen(true);
+    }
+  };
+
+  const handleCloseQuantityPopover = () => {
+    setAnchorEl(null);
+    setCurrentProduct(null);
+  };
+
+  const handleIncrementQuantity = () => {
+    setSelectedQuantity((prev) => prev + 1);
+  };
+
+  const handleDecrementQuantity = () => {
+    setSelectedQuantity((prev) => (prev > 1 ? prev - 1 : 1));
+  };
+
+  const handleQuantityChange = (event) => {
+    const value = parseInt(event.target.value);
+    setSelectedQuantity(isNaN(value) || value < 1 ? 1 : value);
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbarOpen(false);
   };
 
   useEffect(() => {
@@ -253,7 +322,9 @@ const ProductListPage = () => {
           />
           <Box>
             <IconButton color="primary" onClick={handleGoToCart}>
-              <ShoppingCartIcon />
+              <Badge badgeContent={cartItems.length} color="error">
+                <ShoppingCartIcon />
+              </Badge>
             </IconButton>
             <IconButton color="primary">
               <AccountCircleIcon />
@@ -307,7 +378,7 @@ const ProductListPage = () => {
                   <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                     <Button
                       variant="contained"
-                      onClick={() => handleAddToCart(product)}
+                      onClick={(e) => handleAddToCartClick(e, product)}
                       sx={{ flexGrow: 1 }}
                     >
                       Thêm
@@ -326,6 +397,61 @@ const ProductListPage = () => {
         </Grid>
       </Box>
 
+      <Popover
+        open={Boolean(anchorEl)}
+        anchorEl={anchorEl}
+        onClose={handleCloseQuantityPopover}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "center",
+        }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: "center",
+        }}
+      >
+        <Box
+          sx={{
+            p: 2,
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            width: 250,
+          }}
+        >
+          <Typography variant="subtitle1">Chọn số lượng</Typography>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <ButtonGroup>
+              <Button size="small" onClick={handleDecrementQuantity}>
+                <RemoveIcon fontSize="small" />
+              </Button>
+              <TextField
+                size="small"
+                type="number"
+                value={selectedQuantity}
+                onChange={handleQuantityChange}
+                inputProps={{
+                  min: 1,
+                  style: { textAlign: "center", width: "50px" },
+                }}
+              />
+              <Button size="small" onClick={handleIncrementQuantity}>
+                <AddIcon fontSize="small" />
+              </Button>
+            </ButtonGroup>
+            <Button variant="contained" onClick={handleAddToCart} color="primary">
+              Xác nhận
+            </Button>
+          </Box>
+        </Box>
+      </Popover>
+
       <Dialog
         open={openProductDialog}
         onClose={handleCloseProductDialog}
@@ -340,7 +466,11 @@ const ProductListPage = () => {
                 <img
                   src={selectedProductDetails.images[0]}
                   alt={selectedProductDetails.name}
-                  style={{ width: "100%", maxHeight: 200, objectFit: "contain" }}
+                  style={{
+                    width: "100%",
+                    maxHeight: 200,
+                    objectFit: "contain",
+                  }}
                 />
               ) : (
                 <CardMedia
@@ -398,8 +528,12 @@ const ProductListPage = () => {
             <DialogActions>
               <Button onClick={handleCloseProductDialog}>Đóng</Button>
               <Button
-                onClick={() => handleAddToCart(selectedProductDetails)}
+                onClick={(e) => {
+                  handleCloseProductDialog();
+                  handleAddToCartClick(e, selectedProductDetails);
+                }}
                 color="primary"
+                variant="contained"
               >
                 Thêm vào giỏ
               </Button>
@@ -407,6 +541,21 @@ const ProductListPage = () => {
           </>
         )}
       </Dialog>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={handleSnackbarClose}
+          severity="success"
+          sx={{ width: "100%" }}
+        >
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

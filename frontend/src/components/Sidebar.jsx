@@ -169,7 +169,7 @@ const Sidebar = () => {
                       </ListItemIcon>
                       <ListItemText primary="Tạo phiếu nhập kho" />
                     </ListItemButton>
-{/* 
+
                     <ListItemButton
                       sx={{ pl: 4 }}
                       onClick={() => navigate("/inventory/add-shipment")}
@@ -178,7 +178,7 @@ const Sidebar = () => {
                         <AddBox />
                       </ListItemIcon>
                       <ListItemText primary="Thêm lô hàng" />
-                    </ListItemButton> */}
+                    </ListItemButton>
                   </List>
                 </Collapse>
               </>
