@@ -21,7 +21,7 @@ const purchaseOrderItemSchema = new mongoose.Schema(
     unit: {
       type: String,
       required: true,
-      enum: ["cái", "gói", "bao", "thùng", "chai", "lọ", "hộp", "kg", "gram", "liter", "ml"],
+      // enum: ["cái", "gói", "bao", "thùng", "chai", "lọ", "hộp", "kg", "gram", "liter", "ml"],
       default: "cái",
     },
     unitPrice: {
