@@ -5,10 +5,10 @@ const unitSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        enum: {
-            values: ['cái', 'gói', 'bao', 'thùng', 'chai', 'lọ', 'hộp', 'kg', 'gram', 'liter', 'ml'],
-            message: '{VALUE} is not a valid unit'
-        }
+        // enum: {
+        //     values: ['cái', 'gói', 'bao', 'thùng', 'chai', 'lọ', 'hộp', 'kg', 'gram', 'liter', 'ml'],
+        //     message: '{VALUE} is not a valid unit'
+        // }
     },
     ratio: { type: Number, required: true, min: 1 },
     salePrice: { type: Number, required: true, min: 0 }
@@ -77,7 +77,6 @@ const productSchema = new mongoose.Schema(
             required: true,
             default: [
                 { name: 'cái', ratio: 1, salePrice: 0 },
-                { name: 'hộp', ratio: 10, salePrice: 0 }
             ],
             validate: {
                 validator: function (units) {
