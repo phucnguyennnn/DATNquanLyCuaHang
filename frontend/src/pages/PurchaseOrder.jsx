@@ -62,12 +62,12 @@ const PurchaseOrderManagement = () => {
   const [editOrderItems, setEditOrderItems] = useState([]);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState("Tại cửa hàng");
+  const [paymentMethod, setPaymentMethod] = useState("Thanh toán khi nhận hàng");
   const [showPreview, setShowPreview] = useState(false);
   const [totalPrice, setTotalPrice] = useState(0);
   const [approvalDate, setApprovalDate] = useState(null);
-  const [orderStatus, setOrderStatus] = useState("draft");
+  const [orderStatus, setOrderStatus] = useState("approved");
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -477,8 +477,8 @@ const PurchaseOrderManagement = () => {
           <Typography variant="h6" gutterBottom>
             Thông tin sản phẩm
           </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={5}>
               <FormControl fullWidth>
                 <InputLabel>Sản phẩm</InputLabel>
                 <Select
@@ -494,67 +494,52 @@ const PurchaseOrderManagement = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={8}>
-              <Grid container spacing={2}>
-                <Grid item xs={3}>
-                  <TextField
-                    label="Số lượng"
-                    type="number"
-                    fullWidth
-                    value={quantity}
-                    onChange={(e) => setQuantity(Number(e.target.value))}
-                    inputProps={{ min: 1 }}
-                  />
-                </Grid>
-                <Grid item xs={3}>
-                  <FormControl fullWidth>
-                    <InputLabel>Đơn vị</InputLabel>
-                    <Select
-                      value={unit}
-                      label="Đơn vị"
-                      onChange={(e) => setUnit(e.target.value)}
-                    >
-                      {products
-                        .find((p) => p._id === selectedProduct)?.units.map((u) => (
-                          <MenuItem key={u.name} value={u.name}>
-                            {u.name}
-                          </MenuItem>
-                        ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={3}>
-                  <TextField
-                    label="Giá nhập"
-                    type="number"
-                    fullWidth
-                    value={unitPrice}
-                    onChange={(e) => setUnitPrice(Number(e.target.value))}
-                    inputProps={{ min: 0 }}
-                  />
-                </Grid>
-                <Grid item xs={3}>
-                  <TextField
-                    label={`Quy đổi (${products.find((p) => p._id === selectedProduct)?.units.find((u) => u.ratio === 1)?.name || "đơn vị nhỏ nhất"})`}
-                    type="text"
-                    fullWidth
-                    value={
-                      unit
-                        ? `${quantity * (products.find((p) => p._id === selectedProduct)?.units.find((u) => u.name === unit)?.ratio || 1)}`
-                        : ""
-                    }
-                    InputProps={{
-                      readOnly: true,
-                    }}
-                  />
-                </Grid>
-              </Grid>
+            
+            <Grid item xs={6} sm={3} md={2}>
+              <TextField
+                label="Số lượng"
+                type="number"
+                fullWidth
+                value={quantity}
+                onChange={(e) => setQuantity(Number(e.target.value))}
+                inputProps={{ min: 1 }}
+              />
             </Grid>
-            <Grid item xs={12} sm={1}>
+            
+            <Grid item xs={6} sm={3} md={2}>
+              <FormControl fullWidth>
+                <InputLabel>Đơn vị</InputLabel>
+                <Select
+                  value={unit}
+                  label="Đơn vị"
+                  onChange={(e) => setUnit(e.target.value)}
+                >
+                  {products
+                    .find((p) => p._id === selectedProduct)?.units.map((u) => (
+                      <MenuItem key={u.name} value={u.name}>
+                        {u.name}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            <Grid item xs={8} sm={4} md={2}>
+              <TextField
+                label="Giá nhập"
+                type="number"
+                fullWidth
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(Number(e.target.value))}
+                inputProps={{ min: 0 }}
+              />
+            </Grid>
+            
+            <Grid item xs={4} sm={2} md={1}>
               <Button
                 variant="contained"
                 onClick={handleAddItem}
-                sx={{ height: "100%" }}
+                sx={{ height: "100%", width: "100%" }}
               >
                 <AddIcon />
               </Button>
@@ -654,8 +639,7 @@ const PurchaseOrderManagement = () => {
                       <TableCell>Tên sản phẩm</TableCell>
                       <TableCell>SKU</TableCell>
                       <TableCell>Đơn vị</TableCell>
-                      <TableCell>Quy đổi</TableCell>
-                      <TableCell>SL</TableCell>
+                      <TableCell>Số lượng</TableCell>
                       <TableCell>Giá nhập</TableCell>
                       <TableCell>Thành tiền</TableCell>
                       <TableCell></TableCell>
@@ -668,9 +652,7 @@ const PurchaseOrderManagement = () => {
                         <TableCell>{item.name}</TableCell>
                         <TableCell>{item.SKU}</TableCell>
                         <TableCell>{item.unit}</TableCell>
-                        <TableCell>
-                          {products.find((p) => p._id === item.product)?.units.find((u) => u.name === item.unit)?.ratio || "N/A"}
-                        </TableCell>
+                       
                         <TableCell>
                           <IconButton onClick={() => updateQuantity(item.product, -1)}>
                             <RemoveIcon fontSize="small" />
