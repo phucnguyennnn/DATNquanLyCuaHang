@@ -26,6 +26,7 @@ import {
     Snackbar,
     Alert,
     CircularProgress,
+    Autocomplete,
 } from "@mui/material";
 import {
     Add as AddIcon,
@@ -98,6 +99,8 @@ const ProductManager = () => {
     const [openCategoryDialog, setOpenCategoryDialog] = useState(false);
     const [newCategory, setNewCategory] = useState({ name: "", description: "" });
     const token = localStorage.getItem("authToken");
+
+    const predefinedUnits = ["cái", "gói", "bao", "thùng", "chai", "lọ", "hộp", "kg", "gram", "liter", "ml"];
 
     const toggleOptionalFields = () => {
         setShowOptionalFields(!showOptionalFields);
@@ -641,33 +644,31 @@ const ProductManager = () => {
                             {formik.values.units.map((unit, index) => (
                                 <Grid container spacing={2} key={index} sx={{ mb: 2 }}>
                                     <Grid item xs={4}>
-                                        <FormControl fullWidth>
-                                            <InputLabel id={`unit-name-label-${index}`}>Tên đơn vị *</InputLabel>
-                                            <Select
-                                                labelId={`unit-name-label-${index}`}
-                                                value={unit.name}
-                                                onChange={(e) => {
-                                                    const newUnits = [...formik.values.units];
-                                                    newUnits[index].name = e.target.value;
-                                                    formik.setFieldValue("units", newUnits);
-                                                }}
-                                                error={!unit.name}
-                                                // disabled={unit.ratio === 1}
-                                            >
-                                                {["cái", "gói", "bao", "thùng", "chai", "lọ", "hộp", "kg", "gram", "liter", "ml"].map(
-                                                    (unitName) => (
-                                                        <MenuItem key={unitName} value={unitName}>
-                                                            {unitName}
-                                                        </MenuItem>
-                                                    )
-                                                )}
-                                            </Select>
-                                            {!unit.name && (
-                                                <Typography color="error" variant="caption">
-                                                    Tên đơn vị là bắt buộc
-                                                </Typography>
+                                        <Autocomplete
+                                            freeSolo
+                                            options={predefinedUnits}
+                                            value={unit.name}
+                                            onChange={(event, newValue) => {
+                                                const newUnits = [...formik.values.units];
+                                                newUnits[index].name = newValue || "";
+                                                formik.setFieldValue("units", newUnits);
+                                            }}
+                                            renderInput={(params) => (
+                                                <TextField 
+                                                    {...params} 
+                                                    label="Tên đơn vị *" 
+                                                    error={!unit.name}
+                                                    helperText={!unit.name && "Tên đơn vị là bắt buộc"}
+                                                    onChange={(e) => {
+                                                        if (e.target.value !== undefined) {
+                                                            const newUnits = [...formik.values.units];
+                                                            newUnits[index].name = e.target.value;
+                                                            formik.setFieldValue("units", newUnits);
+                                                        }
+                                                    }}
+                                                />
                                             )}
-                                        </FormControl>
+                                        />
                                     </Grid>
                                     <Grid item xs={3}>
                                         <TextField
@@ -730,7 +731,7 @@ const ProductManager = () => {
                                         const hasRatio1 = formik.values.units.some(unit => unit.ratio === 1);
                                         formik.setFieldValue("units", [
                                             ...formik.values.units,
-                                            { name: "", ratio: hasRatio1 ? 2 : 1, salePrice: 0 },
+                                            { name: "cái", ratio: hasRatio1 ? 2 : 1, salePrice: 0 },
                                         ]);
                                     }}
                                 >
