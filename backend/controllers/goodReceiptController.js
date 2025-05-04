@@ -1,4 +1,4 @@
-// controllers/goodReceiptController.js
+// backend/controllers/goodReceiptController.js
 const mongoose = require("mongoose");
 const GoodReceipt = require("../models/GoodReceipt");
 const Batch = require("../models/Batch");
@@ -11,6 +11,8 @@ const goodReceiptController = {
   createGoodReceiptFromPurchaseOrder: async (req, res) => {
     try {
       const { purchaseOrderId, receivedBy, items, notes } = req.body;
+      console.log("Dữ liệu nhận được khi tạo phiếu nhập:", req.body); // Log dữ liệu request body
+
       if (!purchaseOrderId) {
         return res.status(400).json({ message: "Thiếu ID phiếu đặt hàng" });
       }
@@ -38,9 +40,10 @@ const goodReceiptController = {
         { status: "completed" },
         { new: true }
       );
+      console.log("Phiếu nhập kho đã được tạo:", savedGoodReceipt); // Log phiếu nhập đã tạo
       res.status(201).json(savedGoodReceipt);
     } catch (error) {
-      console.error("Lỗi khi tạo phiếu nhập kho:", error);
+      console.error("Lỗi khi tạo phiếu nhập kho:", error); // Sử dụng console.error cho lỗi
       res.status(500).json({ error: error.message });
     }
   },
@@ -50,8 +53,10 @@ const goodReceiptController = {
         path: "items.product",
         strictPopulate: false,
       });
+      console.log("Tất cả phiếu nhập kho:", receipts); // Log tất cả phiếu nhập kho
       res.status(200).json(receipts);
     } catch (error) {
+      console.error("Lỗi khi lấy tất cả phiếu nhập kho:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -68,14 +73,18 @@ const goodReceiptController = {
           .status(404)
           .json({ message: "Không tìm thấy phiếu nhập kho." });
       }
+      console.log("Chi tiết phiếu nhập kho ID:", req.params.id, receipt); // Log chi tiết phiếu nhập kho
       res.status(200).json(receipt);
     } catch (error) {
+      console.error("Lỗi khi lấy phiếu nhập kho theo ID:", error);
       res.status(500).json({ error: error.message });
     }
   },
   confirmGoodReceipt: async (req, res) => {
     try {
-      const receipt = await GoodReceipt.findById(req.params.id);
+      const receiptId = req.params.id;
+      console.log("Bắt đầu xác nhận phiếu nhập kho ID:", receiptId); // Log ID phiếu nhập đang xác nhận
+      const receipt = await GoodReceipt.findById(receiptId);
       if (!receipt)
         return res.status(404).json({ message: "Phiếu nhập không tồn tại." });
       if (receipt.status === "received") {
@@ -83,6 +92,10 @@ const goodReceiptController = {
           .status(400)
           .json({ message: "Phiếu nhập đã được xác nhận trước đó." });
       }
+
+      console.log("Dữ liệu receipt trước khi tạo batch:", receipt); // Log toàn bộ dữ liệu receipt
+      console.log("Các items trong receipt:", receipt.items); // Log các items
+
       for (let i = 0; i < receipt.items.length; i++) {
         const item = receipt.items[i];
         if (!item.product) {
@@ -111,7 +124,8 @@ const goodReceiptController = {
           supplierId: receipt.supplier,
         });
       }
-      const batchPromises = receipt.items.map(async (item) => {
+      const batchPromises = receipt.items.map(async (item, index) => {
+        console.log(`Đang xử lý item thứ ${index + 1}:`, item); // Log từng item trước khi tạo batch
         const product = await Product.findById(item.product);
         const supplier = await Supplier.findById(receipt.supplier);
         const manufactureDate = item.manufactureDate;
@@ -156,6 +170,7 @@ const goodReceiptController = {
         }
       });
       const createdBatches = await Promise.all(batchPromises);
+      console.log("Các lô hàng đã tạo:", createdBatches); // Log các lô hàng đã tạo
       receipt.status = "received";
       await receipt.save();
       res.json({
@@ -184,6 +199,7 @@ const goodReceiptController = {
           .status(404)
           .json({ message: "Không tìm thấy phiếu nhập kho." });
       }
+      console.log("Phiếu nhập kho đã được cập nhật:", receipt); // Log phiếu nhập sau khi cập nhật
       res.status(200).json(receipt);
     } catch (error) {
       console.error("Lỗi khi cập nhật phiếu nhập kho:", error);

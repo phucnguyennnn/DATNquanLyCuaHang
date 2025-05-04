@@ -1,3 +1,4 @@
+// frontend/src/components/CreateGoodReceipt.js
 import React, { useEffect, useState } from "react";
 import {
   Box,
@@ -73,7 +74,7 @@ const CreateGoodReceipt = () => {
   // Khi chọn phiếu đặt mua
   const handleSelectOrder = async (orderId) => {
     if (!isTokenValid()) return;
-
+    console.log("Đã chọn order ID:", orderId);
     try {
       const res = await axios.get(
         `http://localhost:8000/api/purchaseorder/${orderId}`,
@@ -100,6 +101,7 @@ const CreateGoodReceipt = () => {
           expiry_day: "",
         }))
       );
+      console.log("Initial batchInfo:", batchInfo);
     } catch (error) {
       console.error("Lỗi khi lấy chi tiết phiếu đặt hàng:", error);
       alert("Không thể lấy thông tin chi tiết phiếu đặt hàng. Vui lòng thử lại!");
@@ -125,7 +127,8 @@ const CreateGoodReceipt = () => {
 
   // Gửi phiếu nhập kho và xác nhận nhập kho luôn
   const handleSubmit = async () => {
-    
+    console.log("Hàm handleSubmit được gọi");
+
     if (!isTokenValid() || !selectedOrder) {
       alert("Vui lòng chọn phiếu đặt mua trước khi tạo phiếu nhập kho!");
       return;
@@ -209,6 +212,7 @@ const CreateGoodReceipt = () => {
           },
         }
       );
+      console.log("Response tạo phiếu nhập kho:", response.data);
 
       // Bước 2: Xác nhận phiếu nhập kho để tạo batch ngay lập tức
       setConfirming(true);
@@ -222,20 +226,20 @@ const CreateGoodReceipt = () => {
           },
         }
       );
+      console.log("Response confirm:", confirmResponse.data);
 
-      // Lưu và hiển thị batches đã tạo
-      // if (confirmResponse.data.batches && confirmResponse.data.batches.length > 0) {
-      //   setCreatedBatches(confirmResponse.data.batches);
-      // }
+      if (confirmResponse.data.batches && confirmResponse.data.batches.length > 0) {
+        setCreatedBatches(confirmResponse.data.batches);
+      }
 
       alert("Tạo phiếu nhập kho và nhập hàng vào kho thành công!");
       setSelectedOrder(null);
       setBatchInfo([]);
       fetchOrders();
-      
+
     } catch (error) {
       console.error("Lỗi khi tạo phiếu nhập kho:", error);
-      
+
       // Hiển thị thông tin lỗi chi tiết hơn
       let errorMessage = "Tạo phiếu thất bại";
       if (error.response) {
@@ -350,7 +354,7 @@ const CreateGoodReceipt = () => {
                       onChange={(e) => {
                         const newDate = e.target.value;
                         handleBatchChange(index, "manufacture_day", newDate);
-                        
+
                         // Tự động điều chỉnh ngày hết hạn nếu cần
                         const current = batchInfo[index];
                         if (current.expiry_day && new Date(current.expiry_day) <= new Date(newDate)) {
@@ -373,18 +377,18 @@ const CreateGoodReceipt = () => {
                       label="Hạn sử dụng"
                       type="date"
                       fullWidth
-                      error={batchInfo[index]?.manufacture_day && batchInfo[index]?.expiry_day && 
-                             new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)}
+                      error={batchInfo[index]?.manufacture_day && batchInfo[index]?.expiry_day &&
+                        new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)}
                       InputLabelProps={{ shrink: true }}
                       value={batchInfo[index]?.expiry_day || ""}
-                      onChange={(e) => 
+                      onChange={(e) =>
                         handleBatchChange(index, "expiry_day", e.target.value)
                       }
                       required
                       helperText={
-                        batchInfo[index]?.manufacture_day && 
-                        batchInfo[index]?.expiry_day && 
-                        new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)
+                        batchInfo[index]?.manufacture_day &&
+                          batchInfo[index]?.expiry_day &&
+                          new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)
                           ? "Hạn sử dụng phải sau ngày sản xuất"
                           : "Hạn sử dụng của lô hàng"
                       }
