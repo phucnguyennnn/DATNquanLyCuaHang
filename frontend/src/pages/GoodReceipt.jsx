@@ -16,7 +16,10 @@ import {
   Divider,
   Chip,
   CircularProgress,
+  IconButton,
 } from "@mui/material";
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import DeleteIcon from '@mui/icons-material/Delete';
 import axios from "axios";
 import { format } from 'date-fns';
 
@@ -28,12 +31,13 @@ const CreateGoodReceipt = () => {
   const [confirming, setConfirming] = useState(false);
   const [createdBatches, setCreatedBatches] = useState([]);
   const [error, setError] = useState(null);
+  const [supplierProducts, setSupplierProducts] = useState([]);
+  const [additionalItems, setAdditionalItems] = useState([]);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const token = localStorage.getItem("authToken");
 
-  // Hàm kiểm tra token
   const isTokenValid = () => {
     if (!token) {
       alert("Vui lòng đăng nhập để tiếp tục.");
@@ -42,7 +46,6 @@ const CreateGoodReceipt = () => {
     return true;
   };
 
-  // Hàm fetchOrders được tách ra để tái sử dụng
   const fetchOrders = async () => {
     if (!isTokenValid()) return;
     try {
@@ -54,7 +57,6 @@ const CreateGoodReceipt = () => {
       const approvedOrders = res.data.filter((o) => o.status === "approved");
       setOrders(approvedOrders);
       console.log("Approved orders:", approvedOrders);
-      // Log the first order to see its structure
       if (approvedOrders.length > 0) {
         console.log(
           "First order structure:",
@@ -70,7 +72,64 @@ const CreateGoodReceipt = () => {
     fetchOrders();
   }, []);
 
-  // Khi chọn phiếu đặt mua
+  const fetchSupplierProducts = async (supplierId) => {
+    if (!isTokenValid() || !supplierId) return;
+    
+    try {
+      // First get all products
+      const allProductsResponse = await axios.get("http://localhost:8000/api/products", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      // Get supplier details to get the list of products they supply
+      const supplierResponse = await axios.get(`http://localhost:8000/api/suppliers/${supplierId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      // Filter products to only include those supplied by this supplier
+      if (supplierResponse.data && supplierResponse.data.suppliedProducts) {
+        const suppliedProductIds = supplierResponse.data.suppliedProducts.map(
+          item => item.product
+        );
+        
+        // Filter active products supplied by this supplier
+        const filteredProducts = allProductsResponse.data.data.filter(product => 
+          product.active !== false && 
+          suppliedProductIds.includes(product._id)
+        );
+        
+        setSupplierProducts(filteredProducts);
+        console.log(`Found ${filteredProducts.length} products from supplier ${supplierResponse.data.name}`);
+      } else {
+        // If no suppliedProducts or unable to filter, use the direct API endpoint as fallback
+        const response = await axios.get(`http://localhost:8000/api/products/supplier/${supplierId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        setSupplierProducts(response.data);
+      }
+    } catch (error) {
+      console.error("Error fetching supplier products:", error);
+      // Fallback to direct API call if the filtering approach fails
+      try {
+        const response = await axios.get(`http://localhost:8000/api/products/supplier/${supplierId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        setSupplierProducts(response.data);
+      } catch (fallbackError) {
+        console.error("Fallback request also failed:", fallbackError);
+        setSupplierProducts([]);
+      }
+    }
+  };
+
   const handleSelectOrder = async (orderId) => {
     if (!isTokenValid()) return;
 
@@ -86,7 +145,12 @@ const CreateGoodReceipt = () => {
       console.log("Chi tiết phiếu đặt hàng:", res.data);
       setSelectedOrder(res.data);
 
-      // Khởi tạo batch info - sử dụng optional chaining để tránh lỗi nếu dữ liệu không có cấu trúc như mong đợi
+      setAdditionalItems([]);
+
+      if (res.data.supplier && res.data.supplier._id) {
+        fetchSupplierProducts(res.data.supplier._id);
+      }
+
       setBatchInfo(
         res.data.items.map((item) => ({
           product: item.product?._id || item.product,
@@ -106,14 +170,64 @@ const CreateGoodReceipt = () => {
     }
   };
 
-  // Xử lý thay đổi thông tin lô hàng
   const handleBatchChange = (index, field, value) => {
     const updated = [...batchInfo];
     updated[index][field] = value;
     setBatchInfo(updated);
   };
 
-  // Format date helper function
+  const addItem = () => {
+    if (supplierProducts.length === 0) {
+      alert("Không có sản phẩm từ nhà cung cấp này hoặc nhà cung cấp chưa được chọn");
+      return;
+    }
+    
+    setAdditionalItems([
+      ...additionalItems,
+      {
+        product: "",
+        productName: "",
+        productSKU: "",
+        quantity: 1,
+        unit: "",
+        unitPrice: 0,
+        totalPrice: 0,
+        manufacture_day: "",
+        expiry_day: "",
+      },
+    ]);
+  };
+
+  const removeItem = (index) => {
+    const updatedItems = [...additionalItems];
+    updatedItems.splice(index, 1);
+    setAdditionalItems(updatedItems);
+  };
+
+  const handleAdditionalItemChange = (index, field, value) => {
+    const updatedItems = [...additionalItems];
+    updatedItems[index][field] = value;
+
+    if (field === "product") {
+      const selectedProduct = supplierProducts.find(p => p._id === value);
+      if (selectedProduct) {
+        updatedItems[index].productName = selectedProduct.name;
+        updatedItems[index].productSKU = selectedProduct.SKU;
+        updatedItems[index].unit = selectedProduct.unit;
+        if (selectedProduct.price) {
+          updatedItems[index].unitPrice = selectedProduct.price;
+        }
+      }
+    }
+
+    if (field === "quantity" || field === "unitPrice") {
+      updatedItems[index].totalPrice = 
+        Number(updatedItems[index].quantity) * Number(updatedItems[index].unitPrice);
+    }
+
+    setAdditionalItems(updatedItems);
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -123,7 +237,6 @@ const CreateGoodReceipt = () => {
     }
   };
 
-  // Gửi phiếu nhập kho và xác nhận nhập kho luôn
   const handleSubmit = async () => {
     
     if (!isTokenValid() || !selectedOrder) {
@@ -131,13 +244,11 @@ const CreateGoodReceipt = () => {
       return;
     }
 
-    // Prevent double submission
     if (loading || confirming) {
       console.log("Đang xử lý, vui lòng đợi...");
       return;
     }
 
-    // Kiểm tra dữ liệu trước khi gửi
     const isDataComplete = batchInfo.every(
       (item) =>
         item.product &&
@@ -146,15 +257,27 @@ const CreateGoodReceipt = () => {
         item.expiry_day
     );
 
-    if (!isDataComplete) {
+    const isAdditionalDataComplete = additionalItems.length === 0 || additionalItems.every(
+      (item) =>
+        item.product &&
+        item.quantity > 0 &&
+        item.unitPrice > 0 &&
+        item.manufacture_day &&
+        item.expiry_day
+    );
+
+    if (!isDataComplete || !isAdditionalDataComplete) {
       alert(
         "Vui lòng nhập đầy đủ thông tin cho tất cả sản phẩm (số lượng, ngày sản xuất, hạn sử dụng)!"
       );
       return;
     }
 
-    // Kiểm tra ngày hết hạn phải sau ngày sản xuất
     const hasValidDates = batchInfo.every((item) => {
+      const mfgDate = new Date(item.manufacture_day);
+      const expDate = new Date(item.expiry_day);
+      return expDate > mfgDate;
+    }) && additionalItems.every((item) => {
       const mfgDate = new Date(item.manufacture_day);
       const expDate = new Date(item.expiry_day);
       return expDate > mfgDate;
@@ -169,7 +292,6 @@ const CreateGoodReceipt = () => {
       setLoading(true);
       setError(null);
 
-      // Đảm bảo các trường bắt buộc có giá trị
       const userID = localStorage.getItem("userID");
       if (!userID) {
         alert("Không thể xác định người dùng, vui lòng đăng nhập lại");
@@ -177,13 +299,8 @@ const CreateGoodReceipt = () => {
         return;
       }
 
-      // Đảm bảo dữ liệu gửi đi đáp ứng yêu cầu của API
-      const requestData = {
-        purchaseOrderId: selectedOrder._id,
-        supplierId: selectedOrder.supplier?._id || selectedOrder.supplierId,
-        receivedBy: userID,
-        totalAmount: selectedOrder.totalAmount,
-        items: batchInfo.map(item => ({
+      const allItems = [
+        ...batchInfo.map(item => ({
           productId: item.product,
           quantity: Number(item.quantity),
           unit: item.unit,
@@ -193,12 +310,34 @@ const CreateGoodReceipt = () => {
           expiryDate: item.expiry_day,
           productName: item.productName,
           productSKU: item.productSKU
+        })),
+        ...additionalItems.map(item => ({
+          productId: item.product,
+          quantity: Number(item.quantity),
+          unit: item.unit,
+          unitPrice: Number(item.unitPrice),
+          totalPrice: Number(item.unitPrice) * Number(item.quantity),
+          manufactureDate: item.manufacture_day,
+          expiryDate: item.expiry_day,
+          productName: item.productName,
+          productSKU: item.productSKU
         }))
+      ];
+
+      const additionalTotal = additionalItems.reduce((sum, item) => 
+        sum + (Number(item.quantity) * Number(item.unitPrice)), 0);
+      const totalAmount = selectedOrder.totalAmount + additionalTotal;
+
+      const requestData = {
+        purchaseOrderId: selectedOrder._id,
+        supplierId: selectedOrder.supplier?._id || selectedOrder.supplierId,
+        receivedBy: userID,
+        totalAmount: totalAmount,
+        items: allItems
       };
 
       console.log("Dữ liệu gửi đi:", JSON.stringify(requestData, null, 2));
 
-      // Bước 1: Tạo phiếu nhập kho
       const response = await axios.post(
         "http://localhost:8000/api/goodreceipt/from-po",
         requestData,
@@ -210,7 +349,6 @@ const CreateGoodReceipt = () => {
         }
       );
 
-      // Bước 2: Xác nhận phiếu nhập kho để tạo batch ngay lập tức
       setConfirming(true);
       const confirmResponse = await axios.patch(
         `http://localhost:8000/api/goodreceipt/confirm/${response.data._id}`,
@@ -223,20 +361,19 @@ const CreateGoodReceipt = () => {
         }
       );
 
-      // Lưu và hiển thị batches đã tạo
-      // if (confirmResponse.data.batches && confirmResponse.data.batches.length > 0) {
-      //   setCreatedBatches(confirmResponse.data.batches);
-      // }
+      if (confirmResponse.data.batches && confirmResponse.data.batches.length > 0) {
+        setCreatedBatches(confirmResponse.data.batches);
+      }
 
       alert("Tạo phiếu nhập kho và nhập hàng vào kho thành công!");
       setSelectedOrder(null);
       setBatchInfo([]);
+      setAdditionalItems([]);
       fetchOrders();
       
     } catch (error) {
       console.error("Lỗi khi tạo phiếu nhập kho:", error);
       
-      // Hiển thị thông tin lỗi chi tiết hơn
       let errorMessage = "Tạo phiếu thất bại";
       if (error.response) {
         console.log("Dữ liệu lỗi:", error.response.data);
@@ -276,7 +413,6 @@ const CreateGoodReceipt = () => {
         </Paper>
       )}
 
-      {/* Chọn phiếu đặt mua */}
       <FormControl fullWidth sx={{ mb: 3 }}>
         <InputLabel>Chọn phiếu đặt mua</InputLabel>
         <Select
@@ -292,7 +428,6 @@ const CreateGoodReceipt = () => {
         </Select>
       </FormControl>
 
-      {/* Hiển thị chi tiết sản phẩm */}
       {selectedOrder && selectedOrder.items && (
         <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom fontWeight="bold">
@@ -351,10 +486,8 @@ const CreateGoodReceipt = () => {
                         const newDate = e.target.value;
                         handleBatchChange(index, "manufacture_day", newDate);
                         
-                        // Tự động điều chỉnh ngày hết hạn nếu cần
                         const current = batchInfo[index];
                         if (current.expiry_day && new Date(current.expiry_day) <= new Date(newDate)) {
-                          // Tính ngày hết hạn mặc định (6 tháng sau ngày sản xuất)
                           const expDate = new Date(newDate);
                           expDate.setMonth(expDate.getMonth() + 6);
                           handleBatchChange(
@@ -395,9 +528,196 @@ const CreateGoodReceipt = () => {
             ))}
           </Stack>
 
+          <Box mt={4}>
+            <Box display="flex" justifyContent="space-between" alignItems="center">
+              <Box>
+                <Typography variant="h6" gutterBottom fontWeight="bold">
+                  Thêm sản phẩm khác
+                </Typography>
+                {selectedOrder?.supplier && (
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                    Nhà cung cấp: <strong>{selectedOrder.supplier.name}</strong> 
+                    {selectedOrder.supplier.email && ` (${selectedOrder.supplier.email})`}
+                  </Typography>
+                )}
+                {supplierProducts.length > 0 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    Có {supplierProducts.length} sản phẩm có thể thêm từ nhà cung cấp này
+                  </Typography>
+                ) : (
+                  <Typography variant="caption" color="error">
+                    Không có sản phẩm nào khác từ nhà cung cấp này
+                  </Typography>
+                )}
+              </Box>
+              <Button 
+                variant="outlined" 
+                startIcon={<AddCircleOutlineIcon />} 
+                onClick={addItem}
+                disabled={supplierProducts.length === 0}
+              >
+                Thêm sản phẩm
+              </Button>
+            </Box>
+            
+            {additionalItems.length > 0 && (
+              <Stack spacing={3} mt={2}>
+                {additionalItems.map((item, index) => (
+                  <Paper
+                    key={`additional-${index}`}
+                    elevation={2}
+                    sx={{ p: 2, backgroundColor: "#fff", borderLeft: '4px solid #2196f3' }}
+                  >
+                    <Box display="flex" justifyContent="space-between" mb={2}>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        Sản phẩm bổ sung #{index + 1}
+                      </Typography>
+                      <IconButton 
+                        color="error" 
+                        onClick={() => removeItem(index)}
+                        size="small"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                    
+                    <Grid container spacing={2} mb={2}>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Chọn sản phẩm</InputLabel>
+                          <Select
+                            value={item.product || ""}
+                            label="Chọn sản phẩm"
+                            onChange={(e) => handleAdditionalItemChange(index, "product", e.target.value)}
+                          >
+                            {supplierProducts.map((product) => (
+                              <MenuItem key={product._id} value={product._id}>
+                                {product.name} ({product.SKU})
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <TextField
+                          label="Số lượng"
+                          type="number"
+                          fullWidth
+                          value={item.quantity || ""}
+                          onChange={(e) => handleAdditionalItemChange(index, "quantity", e.target.value)}
+                          inputProps={{ min: "1" }}
+                          required
+                        />
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <FormControl fullWidth>
+                          <InputLabel>Đơn vị</InputLabel>
+                          <Select
+                            value={item.unit || ""}
+                            label="Đơn vị"
+                            onChange={(e) => handleAdditionalItemChange(index, "unit", e.target.value)}
+                            disabled={!item.product}
+                          >
+                            {supplierProducts
+                              .find((p) => p._id === item.product)?.units?.map((u) => (
+                                <MenuItem key={u.name} value={u.name}>
+                                  {u.name}
+                                </MenuItem>
+                              )) || []}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+                    
+                    <Grid container spacing={2} mb={2}>
+                      <Grid item xs={6}>
+                        <TextField
+                          label="Đơn giá"
+                          type="number"
+                          fullWidth
+                          value={item.unitPrice || ""}
+                          onChange={(e) => handleAdditionalItemChange(index, "unitPrice", e.target.value)}
+                          InputProps={{
+                            endAdornment: <span>đ</span>,
+                          }}
+                          required
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        <TextField
+                          label="Thành tiền"
+                          type="number"
+                          fullWidth
+                          value={item.totalPrice || 0}
+                          InputProps={{
+                            readOnly: true,
+                            endAdornment: <span>đ</span>,
+                          }}
+                        />
+                      </Grid>
+                    </Grid>
+                    
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Ngày sản xuất"
+                          type="date"
+                          fullWidth
+                          InputLabelProps={{ shrink: true }}
+                          value={item.manufacture_day || ""}
+                          onChange={(e) => {
+                            const newDate = e.target.value;
+                            handleAdditionalItemChange(index, "manufacture_day", newDate);
+                            
+                            const current = additionalItems[index];
+                            if (current.expiry_day && new Date(current.expiry_day) <= new Date(newDate)) {
+                              const expDate = new Date(newDate);
+                              expDate.setMonth(expDate.getMonth() + 6);
+                              handleAdditionalItemChange(
+                                index,
+                                "expiry_day",
+                                expDate.toISOString().split('T')[0]
+                              );
+                            }
+                          }}
+                          required
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Hạn sử dụng"
+                          type="date"
+                          fullWidth
+                          error={item.manufacture_day && item.expiry_day && 
+                                new Date(item.expiry_day) <= new Date(item.manufacture_day)}
+                          InputLabelProps={{ shrink: true }}
+                          value={item.expiry_day || ""}
+                          onChange={(e) => 
+                            handleAdditionalItemChange(index, "expiry_day", e.target.value)
+                          }
+                          required
+                          helperText={
+                            item.manufacture_day && 
+                            item.expiry_day && 
+                            new Date(item.expiry_day) <= new Date(item.manufacture_day)
+                              ? "Hạn sử dụng phải sau ngày sản xuất"
+                              : ""
+                          }
+                        />
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                ))}
+              </Stack>
+            )}
+          </Box>
+
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 4 }}>
             <Typography variant="h6">
-              Tổng giá trị đơn hàng: {selectedOrder.totalAmount?.toLocaleString() || 0} đ
+              Tổng giá trị: {(
+                selectedOrder.totalAmount + 
+                additionalItems.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0)
+              )?.toLocaleString() || 0} đ
             </Typography>
             <Button
               variant="contained"
@@ -413,7 +733,6 @@ const CreateGoodReceipt = () => {
         </Paper>
       )}
 
-      {/* Hiển thị lô hàng đã tạo */}
       {createdBatches.length > 0 && (
         <Box mt={5}>
           <Divider />
