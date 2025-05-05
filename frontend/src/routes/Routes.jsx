@@ -26,7 +26,7 @@ import SupplierPage from "../pages/SupplierPage";
 import VerifyOTPPage from "../pages/VerifyOTPPage";
 import VerifyResetOTPPage from "../pages/VerifyResetOTP";
 import SalesPage from "../pages/SalesPage";
-import ShelfPage from "../pages/ShelfPage";
+import BatchPage from "../pages/BatchPage";
 
 
 const useAuth = () => {
@@ -82,7 +82,7 @@ const AppRouter = () => {
           <Route path="categories" element={<CategoryPage />} />
           {/* <Route path="products_page" element={<ProductsPage />} /> */}
           <Route path="Sales_page" element={<SalesPage />} />
-          <Route path="Shelf_page" element={<ShelfPage/>} />
+          <Route path="Batchs_page" element={<BatchPage/>} />
         </Route>
         
         {/* 404 page */}

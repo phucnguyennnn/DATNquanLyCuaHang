@@ -1,0 +1,804 @@
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  Container,
+  Typography,
+  Box,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Stack,
+  CircularProgress,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  ImageList,
+  ImageListItem,
+  Chip,
+} from "@mui/material";
+import { format, isBefore, addDays } from "date-fns";
+import axios from "axios";
+
+const EXPIRY_THRESHOLD_DAYS = 30;
+const LOW_QUANTITY_THRESHOLD = 5;
+
+function ShelfInventoryPage() {
+  const [shelfData, setShelfData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sortColumn, setSortColumn] = useState(null);
+  const [sortDirection, setSortDirection] = useState("asc");
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [quantityChanges, setQuantityChanges] = useState([]);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [receipt, setReceipt] = useState([]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await axios.get("http://localhost:8000/api/batches", {
+        params: { search: searchTerm, status: statusFilter },
+      });
+      setShelfData(response.data);
+    } catch (err) {
+      setError(
+        err.response?.data?.message || err.message || "Lỗi khi tải dữ liệu."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [searchTerm, statusFilter]);
+
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
+  };
+
+  const handleStatusChange = (event) => {
+    setStatusFilter(event.target.value);
+  };
+
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  const handleQuantityChange = (batchId, field, value) => {
+    setShelfData((prevData) =>
+      prevData.map((item) => {
+        if (item._id === batchId) {
+          const updatedItem = { ...item };
+          const difference = value - item[field];
+          if (field === "quantity_on_shelf") {
+            updatedItem.quantity_on_shelf = value;
+            updatedItem.remaining_quantity -= difference;
+          } else if (field === "remaining_quantity") {
+            updatedItem.remaining_quantity = value;
+            updatedItem.quantity_on_shelf -= difference;
+          }
+          return updatedItem;
+        }
+        return item;
+      })
+    );
+
+    setQuantityChanges((prevChanges) => {
+      const existingChange = prevChanges.find(
+        (change) => change.batchId === batchId
+      );
+      if (existingChange) {
+        return prevChanges.map((change) =>
+          change.batchId === batchId
+            ? { ...change, [field]: value }
+            : change
+        );
+      } else {
+        return [...prevChanges, { batchId, [field]: value }];
+      }
+    });
+  };
+
+  const handleSaveChanges = () => {
+    setConfirmDialogOpen(true);
+  };
+
+  const handleConfirmSave = async () => {
+    try {
+      const updatedBatches = [];
+      for (const change of quantityChanges) {
+        const response = await axios.put(
+          `http://localhost:8000/api/batches/${change.batchId}`,
+          {
+            quantity_on_shelf: change.quantity_on_shelf,
+            remaining_quantity: change.remaining_quantity,
+          }
+        );
+        updatedBatches.push({
+          batchId: change.batchId,
+          quantity_on_shelf: change.quantity_on_shelf,
+          remaining_quantity: change.remaining_quantity,
+        });
+      }
+      setReceipt(updatedBatches);
+      setQuantityChanges([]);
+      setConfirmDialogOpen(false);
+      setSaveDialogOpen(true);
+    } catch (error) {
+      console.error("Lỗi khi lưu thay đổi:", error);
+      alert("Đã xảy ra lỗi khi lưu thay đổi.");
+    }
+  };
+
+  const handleCloseConfirmDialog = () => {
+    setConfirmDialogOpen(false);
+  };
+
+  const handleCloseSaveDialog = () => {
+    setSaveDialogOpen(false);
+  };
+
+  const productQuantities = useMemo(() => {
+    const quantities = {};
+    shelfData.forEach((item) => {
+      const productId = item.product?._id;
+      if (productId) {
+        quantities[productId] = quantities[productId] || {
+          initial: 0,
+          shelf: 0,
+          remaining: 0,
+        };
+        quantities[productId].initial += item.initial_quantity;
+        quantities[productId].shelf += item.quantity_on_shelf;
+        quantities[productId].remaining += item.remaining_quantity;
+      }
+    });
+    return quantities;
+  }, [shelfData]);
+
+  const sortedShelfData = useMemo(() => {
+    const now = new Date();
+
+    const withWarnings = shelfData.map((item) => {
+      let warnings = [];
+      const expiryDate = item.expiry_day ? new Date(item.expiry_day) : null;
+
+      if (
+        expiryDate &&
+        isBefore(expiryDate, addDays(now, EXPIRY_THRESHOLD_DAYS))
+      ) {
+        warnings.push("Sắp hết hạn");
+      }
+
+      if (item.quantity_on_shelf <= LOW_QUANTITY_THRESHOLD) {
+        warnings.push("Ít trên quầy");
+      }
+
+      if (item.remaining_quantity <= LOW_QUANTITY_THRESHOLD) {
+        warnings.push("Ít trong kho");
+      }
+
+      return { ...item, warnings };
+    });
+
+    const prioritizedData = [...withWarnings].sort((a, b) => {
+      if (a.warnings.length > 0 && b.warnings.length === 0) {
+        return -1;
+      }
+      if (a.warnings.length === 0 && b.warnings.length > 0) {
+        return 1;
+      }
+      return 0;
+    });
+
+    if (!sortColumn) {
+      return prioritizedData;
+    }
+
+    return prioritizedData.sort((a, b) => {
+      let valueA, valueB;
+
+      if (sortColumn === "productName") {
+        valueA = a.product?.name || "";
+        valueB = b.product?.name || "";
+      } else if (sortColumn === "SKU") {
+        valueA = a.product?.SKU || "";
+        valueB = b.product?.SKU || "";
+      } else if (sortColumn === "batchCode") {
+        valueA = a._id || "";
+        valueB = b._id || "";
+      } else if (sortColumn === "shelfQuantity") {
+        valueA = a.quantity_on_shelf;
+        valueB = b.quantity_on_shelf;
+      } else if (sortColumn === "warehouseQuantity") {
+        valueA = a.remaining_quantity;
+        valueB = b.remaining_quantity;
+      } else if (sortColumn === "manufactureDay") {
+        valueA = a.manufacture_day ? new Date(a.manufacture_day) : null;
+        valueB = b.manufacture_day ? new Date(b.manufacture_day) : null;
+      } else if (sortColumn === "expiryDay") {
+        valueA = a.expiry_day ? new Date(a.expiry_day) : null;
+        valueB = b.expiry_day ? new Date(b.expiry_day) : null;
+      } else if (sortColumn === "status") {
+        valueA = a.status || "";
+        valueB = b.status || "";
+      } else if (sortColumn === "totalQuantity") {
+        valueA = productQuantities[a.product?._id]?.initial || 0;
+        valueB = productQuantities[b.product?._id]?.initial || 0;
+      }
+
+      if (valueA == null || valueB == null) {
+        return valueA == null ? 1 : -1;
+      }
+
+      if (typeof valueA === "string") {
+        valueA = valueA.toLowerCase();
+        valueB = valueB.toLowerCase();
+      }
+
+      if (sortDirection === "asc") {
+        return valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
+      } else {
+        return valueA > valueB ? -1 : valueA < valueB ? 1 : 0;
+      }
+    });
+  }, [shelfData, sortColumn, sortDirection]);
+
+  const groupedShelfData = useMemo(() => {
+    const grouped = {};
+    sortedShelfData.forEach((item) => {
+      const productId = item.product?._id;
+      if (!grouped[productId]) {
+        grouped[productId] = [];
+      }
+      grouped[productId].push(item);
+    });
+    return Object.values(grouped);
+  }, [sortedShelfData]);
+
+  const handleBatchClick = (batchId) => {
+    const batchInfo = shelfData.find((item) => item._id === batchId);
+    setSelectedBatch(batchInfo);
+    setBatchDialogOpen(true);
+  };
+
+  const handleCloseBatchDialog = () => {
+    setBatchDialogOpen(false);
+    setSelectedBatch(null);
+  };
+
+  const handleProductClick = (productId) => {
+    const productInfo = shelfData.find(
+      (item) => item.product?._id === productId
+    )?.product;
+    const quantities = productQuantities[productId] || {
+      initial: 0,
+      shelf: 0,
+      remaining: 0,
+    };
+    setSelectedProduct({
+      ...productInfo,
+      overallTotalQuantity: quantities.initial,
+      overallShelfQuantity: quantities.shelf,
+      overallWarehouseQuantity: quantities.remaining,
+    });
+    setProductDialogOpen(true);
+  };
+
+  const handleCloseProductDialog = () => {
+    setProductDialogOpen(false);
+    setSelectedProduct(null);
+  };
+
+  return (
+    <Container
+      maxWidth="xl"
+      sx={{ height: "100vh", display: "flex", flexDirection: "column"}}
+    >
+      <Typography variant="h4" component="h1" gutterBottom>
+        Quản lý hàng tồn kho và trên quầy
+      </Typography>
+
+      <Box mb={2}>
+        <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+          <Stack direction="row" spacing={2} alignItems="center">
+            <TextField
+              label="Tìm kiếm (Tên/SKU/Mã Lô)"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              size="small"
+            />
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel id="status-filter-label">Trạng Thái Lô</InputLabel>
+              <Select
+                labelId="status-filter-label"
+                id="status-filter"
+                value={statusFilter}
+                label="Trạng Thái Lô"
+                onChange={handleStatusChange}
+              >
+                <MenuItem value="">Tất cả</MenuItem>
+                <MenuItem value="active">Hoạt động</MenuItem>
+                <MenuItem value="inactive">Không hoạt động</MenuItem>
+                <MenuItem value="expired">Hết hạn</MenuItem>
+                <MenuItem value="sold_out">Hết hàng</MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
+          {quantityChanges.length > 0 && (
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={handleSaveChanges}
+            >
+              Lưu thay đổi
+            </Button>
+          )}
+        </Stack>
+      </Box>
+
+      {loading ? (
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          flex={1}
+        >
+          <CircularProgress />
+        </Box>
+      ) : error ? (
+        <Alert severity="error">{error}</Alert>
+      ) : (
+        <Box sx={{ flex: 1, minHeight: 400 }}>
+          <TableContainer
+            component={Paper}
+            sx={{
+              height: "100%",
+              maxHeight: "calc(100vh - 150px)",
+              "& .MuiTable-root": { minWidth: 1000 },
+              "& .MuiTableCell-root": { border: "1px solid #ddd" }, // Add border to all table cells
+            }}
+          >
+            <Table stickyHeader aria-label="shelf inventory table">
+              <TableHead>
+                <TableRow>
+                  <TableCell
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleSort("productName")}
+                  >
+                    Tên Sản Phẩm{" "}
+                    {sortColumn === "productName" &&
+                      (sortDirection === "asc" ? "▲" : "▼")}
+                  </TableCell>
+                  {/* <TableCell
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleSort("totalQuantity")}
+                  >
+                    Tổng Số Lượng{" "}
+                    {sortColumn === "totalQuantity" &&
+                      (sortDirection === "asc" ? "▲" : "▼")}
+                  </TableCell> */}
+                  <TableCell
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleSort("SKU")}
+                  >
+                    SKU{" "}
+                    {sortColumn === "SKU" &&
+                      (sortDirection === "asc" ? "▲" : "▼")}
+                  </TableCell>
+                  <TableCell
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleSort("batchCode")}
+                  >
+                    Mã Lô Hàng{" "}
+                    {sortColumn === "batchCode" &&
+                      (sortDirection === "asc" ? "▲" : "▼")}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleSort("shelfQuantity")}
+                  >
+                    Số Lượng Trên Quầy{" "}
+                    {sortColumn === "shelfQuantity" &&
+                      (sortDirection === "asc" ? "▲" : "▼")}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleSort("warehouseQuantity")}
+                  >
+                    Số Lượng Trong Kho{" "}
+                    {sortColumn === "warehouseQuantity" &&
+                      (sortDirection === "asc" ? "▲" : "▼")}
+                  </TableCell>
+                  <TableCell
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleSort("manufactureDay")}
+                  >
+                    Ngày Sản Xuất{" "}
+                    {sortColumn === "manufactureDay" &&
+                      (sortDirection === "asc" ? "▲" : "▼")}
+                  </TableCell>
+                  <TableCell
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleSort("expiryDay")}
+                  >
+                    Hạn Sử Dụng{" "}
+                    {sortColumn === "expiryDay" &&
+                      (sortDirection === "asc" ? "▲" : "▼")}
+                  </TableCell>
+                  <TableCell
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleSort("status")}
+                  >
+                    Trạng Thái Lô{" "}
+                    {sortColumn === "status" &&
+                      (sortDirection === "asc" ? "▲" : "▼")}
+                  </TableCell>
+                  <TableCell>Cảnh báo</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {groupedShelfData.map((group) =>
+                  group.map((item, index) => (
+                    <TableRow
+                      key={item._id}
+                      sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
+                    >
+                      {index === 0 && (
+                        <>
+                          <TableCell
+                            rowSpan={group.length}
+                            component="th"
+                            scope="row"
+                            style={{
+                              cursor: "pointer",
+                              color: "blue",
+                              textDecoration: "underline",
+                            }}
+                            onClick={() => handleProductClick(item.product?._id)}
+                          >
+                            {item.product?.name}{" "}
+                            {/* {item.product?.units && item.product.units.length > 0
+                              ? `(${item.product.units.find((u) => u.default)?.name || item.product.units[0].name})`
+                              : "(N/A)"} */}
+                          </TableCell>
+                          {/* <TableCell rowSpan={group.length} align="right">
+                            {productQuantities[item.product?._id]?.initial || 0}
+                          </TableCell> */}
+                        </>
+                      )}
+                      <TableCell>{item.product?.SKU}</TableCell>
+                      <TableCell
+                        style={{
+                          cursor: "pointer",
+                          color: "blue",
+                          textDecoration: "underline",
+                        }}
+                        onClick={() => handleBatchClick(item._id)}
+                      >
+                        {item._id}
+                      </TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          type="number"
+                          value={item.quantity_on_shelf}
+                          onChange={(e) =>
+                            handleQuantityChange(
+                              item._id,
+                              "quantity_on_shelf",
+                              parseInt(e.target.value, 10)
+                            )
+                          }
+                          size="small"
+                          inputProps={{ min: 0 }}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <TextField
+                          type="number"
+                          value={item.remaining_quantity}
+                          onChange={(e) =>
+                            handleQuantityChange(
+                              item._id,
+                              "remaining_quantity",
+                              parseInt(e.target.value, 10)
+                            )
+                          }
+                          size="small"
+                          inputProps={{ min: 0 }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {item.manufacture_day
+                          ? format(
+                              new Date(item.manufacture_day),
+                              "dd/MM/yyyy"
+                            )
+                          : "-"}
+                      </TableCell>
+                      <TableCell
+                        style={
+                          item.expiry_day &&
+                          isBefore(
+                            new Date(item.expiry_day),
+                            addDays(new Date(), EXPIRY_THRESHOLD_DAYS)
+                          )
+                            ? { color: "red" }
+                            : {}
+                        }
+                      >
+                        {item.expiry_day
+                          ? format(new Date(item.expiry_day), "dd/MM/yyyy")
+                          : "-"}
+                      </TableCell>
+                      <TableCell>
+                        {item.status === "active"
+                          ? "Hoạt động"
+                          : item.status === "inactive"
+                          ? "Không hoạt động"
+                          : item.status === "expired"
+                          ? "Hết hạn"
+                          : item.status === "sold_out"
+                          ? "Hết hàng"
+                          : item.status}
+                      </TableCell>
+                      <TableCell>
+                        {item.warnings.map((warning, index) => (
+                          <Chip
+                            key={index}
+                            label={warning}
+                            color="warning"
+                            size="small"
+                            sx={{ mr: 0.5 }}
+                          />
+                        ))}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <Box mt={2}>
+            <Typography variant="h6">Danh sách thay đổi:</Typography>
+            {quantityChanges.length > 0 ? (
+              <ul>
+                {quantityChanges.map((change, index) => (
+                  <li key={index}>
+                    <Typography>
+                      Lô hàng {change.batchId}: 
+                      {change.quantity_on_shelf !== undefined && ` Số lượng trên quầy: ${change.quantity_on_shelf}`}
+                      {change.remaining_quantity !== undefined && ` Số lượng trong kho: ${change.remaining_quantity}`}
+                    </Typography>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Typography>Không có thay đổi nào.</Typography>
+            )}
+          </Box>
+        </Box>
+      )}
+
+      <Dialog open={batchDialogOpen} onClose={handleCloseBatchDialog}>
+        <DialogTitle>Thông tin Lô hàng</DialogTitle>
+        <DialogContent>
+          {selectedBatch && (
+            <Box>
+              <Typography>Mã Lô: {selectedBatch._id}</Typography>
+              <Typography>
+                Ngày Sản Xuất:{" "}
+                {selectedBatch.manufacture_day
+                  ? format(
+                      new Date(selectedBatch.manufacture_day),
+                      "dd/MM/yyyy"
+                    )
+                  : "-"}
+              </Typography>
+              <Typography
+                style={
+                  selectedBatch.expiry_day &&
+                  isBefore(
+                    new Date(selectedBatch.expiry_day),
+                    addDays(new Date(), EXPIRY_THRESHOLD_DAYS)
+                  )
+                    ? { color: "red" }
+                    : {}
+                }
+              >
+                Hạn Sử Dụng:{" "}
+                {selectedBatch.expiry_day
+                  ? format(new Date(selectedBatch.expiry_day), "dd/MM/yyyy")
+                  : "-"}
+              </Typography>
+              <Typography>
+                Số lượng ban đầu: {selectedBatch.initial_quantity}
+              </Typography>
+              <Typography>
+                Số lượng còn lại: {selectedBatch.remaining_quantity}
+              </Typography>
+              <Typography>
+                Số lượng đã bán: {selectedBatch.sold_quantity}
+              </Typography>
+              <Typography>
+                Số lượng bị mất: {selectedBatch.lost_quantity}
+              </Typography>
+              <Typography
+                style={
+                  selectedBatch.quantity_on_shelf <= LOW_QUANTITY_THRESHOLD
+                    ? { color: "orange" }
+                    : {}
+                }
+              >
+                Số lượng trên quầy: {selectedBatch.quantity_on_shelf}
+              </Typography>
+              <Typography>Trạng thái: {selectedBatch.status}</Typography>
+              {selectedBatch.goodReceipt && (
+                <Typography>
+                  Phiếu nhập hàng: {selectedBatch.goodReceipt.receiptNumber}
+                </Typography>
+              )}
+              {selectedBatch.supplier && (
+                <Typography>
+                  Nhà cung cấp: {selectedBatch.supplier.name}
+                </Typography>
+              )}
+              {selectedBatch.discountInfo?.isDiscounted && (
+                <Typography>
+                  Giảm giá: {selectedBatch.discountInfo.discountValue}
+                  {selectedBatch.discountInfo.discountType === "percentage"
+                    ? "%"
+                    : ""}
+                </Typography>
+              )}
+              <Typography>
+                Ngày tạo:{" "}
+                {format(
+                  new Date(selectedBatch.createdAt),
+                  "dd/MM/yyyy HH:mm:ss"
+                )}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseBatchDialog}>Đóng</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={productDialogOpen} onClose={handleCloseProductDialog}>
+        <DialogTitle>Thông tin Sản phẩm</DialogTitle>
+        <DialogContent>
+          {selectedProduct && (
+            <Box>
+              <Typography>Tên sản phẩm: {selectedProduct.name}</Typography>
+              <Typography>SKU: {selectedProduct.SKU}</Typography>
+              <Typography
+                style={
+                  selectedProduct.overallShelfQuantity <= LOW_QUANTITY_THRESHOLD
+                    ? { color: "orange" }
+                    : {}
+                }
+              >
+                Tổng số lượng trên quầy: {selectedProduct.overallShelfQuantity}
+              </Typography>
+              <Typography
+                style={
+                  selectedProduct.overallWarehouseQuantity <=
+                  LOW_QUANTITY_THRESHOLD
+                    ? { color: "orange" }
+                    : {}
+                }
+              >
+                Tổng số lượng trong kho:{" "}
+                {selectedProduct.overallWarehouseQuantity}
+              </Typography>
+              <Typography>
+                Tổng số lượng: {selectedProduct.overallTotalQuantity}
+              </Typography>
+              {selectedProduct.images && selectedProduct.images.length > 0 && (
+                <Box mt={2}>
+                  <Typography>Hình ảnh:</Typography>
+                  <ImageList rowHeight={100} cols={3}>
+                    {selectedProduct.images.map((image, index) => (
+                      <ImageListItem key={index}>
+                        <img
+                          src={image}
+                          alt={`Product ${selectedProduct.name} - ${index}`}
+                          loading="lazy"
+                          style={{ height: "100%", objectFit: "contain" }}
+                        />
+                      </ImageListItem>
+                    ))}
+                  </ImageList>
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseProductDialog}>Đóng</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={confirmDialogOpen} onClose={handleCloseConfirmDialog}>
+        <DialogTitle>Xác nhận thay đổi</DialogTitle>
+        <DialogContent>
+          {quantityChanges.length > 0 ? (
+            <ul>
+              {quantityChanges.map((change, index) => (
+                <li key={index}>
+                  <Typography>
+                    Lô hàng {change.batchId}: 
+                    {change.quantity_on_shelf !== undefined && ` Số lượng trên quầy: ${change.quantity_on_shelf}`}
+                    {change.remaining_quantity !== undefined && ` Số lượng trong kho: ${change.remaining_quantity}`}
+                  </Typography>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Typography>Không có thay đổi nào.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseConfirmDialog}>Hủy</Button>
+          <Button variant="contained" color="primary" onClick={handleConfirmSave}>
+            Xác nhận và lưu
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={saveDialogOpen} onClose={handleCloseSaveDialog}>
+        <DialogTitle>Phiếu thay đổi</DialogTitle>
+        <DialogContent>
+          {receipt.length > 0 ? (
+            <ul>
+              {receipt.map((batch, index) => (
+                <li key={index}>
+                  <Typography>
+                    Lô hàng {batch.batchId}: 
+                    Số lượng trên quầy: {batch.quantity_on_shelf}, 
+                    Số lượng trong kho: {batch.remaining_quantity}
+                  </Typography>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Typography>Không có thay đổi nào.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseSaveDialog}>Đóng</Button>
+        </DialogActions>
+      </Dialog>
+    </Container>
+  );
+}
+
+export default ShelfInventoryPage;

@@ -164,13 +164,14 @@ const PurchaseOrderManagement = () => {
 
   const fetchOrders = async () => {
     try {
-      const response = await axios.get("http://localhost:8000/api/purchaseOrder",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const response = await axios.get("http://localhost:8000/api/purchaseOrder", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const sortedOrders = response.data.sort(
+        (a, b) => new Date(b.orderDate) - new Date(a.orderDate)
       );
-      setOrders(response.data);
-      // console.log("Danh sách phiếu đặt hàng:", response.data);
+      setOrders(sortedOrders);
+      // console.log("Danh sách phiếu đặt hàng:", sortedOrders);
     } catch (error) {
       console.error("Lỗi khi lấy danh sách phiếu đặt hàng:", error);
     }
@@ -741,7 +742,7 @@ const PurchaseOrderManagement = () => {
                   <Grid item xs={6}>
                     <Typography variant="body1">
                       <strong>Trạng thái:</strong> {
-                        STATUSES.find((status) => status.value === orderStatus)?.label || "Nháp"
+                        STATUSES.find((status) => status.value === orderStatus)?.label || "Không xác định"
                       }
                     </Typography>
                   </Grid>

@@ -1,3 +1,4 @@
+// frontend/src/components/CreateGoodReceipt.js
 import React, { useEffect, useState } from "react";
 import {
   Box,
@@ -49,7 +50,7 @@ const CreateGoodReceipt = () => {
   const fetchOrders = async () => {
     if (!isTokenValid()) return;
     try {
-      const res = await axios.get("http://localhost:8000/api/purchaseorder", {
+      const res = await axios.get("http://localhost:8000/api/purchaseOrder", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -132,7 +133,7 @@ const CreateGoodReceipt = () => {
 
   const handleSelectOrder = async (orderId) => {
     if (!isTokenValid()) return;
-
+    console.log("Đã chọn order ID:", orderId);
     try {
       const res = await axios.get(
         `http://localhost:8000/api/purchaseorder/${orderId}`,
@@ -164,6 +165,7 @@ const CreateGoodReceipt = () => {
           expiry_day: "",
         }))
       );
+      console.log("Initial batchInfo:", batchInfo);
     } catch (error) {
       console.error("Lỗi khi lấy chi tiết phiếu đặt hàng:", error);
       alert("Không thể lấy thông tin chi tiết phiếu đặt hàng. Vui lòng thử lại!");
@@ -173,6 +175,15 @@ const CreateGoodReceipt = () => {
   const handleBatchChange = (index, field, value) => {
     const updated = [...batchInfo];
     updated[index][field] = value;
+
+    if (field === "quantity" || field === "unit") {
+      const selectedUnit = selectedOrder.items[index]?.product?.units?.find(
+        (u) => u.name === updated[index].unit
+      );
+      const ratio = selectedUnit?.ratio || 1;
+      updated[index].calculatedQuantity = Number(updated[index].quantity) * ratio;
+    }
+
     setBatchInfo(updated);
   };
 
@@ -220,6 +231,14 @@ const CreateGoodReceipt = () => {
       }
     }
 
+    if (field === "quantity" || field === "unit") {
+      const selectedUnit = supplierProducts.find(p => p._id === updatedItems[index].product)?.units?.find(
+        (u) => u.name === updatedItems[index].unit
+      );
+      const ratio = selectedUnit?.ratio || 1;
+      updatedItems[index].calculatedQuantity = Number(updatedItems[index].quantity) * ratio;
+    }
+
     if (field === "quantity" || field === "unitPrice") {
       updatedItems[index].totalPrice = 
         Number(updatedItems[index].quantity) * Number(updatedItems[index].unitPrice);
@@ -238,14 +257,14 @@ const CreateGoodReceipt = () => {
   };
 
   const handleSubmit = async () => {
-    
+    console.log("Hàm handleSubmit được gọi");
+
     if (!isTokenValid() || !selectedOrder) {
       alert("Vui lòng chọn phiếu đặt mua trước khi tạo phiếu nhập kho!");
       return;
     }
 
     if (loading || confirming) {
-      console.log("Đang xử lý, vui lòng đợi...");
       return;
     }
 
@@ -300,28 +319,42 @@ const CreateGoodReceipt = () => {
       }
 
       const allItems = [
-        ...batchInfo.map(item => ({
-          productId: item.product,
-          quantity: Number(item.quantity),
-          unit: item.unit,
-          unitPrice: item.unitPrice,
-          totalPrice: item.unitPrice * Number(item.quantity),
-          manufactureDate: item.manufacture_day,
-          expiryDate: item.expiry_day,
-          productName: item.productName,
-          productSKU: item.productSKU
-        })),
-        ...additionalItems.map(item => ({
-          productId: item.product,
-          quantity: Number(item.quantity),
-          unit: item.unit,
-          unitPrice: Number(item.unitPrice),
-          totalPrice: Number(item.unitPrice) * Number(item.quantity),
-          manufactureDate: item.manufacture_day,
-          expiryDate: item.expiry_day,
-          productName: item.productName,
-          productSKU: item.productSKU
-        }))
+        ...batchInfo.map(item => {
+          const selectedUnit = selectedOrder.items.find(
+            (orderItem) => orderItem.product?._id === item.product
+          )?.product?.units?.find((u) => u.name === item.unit);
+          const ratio = selectedUnit?.ratio || 1;
+
+          return {
+            productId: item.product,
+            quantity: Number(item.quantity) * ratio,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+            totalPrice: item.unitPrice * Number(item.quantity),
+            manufactureDate: item.manufacture_day,
+            expiryDate: item.expiry_day,
+            productName: item.productName,
+            productSKU: item.productSKU
+          };
+        }),
+        ...additionalItems.map(item => {
+          const selectedUnit = supplierProducts.find(
+            (product) => product._id === item.product
+          )?.units?.find((u) => u.name === item.unit);
+          const ratio = selectedUnit?.ratio || 1;
+
+          return {
+            productId: item.product,
+            quantity: Number(item.quantity) * ratio,
+            unit: item.unit,
+            unitPrice: Number(item.unitPrice),
+            totalPrice: Number(item.unitPrice) * Number(item.quantity),
+            manufactureDate: item.manufacture_day,
+            expiryDate: item.expiry_day,
+            productName: item.productName,
+            productSKU: item.productSKU
+          };
+        })
       ];
 
       const additionalTotal = additionalItems.reduce((sum, item) => 
@@ -348,6 +381,7 @@ const CreateGoodReceipt = () => {
           },
         }
       );
+      console.log("Response tạo phiếu nhập kho:", response.data);
 
       setConfirming(true);
       const confirmResponse = await axios.patch(
@@ -360,6 +394,7 @@ const CreateGoodReceipt = () => {
           },
         }
       );
+      console.log("Response confirm:", confirmResponse.data);
 
       if (confirmResponse.data.batches && confirmResponse.data.batches.length > 0) {
         setCreatedBatches(confirmResponse.data.batches);
@@ -370,10 +405,9 @@ const CreateGoodReceipt = () => {
       setBatchInfo([]);
       setAdditionalItems([]);
       fetchOrders();
-      
+
     } catch (error) {
       console.error("Lỗi khi tạo phiếu nhập kho:", error);
-      
       let errorMessage = "Tạo phiếu thất bại";
       if (error.response) {
         console.log("Dữ liệu lỗi:", error.response.data);
@@ -485,7 +519,6 @@ const CreateGoodReceipt = () => {
                       onChange={(e) => {
                         const newDate = e.target.value;
                         handleBatchChange(index, "manufacture_day", newDate);
-                        
                         const current = batchInfo[index];
                         if (current.expiry_day && new Date(current.expiry_day) <= new Date(newDate)) {
                           const expDate = new Date(newDate);
@@ -506,18 +539,18 @@ const CreateGoodReceipt = () => {
                       label="Hạn sử dụng"
                       type="date"
                       fullWidth
-                      error={batchInfo[index]?.manufacture_day && batchInfo[index]?.expiry_day && 
-                             new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)}
+                      error={batchInfo[index]?.manufacture_day && batchInfo[index]?.expiry_day &&
+                        new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)}
                       InputLabelProps={{ shrink: true }}
                       value={batchInfo[index]?.expiry_day || ""}
-                      onChange={(e) => 
+                      onChange={(e) =>
                         handleBatchChange(index, "expiry_day", e.target.value)
                       }
                       required
                       helperText={
-                        batchInfo[index]?.manufacture_day && 
-                        batchInfo[index]?.expiry_day && 
-                        new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)
+                        batchInfo[index]?.manufacture_day &&
+                          batchInfo[index]?.expiry_day &&
+                          new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)
                           ? "Hạn sử dụng phải sau ngày sản xuất"
                           : "Hạn sử dụng của lô hàng"
                       }
