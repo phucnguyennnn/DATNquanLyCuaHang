@@ -77,7 +77,7 @@ const AppRouter = () => {
           <Route path="categories" element={<CategoryPage />} />
           <Route path="products_page" element={<ProductsPage />} />
           <Route path="Sales_page" element={<SalesPage />} />
-          <Route path="Shelf_page" element={<ShelfPage/>} />
+          <Route path="Batchs_page" element={<ShelfPage/>} />
         </Route>
         
         {/* 404 page */}

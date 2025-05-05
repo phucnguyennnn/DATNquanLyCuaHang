@@ -194,7 +194,7 @@ const Sidebar = () => {
             </ListItemButton>
 
                         {/* Products - Hiển thị cho tất cả các role */}
-            <ListItemButton onClick={() => navigate("/Shelf_page")}>
+            <ListItemButton onClick={() => navigate("/Batchs_page")}>
               <ListItemIcon>
                 <Warehouse />
               </ListItemIcon>

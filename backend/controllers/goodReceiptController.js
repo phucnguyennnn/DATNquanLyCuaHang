@@ -1,4 +1,4 @@
-// controllers/goodReceiptController.js
+// backend/controllers/goodReceiptController.js
 const mongoose = require("mongoose");
 const GoodReceipt = require("../models/GoodReceipt");
 const Batch = require("../models/Batch");
@@ -11,6 +11,8 @@ const goodReceiptController = {
   createGoodReceiptFromPurchaseOrder: async (req, res) => {
     try {
       const { purchaseOrderId, receivedBy, items, notes } = req.body;
+      console.log("Dữ liệu nhận được khi tạo phiếu nhập:", req.body); // Log dữ liệu request body
+
       if (!purchaseOrderId) {
         return res.status(400).json({ message: "Thiếu ID phiếu đặt hàng" });
       }
@@ -38,9 +40,10 @@ const goodReceiptController = {
         { status: "completed" },
         { new: true }
       );
+      console.log("Phiếu nhập kho đã được tạo:", savedGoodReceipt); // Log phiếu nhập đã tạo
       res.status(201).json(savedGoodReceipt);
     } catch (error) {
-      console.error("Lỗi khi tạo phiếu nhập kho:", error);
+      console.error("Lỗi khi tạo phiếu nhập kho:", error); // Sử dụng console.error cho lỗi
       res.status(500).json({ error: error.message });
     }
   },
@@ -50,8 +53,10 @@ const goodReceiptController = {
         path: "items.product",
         strictPopulate: false,
       });
+      console.log("Tất cả phiếu nhập kho:", receipts); // Log tất cả phiếu nhập kho
       res.status(200).json(receipts);
     } catch (error) {
+      console.error("Lỗi khi lấy tất cả phiếu nhập kho:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -68,103 +73,71 @@ const goodReceiptController = {
           .status(404)
           .json({ message: "Không tìm thấy phiếu nhập kho." });
       }
+      console.log("Chi tiết phiếu nhập kho ID:", req.params.id, receipt); // Log chi tiết phiếu nhập kho
       res.status(200).json(receipt);
     } catch (error) {
+      console.error("Lỗi khi lấy phiếu nhập kho theo ID:", error);
       res.status(500).json({ error: error.message });
     }
   },
   confirmGoodReceipt: async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    
     try {
-      const receipt = await GoodReceipt.findById(req.params.id);
-      if (!receipt)
-        return res.status(404).json({ message: "Phiếu nhập không tồn tại." });
-      if (receipt.status === "received") {
-        return res
-          .status(400)
-          .json({ message: "Phiếu nhập đã được xác nhận trước đó." });
-      }
-      for (let i = 0; i < receipt.items.length; i++) {
-        const item = receipt.items[i];
-        if (!item.product) {
-          return res.status(400).json({
-            message: `Sản phẩm có vấn đề tại mục #${i + 1
-              }: ID sản phẩm không xác định.`,
-            itemIndex: i,
-            item: item,
-          });
-        }
-        const productExists = await Product.exists({ _id: item.product });
-        if (!productExists) {
-          return res.status(404).json({
-            message: `Không tìm thấy sản phẩm với ID: ${item.product
-              } tại mục #${i + 1}.`,
-            itemIndex: i,
-            productId: item.product,
-            item: item,
-          });
-        }
-      }
-      const supplierExists = await Supplier.exists({ _id: receipt.supplier });
-      if (!supplierExists) {
-        return res.status(404).json({
-          message: `Không tìm thấy nhà cung cấp với ID: ${receipt.supplier}.`,
-          supplierId: receipt.supplier,
-        });
-      }
-      const batchPromises = receipt.items.map(async (item) => {
-        const product = await Product.findById(item.product);
-        const supplier = await Supplier.findById(receipt.supplier);
-        const manufactureDate = item.manufactureDate;
-        const expiryDate = item.expiryDate;
-        const batchCode = `BATCH-${Date.now()}-${Math.random()
-          .toString(36)
-          .substr(2, 7) // Lấy 7 ký tự từ vị trí thứ 2
-          .toUpperCase()}`;
+      const receiptId = req.params.id;
+      const receipt = await GoodReceipt.findById(receiptId)
+        .session(session)
+        .select('status items supplier')
+        .lean();
 
-        console.log("Giá trị batchCode trước khi tạo instance:", batchCode);
+      if (!receipt) {
+        await session.abortTransaction();
+        return res.status(404).json({ message: "Phiếu nhập không tồn tại" });
+      }
+
+      if (receipt.status === "received") {
+        await session.abortTransaction();
+        return res.status(400).json({ message: "Phiếu đã được xác nhận" });
+      }
+
+      const batchCreationPromises = receipt.items.map(async (item) => {
         const batch = new Batch({
-          batchCode: batchCode,
-          product: product._id,
-          supplier: supplier._id,
-          manufacture_day: manufactureDate,
-          expiry_day: expiryDate,
+          batchCode: `BATCH-${uuidv4()}`,
+          product: item.product,
+          supplier: receipt.supplier,
+          manufacture_day: item.manufactureDate,
+          expiry_day: item.expiryDate,
           initial_quantity: item.quantity,
           remaining_quantity: item.quantity,
-          sold_quantity: 0,
-          lost_quantity: 0,
-          quantity_on_shelf: 0,
           status: "active",
-          goodReceipt: receipt._id,
-          import_price: item.unitPrice || 0,
+          goodReceipt: receiptId,
         });
-        console.log("Đối tượng batch trước khi lưu:", batch);
-        try {
-          const savedBatch = await batch.save();
-          console.log("Lô hàng đã được lưu thành công:", savedBatch);
-          product.batches = product.batches || [];
-          product.batches.push(savedBatch._id);
-          await product.save();
-          return {
-            ...savedBatch.toObject(),
-            productName: product.name,
-            unitPrice: item.unitPrice,
-            import_price: item.unitPrice,
-          };
-        } catch (saveError) {
-          console.error("Lỗi khi lưu lô hàng:", saveError);
-          throw saveError; // Re-throw lỗi để catch ở cấp cao hơn
-        }
+
+        const savedBatch = await batch.save({ session });
+        await Product.updateOne(
+          { _id: item.product },
+          { $push: { batches: savedBatch._id } },
+          { session }
+        );
+        return savedBatch;
       });
-      const createdBatches = await Promise.all(batchPromises);
-      receipt.status = "received";
-      await receipt.save();
-      res.json({
-        message: "Xác nhận nhập kho thành công. Các lô hàng đã được tạo.",
-        batches: createdBatches,
-      });
+
+      const batches = await Promise.all(batchCreationPromises);
+      await GoodReceipt.updateOne(
+        { _id: receiptId },
+        { $set: { status: "received" } },
+        { session }
+      );
+
+      await session.commitTransaction();
+      res.json({ batches });
+      
     } catch (error) {
-      console.error("Lỗi xác nhận nhập kho:", error);
+      await session.abortTransaction();
       res.status(500).json({ error: error.message });
+    } finally {
+      session.endSession();
     }
   },
   updateGoodReceipt: async (req, res) => {
@@ -184,6 +157,7 @@ const goodReceiptController = {
           .status(404)
           .json({ message: "Không tìm thấy phiếu nhập kho." });
       }
+      console.log("Phiếu nhập kho đã được cập nhật:", receipt); // Log phiếu nhập sau khi cập nhật
       res.status(200).json(receipt);
     } catch (error) {
       console.error("Lỗi khi cập nhật phiếu nhập kho:", error);
