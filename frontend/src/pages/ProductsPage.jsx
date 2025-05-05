@@ -282,14 +282,29 @@ const ProductListPage = () => {
     <Box sx={{ display: "flex", bgcolor: theme.palette.background.default }}>
       <Box
         sx={{
-          width: 300,
+          width: 250,
+          minWidth: 250, 
+          maxWidth: 250,
           borderRight: `1px solid ${theme.palette.divider}`,
           bgcolor: primaryColor,
           overflowY: "auto",
           height: "100vh",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        <List>
+        <Typography
+          variant="h6"
+          sx={{
+            textAlign: "center",
+            py: 2,
+            bgcolor: theme.palette.primary.main,
+            color: theme.palette.primary.contrastText,
+          }}
+        >
+          Danh mục sản phẩm
+        </Typography>
+        <List sx={{ flexGrow: 1 }}>
           <ListItem disablePadding>
             <ListItemButton
               onClick={() => handleCategoryClick(null)}

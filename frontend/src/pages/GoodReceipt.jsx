@@ -167,6 +167,15 @@ const CreateGoodReceipt = () => {
   const handleBatchChange = (index, field, value) => {
     const updated = [...batchInfo];
     updated[index][field] = value;
+
+    if (field === "quantity" || field === "unit") {
+      const selectedUnit = selectedOrder.items[index]?.product?.units?.find(
+        (u) => u.name === updated[index].unit
+      );
+      const ratio = selectedUnit?.ratio || 1;
+      updated[index].calculatedQuantity = Number(updated[index].quantity) * ratio;
+    }
+
     setBatchInfo(updated);
   };
 
@@ -209,6 +218,14 @@ const CreateGoodReceipt = () => {
           updatedItems[index].unitPrice = selectedProduct.price;
         }
       }
+    }
+
+    if (field === "quantity" || field === "unit") {
+      const selectedUnit = supplierProducts.find(p => p._id === updatedItems[index].product)?.units?.find(
+        (u) => u.name === updatedItems[index].unit
+      );
+      const ratio = selectedUnit?.ratio || 1;
+      updatedItems[index].calculatedQuantity = Number(updatedItems[index].quantity) * ratio;
     }
 
     if (field === "quantity" || field === "unitPrice") {
