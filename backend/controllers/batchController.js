@@ -1,8 +1,8 @@
 const Batch = require("../models/Batch");
 const Supplier = require("../models/Supplier");
 const Product = require("../models/Product");
-const { Mongoose } = require("mongoose");
-
+const mongoose = require("mongoose");
+const TransferLog = require('../models/TransferLog');
 exports.createBatch = async (req, res) => {
   try {
     const {
@@ -75,14 +75,14 @@ exports.getAllBatches = async (req, res) => {
     }
 
     if (search) {
-      const isObjectId = Mongoose.Types.ObjectId.isValid(search);
+      const isObjectId = mongoose.Types.ObjectId.isValid(search);
 
-      // Tìm kiếm theo ID nếu là ObjectId hợp lệ
+      // Tìm kiếm theo ID lô hàng
       if (isObjectId) {
         orConditions.push({ _id: search });
       }
 
-      // Tìm kiếm theo tên sản phẩm hoặc SKU
+      // Tìm kiếm theo thông tin sản phẩm
       const products = await Product.find({
         $or: [
           { name: { $regex: search, $options: "i" } },
@@ -94,21 +94,23 @@ exports.getAllBatches = async (req, res) => {
         orConditions.push({ product: { $in: products.map((p) => p._id) } });
       }
 
-      // Kết hợp điều kiện tìm kiếm
-      if (orConditions.length > 0) {
-        query.$or = orConditions;
+      // Nếu không có điều kiện nào khớp, trả về mảng rỗng
+      if (orConditions.length === 0) {
+        return res.status(200).json([]);
       }
+
+      query.$or = orConditions;
     }
 
     const batches = await Batch.find(query)
-      .populate("product", "name SKU description createdAt updatedAt images")
+      .populate("product", "name SKU description images")
       .populate("supplier", "name")
       .populate("goodReceipt", "receiptNumber");
 
     res.status(200).json(batches);
   } catch (error) {
     console.error("Lỗi khi lấy danh sách lô hàng:", error);
-    res.status(500).json({ message: "Lỗi khi tải dữ liệu lô hàng." });
+    res.status(500).json({ message: "Lỗi server khi tải dữ liệu lô hàng" });
   }
 };
 exports.updateBatch = async (req, res) => {
@@ -154,6 +156,36 @@ exports.getBatchById = async (req, res) => {
     }
 
     res.status(200).json(batch);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.transferToShelf = async (req, res) => {
+  try {
+    const { quantity } = req.body;
+    const batch = await Batch.findById(req.params.id);
+
+    if (!batch) {
+      return res.status(404).json({ message: "Lô hàng không tồn tại" });
+    }
+
+    if (quantity <= 0) {
+      return res.status(400).json({ message: "Số lượng phải lớn hơn 0" });
+    }
+
+    if (batch.remaining_quantity < quantity) {
+      return res.status(400).json({
+        message: "Số lượng trong kho không đủ để chuyển",
+      });
+    }
+
+    batch.remaining_quantity -= quantity;
+    batch.quantity_on_shelf += quantity;
+
+    const updatedBatch = await batch.save({ validateModifiedOnly: true })
+    res.status(200).json(updatedBatch);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

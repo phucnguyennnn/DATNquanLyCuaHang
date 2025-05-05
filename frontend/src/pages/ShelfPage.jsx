@@ -45,6 +45,41 @@ function ShelfInventoryPage() {
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [selectedTransferBatch, setSelectedTransferBatch] = useState(null);
+  const [transferQuantity, setTransferQuantity] = useState("");
+  const [transferError, setTransferError] = useState(null);
+
+  const handleOpenTransferDialog = (batch) => {
+    setSelectedTransferBatch(batch);
+    setTransferDialogOpen(true);
+    setTransferQuantity("");
+    setTransferError(null);
+  };
+
+  const handleTransferQuantityChange = (event) => {
+    setTransferQuantity(event.target.value.replace(/\D/g, ""));
+  };
+
+  const handleTransferSubmit = async () => {
+    if (!transferQuantity || parseInt(transferQuantity) <= 0) {
+      setTransferError("Vui lòng nhập số lượng hợp lệ");
+      return;
+    }
+    const userId = localStorage.getItem("userId");
+    try {
+      await axios.put(
+        `http://localhost:8000/api/batches/${selectedTransferBatch._id}/transfer-to-shelf`,
+        { quantity: parseInt(transferQuantity) }
+      );
+      await fetchData();
+      setTransferDialogOpen(false);
+    } catch (err) {
+      setTransferError(
+        err.response?.data?.message || err.message || "Lỗi khi chuyển hàng"
+      );
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -229,7 +264,6 @@ function ShelfInventoryPage() {
       <Typography variant="h4" component="h1" gutterBottom>
         Quản lý hàng tồn kho và trên quầy
       </Typography>
-
       <Box mb={2}>
         <Stack direction="row" spacing={2} alignItems="center">
           <TextField
@@ -238,25 +272,31 @@ function ShelfInventoryPage() {
             onChange={handleSearchChange}
             size="small"
           />
-          <FormControl size="small">
-            <InputLabel id="status-filter-label">Trạng Thái Lô</InputLabel>
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel id="status-filter-label" shrink>
+              Trạng Thái Lô
+            </InputLabel>
             <Select
               labelId="status-filter-label"
               id="status-filter"
               value={statusFilter}
               label="Trạng Thái Lô"
               onChange={handleStatusChange}
+              displayEmpty
+              renderValue={(value) => (value === "" ? "Tất cả" : value)}
+              inputProps={{
+                "aria-label": "Trạng thái lô hàng",
+              }}
             >
               <MenuItem value="">Tất cả</MenuItem>
-              <MenuItem value="active">Active</MenuItem>
-              <MenuItem value="inactive">Inactive</MenuItem>
-              <MenuItem value="expired">Expired</MenuItem>
-              <MenuItem value="sold_out">Sold Out</MenuItem>
+              <MenuItem value="active">Hoạt động</MenuItem>
+              <MenuItem value="inactive">Không hoạt động</MenuItem>
+              <MenuItem value="expired">Hết hạn</MenuItem>
+              <MenuItem value="sold_out">Hết hàng trong ko</MenuItem>
             </Select>
           </FormControl>
         </Stack>
       </Box>
-
       {loading ? (
         <Box
           display="flex"
@@ -281,6 +321,7 @@ function ShelfInventoryPage() {
             <Table stickyHeader aria-label="shelf inventory table">
               <TableHead>
                 <TableRow>
+                  <TableCell>STT</TableCell>
                   <TableCell
                     style={{ cursor: "pointer" }}
                     onClick={() => handleSort("productName")}
@@ -348,14 +389,16 @@ function ShelfInventoryPage() {
                       (sortDirection === "asc" ? "▲" : "▼")}
                   </TableCell>
                   <TableCell>Cảnh báo</TableCell>
+                  <TableCell>Thao tác</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sortedShelfData?.map((item) => (
+                {sortedShelfData?.map((item, index) => (
                   <TableRow
                     key={item._id}
                     sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
                   >
+                    <TableCell>{index + 1}</TableCell>
                     <TableCell
                       component="th"
                       scope="row"
@@ -417,6 +460,23 @@ function ShelfInventoryPage() {
                         />
                       ))}
                     </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        sx={{
+                          fontSize: "0.7rem",
+                          padding: "2px 6px",
+                          margin: "0 2px",
+                          textTransform: "none",
+                        }}
+                        variant="contained"
+                        onClick={() => handleOpenTransferDialog(item)}
+                        disabled={item.remaining_quantity <= 0}
+                      >
+                        chuyển lên quầy
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -424,7 +484,6 @@ function ShelfInventoryPage() {
           </TableContainer>
         </Box>
       )}
-
       <Dialog open={batchDialogOpen} onClose={handleCloseBatchDialog}>
         <DialogTitle>Thông tin Lô hàng</DialogTitle>
         <DialogContent>
@@ -478,11 +537,6 @@ function ShelfInventoryPage() {
                 Số lượng trên quầy: {selectedBatch.quantity_on_shelf}
               </Typography>
               <Typography>Trạng thái: {selectedBatch.status}</Typography>
-              {selectedBatch.goodReceipt && (
-                <Typography>
-                  Phiếu nhập hàng: {selectedBatch.goodReceipt.receiptNumber}
-                </Typography>
-              )}
               {selectedBatch.supplier && (
                 <Typography>
                   Nhà cung cấp: {selectedBatch.supplier.name}
@@ -511,6 +565,37 @@ function ShelfInventoryPage() {
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={transferDialogOpen}
+        onClose={() => setTransferDialogOpen(false)}
+      >
+        <DialogTitle>Chuyển hàng lên quầy</DialogTitle>
+        <DialogContent>
+          <Box sx={{ minWidth: 300, pt: 2 }}>
+            <TextField
+              fullWidth
+              label="Số lượng chuyển"
+              value={transferQuantity}
+              onChange={handleTransferQuantityChange}
+              error={!!transferError}
+              helperText={transferError}
+            />
+            <Typography variant="body2" color="text.secondary" mt={1}>
+              Có sẵn trong kho: {selectedTransferBatch?.remaining_quantity}
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTransferDialogOpen(false)}>Hủy</Button>
+          <Button
+            onClick={handleTransferSubmit}
+            variant="contained"
+            color="primary"
+          >
+            Xác nhận
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={productDialogOpen} onClose={handleCloseProductDialog}>
         <DialogTitle>Thông tin Sản phẩm</DialogTitle>
         <DialogContent>

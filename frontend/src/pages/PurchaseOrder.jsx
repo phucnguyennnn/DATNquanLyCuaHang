@@ -26,6 +26,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  TableSortLabel,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -68,56 +69,42 @@ const PurchaseOrderManagement = () => {
   const [totalPrice, setTotalPrice] = useState(0);
   const [approvalDate, setApprovalDate] = useState(null);
   const [orderStatus, setOrderStatus] = useState("approved");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("orderDate");
+  const [sortOrder, setSortOrder] = useState("desc");
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const navigate = useNavigate();
-
   const token = localStorage.getItem("authToken");
 
-  // gắn xác thực người dùng vào các request axios
   useEffect(() => {
     const interceptor = axios.interceptors.request.use((config) => {
       const token = localStorage.getItem("authToken");
       if (token) config.headers.Authorization = `Bearer ${token}`;
       return config;
     });
-
-    const getUserInfo = () => {
-      try {
-        const userInfoString = localStorage.getItem("userInfo");
-        if (userInfoString) {
-          const userInfo = JSON.parse(userInfoString);
-        }
-      } catch (error) {
-        console.error("Lỗi khi lấy thông tin người dùng:", error);
-      }
-    };
-
-    getUserInfo();
-    fetchSuppliers();
-    fetchOrders();
-
     return () => axios.interceptors.request.eject(interceptor);
   }, []);
 
   useEffect(() => {
-    fetchProducts();
+    fetchSuppliers();
+    fetchOrders();
   }, []);
 
   useEffect(() => {
-    setTotalPrice(calculateTotal());
+    fetchProducts();
+  }, [selectedSupplier]);
+
+  useEffect(() => {
+    setTotalPrice(orderItems.reduce((sum, item) => sum + item.totalPrice, 0));
   }, [orderItems]);
 
   const fetchSuppliers = async () => {
     try {
-      const response = await axios.get("http://localhost:8000/api/suppliers",
-        {
-          // headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await axios.get("http://localhost:8000/api/suppliers");
       setSuppliers(response.data);
-      // console.log("sup: ", response.data);
     } catch (error) {
       console.error(error);
     }
@@ -125,95 +112,53 @@ const PurchaseOrderManagement = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await axios.get("http://localhost:8000/api/products",
-        {
-          // headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await axios.get("http://localhost:8000/api/products");
       const activeProducts = response.data.data.filter(product => product.active !== false);
-      setProducts(activeProducts);
-      
       if (selectedSupplier) {
-        const supplierData = await axios.get(
-          `http://localhost:8000/api/suppliers/${selectedSupplier}`,
-          // { headers: { Authorization: `Bearer ${token}` } }
-        );
-        
-        if (supplierData.data && supplierData.data.suppliedProducts) {
-          const suppliedProductIds = supplierData.data.suppliedProducts.map(
-            item => item.product
-          );
-          
-          const filteredProducts = activeProducts.filter(
-            product => suppliedProductIds.includes(product._id)
-          );
-          
-          setProducts(filteredProducts);
-        }
+        const supplierData = await axios.get(`http://localhost:8000/api/suppliers/${selectedSupplier}`);
+        const suppliedProductIds = supplierData.data.suppliedProducts.map(item => item.product);
+        const filteredProducts = activeProducts.filter(product => suppliedProductIds.includes(product._id));
+        setProducts(filteredProducts);
+      } else {
+        setProducts(activeProducts);
       }
     } catch (error) {
-      console.error("Lỗi khi lấy danh sách sản phẩm:", error);
+      console.error(error);
     }
   };
 
-  useEffect(() => {
-    if (selectedSupplier) {
-      fetchProducts();
-    }
-  }, [selectedSupplier]);
-
   const fetchOrders = async () => {
     try {
-      const response = await axios.get("http://localhost:8000/api/purchaseOrder",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await axios.get("http://localhost:8000/api/purchaseOrder");
       setOrders(response.data);
-      // console.log("Danh sách phiếu đặt hàng:", response.data);
     } catch (error) {
-      console.error("Lỗi khi lấy danh sách phiếu đặt hàng:", error);
+      console.error(error);
     }
   };
 
   const handleAddItem = () => {
-    if (!selectedProduct || quantity <= 0 || !unit || unitPrice <= 0) {
-      alert("Vui lòng nhập đầy đủ thông tin sản phẩm!");
-      return;
-    }
-
     const product = products.find((p) => p._id === selectedProduct);
-    if (!product) return;
-
-    const existingIndex = orderItems.findIndex(
-      (item) => item.product === selectedProduct && item.unit === unit
-    );
-
+    if (!product || !selectedProduct || quantity <= 0 || !unit || unitPrice <= 0) return;
+    const existingIndex = orderItems.findIndex(item => item.product === selectedProduct && item.unit === unit);
     if (existingIndex !== -1) {
-      setOrderItems(orderItems.map((item, index) =>
-        index === existingIndex
-          ? {
-              ...item,
-              quantity: item.quantity + Number(quantity),
-              totalPrice: (item.quantity + Number(quantity)) * item.unitPrice,
-            }
-          : item
+      setOrderItems(orderItems.map((item, index) => 
+        index === existingIndex ? {
+          ...item,
+          quantity: item.quantity + Number(quantity),
+          totalPrice: (item.quantity + Number(quantity)) * item.unitPrice,
+        } : item
       ));
     } else {
-      setOrderItems([
-        ...orderItems,
-        {
-          product: selectedProduct,
-          name: product.name,
-          SKU: product.SKU,
-          quantity: Number(quantity),
-          unit,
-          unitPrice: Number(unitPrice),
-          totalPrice: Number(quantity) * Number(unitPrice),
-        },
-      ]);
+      setOrderItems([...orderItems, {
+        product: selectedProduct,
+        name: product.name,
+        SKU: product.SKU,
+        quantity: Number(quantity),
+        unit,
+        unitPrice: Number(unitPrice),
+        totalPrice: Number(quantity) * Number(unitPrice),
+      }]);
     }
-
     setSelectedProduct("");
     setQuantity(1);
     setUnit("");
@@ -225,75 +170,32 @@ const PurchaseOrderManagement = () => {
   };
 
   const updateQuantity = (productId, delta) => {
-    setOrderItems((prev) =>
-      prev.map((item) => {
-        if (item.product === productId) {
-          const newQuantity = Math.max(1, item.quantity + delta);
-          return {
-            ...item,
-            quantity: newQuantity,
-            totalPrice: newQuantity * item.unitPrice,
-          };
-        }
-        return item;
-      })
-    );
-  };
-
-  const calculateTotal = () => {
-    return orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    setOrderItems(prev => prev.map(item => {
+      if (item.product === productId) {
+        const newQuantity = Math.max(1, item.quantity + delta);
+        return { ...item, quantity: newQuantity, totalPrice: newQuantity * item.unitPrice };
+      }
+      return item;
+    }));
   };
 
   const handlePreviewOrder = () => {
-    if (!selectedSupplier) {
-      alert("Vui lòng chọn nhà cung cấp!");
-      return;
-    }
-
-    if (orderItems.length === 0) {
-      alert("Vui lòng thêm ít nhất một sản phẩm vào phiếu đặt hàng!");
-      return;
-    }
-    
-    // Validate expected delivery date
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
     const deliveryDate = new Date(expectedDeliveryDate);
-    
-    if (deliveryDate <= currentDate) {
-      alert("Ngày giao hàng dự kiến phải sau ngày hiện tại!");
-      return;
-    }
-    
+    if (!selectedSupplier || orderItems.length === 0 || deliveryDate <= currentDate) return;
     setShowPreview(true);
   };
 
   const handleSubmit = async () => {
-    if (!selectedSupplier) {
-      alert("Vui lòng chọn nhà cung cấp!");
-      return;
-    }
-
-    if (orderItems.length === 0) {
-      alert("Vui lòng thêm ít nhất một sản phẩm vào phiếu đặt hàng!");
-      return;
-    }
-    
-    // Validate expected delivery date
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
     const deliveryDate = new Date(expectedDeliveryDate);
-    
-    if (deliveryDate <= currentDate) {
-      alert("Ngày giao hàng dự kiến phải sau ngày hiện tại!");
-      return;
-    }
-
+    if (!selectedSupplier || orderItems.length === 0 || deliveryDate <= currentDate) return;
     try {
-      // Use totalPrice for consistency
       const payload = {
         supplier: selectedSupplier,
-        supplierName: suppliers.find((s) => s._id === selectedSupplier)?.name || "",
+        supplierName: suppliers.find(s => s._id === selectedSupplier)?.name || "",
         items: orderItems.map(({ product, name, SKU, quantity, unit, unitPrice }) => ({
           product,
           productName: name,
@@ -302,53 +204,32 @@ const PurchaseOrderManagement = () => {
           unit,
           unitPrice,
           totalPrice: quantity * unitPrice,
-          conversionRate: products.find((p) => p._id === product)?.units.find((u) => u.name === unit)?.ratio || 1,
+          conversionRate: products.find(p => p._id === product)?.units.find(u => u.name === unit)?.ratio || 1,
         })),
-        totalAmount: totalPrice, // Use totalPrice directly
+        totalAmount: totalPrice,
         sendEmailFlag: sendEmail,
         expectedDeliveryDate,
         notes,
         deliveryAddress,
         paymentMethod,
-        createdBy: (() => {
-          try {
-            const name = localStorage.getItem("fullName");
-            return name || "Không xác định";
-          } catch (error) {
-            return "Không xác định";
-          }
-        })(),
+        createdBy: localStorage.getItem("fullName") || "Không xác định",
         status: orderStatus,
         createdByName: localStorage.getItem("fullName") || "Không xác định",
         orderDate: new Date().toISOString(),
         approvalDate: orderStatus === "approved" ? new Date().toISOString() : null,
       };
-
-      console.log("Dữ liệu gửi đi khi tạo phiếu:", payload);
-
-      const response = await axios.post("http://localhost:8000/api/purchaseOrder", payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      console.log("Phản hồi khi tạo phiếu:", response.data);
-      
+      await axios.post("http://localhost:8000/api/purchaseOrder", payload);
       alert("Tạo phiếu đặt hàng thành công!");
       setSelectedSupplier("");
       setOrderItems([]);
       fetchOrders();
     } catch (error) {
       console.error(error);
-      // Improved error handling
-      if (error.response && error.response.data && error.response.data.error) {
-        alert(`Lỗi khi tạo phiếu: ${error.response.data.error}`);
-      } else {
-        alert("Lỗi khi tạo phiếu đặt hàng!");
-      }
+      alert(error.response?.data?.error || "Lỗi khi tạo phiếu đặt hàng!");
     }
   };
 
   const handleEdit = (order) => {
-    console.log("Thông tin phiếu đang chỉnh sửa:", order);
     setEditOrder({
       ...order,
       expectedDeliveryDate: order.expectedDeliveryDate.split("T")[0],
@@ -364,28 +245,21 @@ const PurchaseOrderManagement = () => {
   };
 
   const handleEditOrderItemChange = (index, field, value) => {
-    setEditOrderItems((prevItems) => {
-      const updatedItems = [...prevItems];
+    setEditOrderItems(prev => {
+      const updatedItems = [...prev];
       updatedItems[index] = { ...updatedItems[index], [field]: value };
       return updatedItems;
     });
   };
 
   const handleUpdateOrder = async () => {
-    if (new Date(editOrder.expectedDeliveryDate) <= new Date(editOrder.orderDate)) {
-      alert("Ngày giao hàng dự kiến phải lớn hơn ngày đặt hàng!");
-      return;
-    }
-    
+    if (new Date(editOrder.expectedDeliveryDate) <= new Date(editOrder.orderDate)) return;
     try {
-      const isNewlyApproved = editOrder.status === "approved" && 
-                             (editOrder.originalStatus && editOrder.originalStatus !== "approved");
-      
-      // Use totalPrice for consistency
+      const isNewlyApproved = editOrder.status === "approved" && editOrder.originalStatus !== "approved";
       const payload = {
         ...editOrder,
         supplier: editOrder.supplier._id,
-        supplierName: suppliers.find((s) => s._id === editOrder.supplier._id)?.name || editOrder.supplierName,
+        supplierName: suppliers.find(s => s._id === editOrder.supplier._id)?.name || editOrder.supplierName,
         items: editOrderItems.map(({ product, quantity, unit, unitPrice }) => ({
           product: product._id,
           productName: product.name || "",
@@ -394,17 +268,12 @@ const PurchaseOrderManagement = () => {
           unit,
           unitPrice,
           totalPrice: quantity * unitPrice,
-          conversionRate: products.find((p) => p._id === product._id)?.units.find((u) => u.name === unit)?.ratio || 1,
+          conversionRate: products.find(p => p._id === product._id)?.units.find(u => u.name === unit)?.ratio || 1,
         })),
         approvalDate: isNewlyApproved ? new Date().toISOString() : editOrder.approvalDate,
-        totalAmount: editOrderItems.reduce((sum, item) => sum + item.totalPrice, 0), // Use totalPrice for consistency
+        totalAmount: editOrderItems.reduce((sum, item) => sum + item.totalPrice, 0),
       };
-
-      // console.log("Dữ liệu gửi đi khi cập nhật phiếu:", payload);
-
-      const response = await axios.put(`http://localhost:8000/api/purchaseOrder/${editOrder._id}`, payload);
-      // console.log("Phản hồi khi cập nhật phiếu:", response.data);
-      
+      await axios.put(`http://localhost:8000/api/purchaseOrder/${editOrder._id}`, payload);
       alert("Cập nhật phiếu đặt hàng thành công!");
       setOpenDialog(false);
       fetchOrders();
@@ -430,9 +299,43 @@ const PurchaseOrderManagement = () => {
       await axios.post(`http://localhost:8000/api/purchaseOrder/${order._id}/resend-email`);
       alert("Gửi lại email thành công!");
     } catch (error) {
-      console.error("Lỗi khi gửi lại email:", error);
+      console.error(error);
       alert("Lỗi khi gửi lại email!");
     }
+  };
+
+  const getFilteredAndSortedOrders = () => {
+    return orders
+      .filter(order => {
+        const matchesSearch = (
+          order._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.createdByName.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        const matchesStatus = statusFilter === "all" || order.status === statusFilter;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a, b) => {
+        const modifier = sortOrder === "asc" ? 1 : -1;
+        switch (sortBy) {
+          case "orderDate":
+            return (new Date(a.orderDate) - new Date(b.orderDate)) * modifier;
+          case "expectedDeliveryDate":
+            return (new Date(a.expectedDeliveryDate) - new Date(b.expectedDeliveryDate)) * modifier;
+          case "totalAmount":
+            return (a.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) - 
+                   b.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)) * modifier;
+          case "status":
+            return a.status.localeCompare(b.status) * modifier;
+          default:
+            return 0;
+        }
+      });
+  };
+
+  const handleSort = (column) => {
+    setSortBy(prev => column === prev ? prev : column);
+    setSortOrder(prev => column === sortBy ? (prev === "asc" ? "desc" : "asc") : "asc");
   };
 
   return (
@@ -453,6 +356,7 @@ const PurchaseOrderManagement = () => {
         <Typography variant="h5" mb={2}>
           Tạo phiếu đặt hàng
         </Typography>
+        
         <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" gutterBottom>
             Thông tin nhà cung cấp
@@ -514,12 +418,9 @@ const PurchaseOrderManagement = () => {
                   label="Đơn vị"
                   onChange={(e) => setUnit(e.target.value)}
                 >
-                  {products
-                    .find((p) => p._id === selectedProduct)?.units.map((u) => (
-                      <MenuItem key={u.name} value={u.name}>
-                        {u.name}
-                      </MenuItem>
-                    ))}
+                  {products.find(p => p._id === selectedProduct)?.units.map(u => (
+                    <MenuItem key={u.name} value={u.name}>{u.name}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -580,9 +481,7 @@ const PurchaseOrderManagement = () => {
                 fullWidth
                 value={expectedDeliveryDate}
                 onChange={(e) => setExpectedDeliveryDate(e.target.value)}
-                InputLabelProps={{
-                  shrink: true,
-                }}
+                InputLabelProps={{ shrink: true }}
               />
             </Grid>
 
@@ -603,7 +502,7 @@ const PurchaseOrderManagement = () => {
                   label="Trạng thái phiếu"
                   onChange={(e) => setOrderStatus(e.target.value)}
                 >
-                  {STATUSES.map((status) => (
+                  {STATUSES.map(status => (
                     <MenuItem key={status.value} value={status.value}>
                       {status.label}
                     </MenuItem>
@@ -740,23 +639,12 @@ const PurchaseOrderManagement = () => {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body1">
-                      <strong>Trạng thái:</strong> {
-                        STATUSES.find((status) => status.value === orderStatus)?.label || "Nháp"
-                      }
+                      <strong>Trạng thái:</strong> {STATUSES.find(status => status.value === orderStatus)?.label || "Nháp"}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body1">
-                      <strong>Người lập đơn:</strong> {
-                        (() => {
-                          try {
-                            const name = localStorage.getItem("fullName");
-                            return name || "Không xác định";
-                          } catch (error) {
-                            return "Không xác định";
-                          }
-                        })()
-                      }
+                      <strong>Người lập đơn:</strong> {localStorage.getItem("fullName") || "Không xác định"}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -877,24 +765,101 @@ const PurchaseOrderManagement = () => {
         <Typography variant="h5" mb={2}>
           Danh sách phiếu đặt hàng
         </Typography>
+        
+        <Paper elevation={3} sx={{ p: 2, mb: 2 }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={4}>
+              <TextField
+                label="Tìm kiếm phiếu đặt hàng"
+                variant="outlined"
+                fullWidth
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Lọc theo trạng thái</InputLabel>
+                <Select
+                  value={statusFilter}
+                  label="Lọc theo trạng thái"
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <MenuItem value="all">Tất cả</MenuItem>
+                  {STATUSES.map(status => (
+                    <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </Paper>
+
         <Paper elevation={3} sx={{ p: 3 }}>
           <TableContainer>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Mã phiếu</TableCell>
-                  <TableCell>Nhà cung cấp</TableCell>
-                  <TableCell>Ngày đặt hàng</TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === "_id"}
+                      direction={sortOrder}
+                      onClick={() => handleSort("_id")}
+                    >
+                      Mã phiếu
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === "supplier"}
+                      direction={sortOrder}
+                      onClick={() => handleSort("supplier")}
+                    >
+                      Nhà cung cấp
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === "orderDate"}
+                      direction={sortOrder}
+                      onClick={() => handleSort("orderDate")}
+                    >
+                      Ngày đặt hàng
+                    </TableSortLabel>
+                  </TableCell>
                   <TableCell>Người lập đơn</TableCell>
-                  {/* <TableCell>Ngày duyệt đơn</TableCell> */}
-                  <TableCell>Ngày giao hàng dự kiến</TableCell>
-                  <TableCell>Tổng tiền</TableCell>
-                  <TableCell>Trạng thái</TableCell>
-                  <TableCell></TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === "expectedDeliveryDate"}
+                      direction={sortOrder}
+                      onClick={() => handleSort("expectedDeliveryDate")}
+                    >
+                      Ngày giao dự kiến
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === "totalAmount"}
+                      direction={sortOrder}
+                      onClick={() => handleSort("totalAmount")}
+                    >
+                      Tổng tiền
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={sortBy === "status"}
+                      direction={sortOrder}
+                      onClick={() => handleSort("status")}
+                    >
+                      Trạng thái
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>Hành động</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {orders.map((order) => (
+                {getFilteredAndSortedOrders().map((order) => (
                   <TableRow key={order._id}>
                     <TableCell>{order._id}</TableCell>
                     <TableCell>{order.supplier.name}</TableCell>
@@ -904,15 +869,12 @@ const PurchaseOrderManagement = () => {
                     <TableCell>
                       {order.createdByName || "Không xác định"}
                     </TableCell>
-                    {/* <TableCell>
-                      {order.approvalDate ? new Date(order.approvalDate).toLocaleDateString() : "Chưa duyệt"}
-                    </TableCell> */}
                     <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      {(order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0)).toLocaleString()} đ
+                      {order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()} đ
                     </TableCell>
                     <TableCell>
-                      {STATUSES.find((status) => status.value === order.status)?.label || "Không xác định"}
+                      {STATUSES.find(status => status.value === order.status)?.label || "Không xác định"}
                     </TableCell>
                     <TableCell>
                       <IconButton onClick={() => handleEdit(order)}>
@@ -981,7 +943,7 @@ const PurchaseOrderManagement = () => {
                                 handleEditOrderItemChange(index, "unit", e.target.value)
                               }
                             >
-                              {UNITS.map((unit) => (
+                              {UNITS.map(unit => (
                                 <MenuItem key={unit} value={unit}>{unit}</MenuItem>
                               ))}
                             </Select>
@@ -1049,10 +1011,8 @@ const PurchaseOrderManagement = () => {
                     label="Trạng thái"
                     onChange={(e) => setEditOrder({ ...editOrder, status: e.target.value })}
                   >
-                    {STATUSES.map((status) => (
-                      <MenuItem key={status.value} value={status.value}>
-                        {status.label}
-                      </MenuItem>
+                    {STATUSES.map(status => (
+                      <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>

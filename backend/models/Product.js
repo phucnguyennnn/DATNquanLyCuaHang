@@ -251,18 +251,22 @@ productSchema.virtual('primarySupplier').get(function () {
     return null;
 });
 
-productSchema.methods.getDiscountedPrice = function () {
-    if (!this.discount || !salePrice) return salePrice;
-    const now = new Date();
-    if (now < this.discount.startDate || now > this.discount.endDate) {
-        return salePrice;
+productSchema.methods.getBatchDiscountedPrice = function (batch) {
+    const basePrice = this.units.find(unit => unit.ratio === 1)?.salePrice || this.price; // Lấy giá từ units hoặc price nếu không có units
+    let discountedPrice = basePrice;
+  
+    if (batch && batch.discountInfo && batch.discountInfo.isDiscounted) {
+      const discountValue = batch.discountInfo.discountValue;
+      const discountType = batch.discountInfo.discountType;
+  
+      if (discountType === 'percentage') {
+        discountedPrice = discountedPrice * (1 - discountValue / 100);
+      } else if (discountType === 'fixed') {
+        discountedPrice = Math.max(0, discountedPrice - discountValue);
+      }
     }
-
-    return this.discount.type === "percentage"
-        ? salePrice * (1 - this.discount.value / 100)
-        : Math.max(0, salePrice - this.discount.value);
-};
-
+    return discountedPrice;
+  };
 productSchema.pre('remove', async function (next) {
     const Batch = mongoose.model('Batch');
     await Batch.deleteMany({ product: this._id });
