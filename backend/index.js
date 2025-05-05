@@ -13,7 +13,7 @@ const goodReceiptRouter = require('./routers/goodReceiptRouter');
 const userRouter = require('./routers/userRouter');
 const cartRouter = require('./routers/cartRouter');
 const orderRouter = require('./routers/orderRouter');
-const inventoriesRouter = require('./routers/inventoryRouter');
+// const inventoriesRouter = require('./routers/inventoryRouter');
 const session = require('express-session');
 
 dotenv.config();
@@ -69,4 +69,4 @@ app.use('/api/purchaseOrder', purchaseOrderRouter);
 app.use('/api/goodReceipt', goodReceiptRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/orders', orderRouter);
-app.use('/api/inventories', inventoriesRouter);
+// app.use('/api/inventories', inventoriesRouter);

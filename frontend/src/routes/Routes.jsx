@@ -18,7 +18,7 @@ import Profile from "../pages/Profile";
 import User from "../pages/User";
 import PurchaseOrder from "../pages/PurchaseOrder";
 import GoodReceipt from "../pages/GoodReceipt";
-import AddToInventoy from "../pages/AddToInventory";
+// import AddToInventoy from "../pages/AddToInventory";
 import ProductPage from "../pages/ProductsPage";
 import CartPage from "../pages/Cart";
 import CategoryPage from "../pages/CategoryPage";
@@ -57,7 +57,12 @@ const AppRouter = () => {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="verify-otp" element={<VerifyOTPPage />} />
         <Route path="verify-reset-otp" element={<VerifyResetOTPPage />} />
-        <Route path="products_page" element={<ProductPage />} />
+        <Route path="products_page" element={<ProductsPage />}>
+          <Route path="cart_page" element={<CartPage />} />
+        </Route>
+        <Route path="cart_page" element={<CartPage />} />
+
+
         {/* Protected routes with layout */}
         <Route
           path="/"
@@ -72,10 +77,10 @@ const AppRouter = () => {
           <Route path="users" element={<User />} />
           <Route path="inventory/purchase-order" element={<PurchaseOrder />} />
           <Route path="inventory/receipt" element={<GoodReceipt />} />
-          <Route path="inventory/add-shipment" element={<AddToInventoy />} />
-          <Route path="cart_page" element={<CartPage />} />
+          {/* <Route path="inventory/add-shipment" element={<AddToInventoy />} /> */}
+          {/* <Route path="cart_page" element={<CartPage />} /> */}
           <Route path="categories" element={<CategoryPage />} />
-          <Route path="products_page" element={<ProductsPage />} />
+          {/* <Route path="products_page" element={<ProductsPage />} /> */}
           <Route path="Sales_page" element={<SalesPage />} />
           <Route path="Shelf_page" element={<ShelfPage/>} />
         </Route>
