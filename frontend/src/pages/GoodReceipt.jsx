@@ -175,6 +175,15 @@ const CreateGoodReceipt = () => {
   const handleBatchChange = (index, field, value) => {
     const updated = [...batchInfo];
     updated[index][field] = value;
+
+    if (field === "quantity" || field === "unit") {
+      const selectedUnit = selectedOrder.items[index]?.product?.units?.find(
+        (u) => u.name === updated[index].unit
+      );
+      const ratio = selectedUnit?.ratio || 1;
+      updated[index].calculatedQuantity = Number(updated[index].quantity) * ratio;
+    }
+
     setBatchInfo(updated);
   };
 
@@ -222,6 +231,14 @@ const CreateGoodReceipt = () => {
       }
     }
 
+    if (field === "quantity" || field === "unit") {
+      const selectedUnit = supplierProducts.find(p => p._id === updatedItems[index].product)?.units?.find(
+        (u) => u.name === updatedItems[index].unit
+      );
+      const ratio = selectedUnit?.ratio || 1;
+      updatedItems[index].calculatedQuantity = Number(updatedItems[index].quantity) * ratio;
+    }
+
     if (field === "quantity" || field === "unitPrice") {
       updatedItems[index].totalPrice = 
         Number(updatedItems[index].quantity) * Number(updatedItems[index].unitPrice);
@@ -248,7 +265,6 @@ const CreateGoodReceipt = () => {
     }
 
     if (loading || confirming) {
-      console.log("Đang xử lý, vui lòng đợi...");
       return;
     }
 
@@ -303,28 +319,42 @@ const CreateGoodReceipt = () => {
       }
 
       const allItems = [
-        ...batchInfo.map(item => ({
-          productId: item.product,
-          quantity: Number(item.quantity),
-          unit: item.unit,
-          unitPrice: item.unitPrice,
-          totalPrice: item.unitPrice * Number(item.quantity),
-          manufactureDate: item.manufacture_day,
-          expiryDate: item.expiry_day,
-          productName: item.productName,
-          productSKU: item.productSKU
-        })),
-        ...additionalItems.map(item => ({
-          productId: item.product,
-          quantity: Number(item.quantity),
-          unit: item.unit,
-          unitPrice: Number(item.unitPrice),
-          totalPrice: Number(item.unitPrice) * Number(item.quantity),
-          manufactureDate: item.manufacture_day,
-          expiryDate: item.expiry_day,
-          productName: item.productName,
-          productSKU: item.productSKU
-        }))
+        ...batchInfo.map(item => {
+          const selectedUnit = selectedOrder.items.find(
+            (orderItem) => orderItem.product?._id === item.product
+          )?.product?.units?.find((u) => u.name === item.unit);
+          const ratio = selectedUnit?.ratio || 1;
+
+          return {
+            productId: item.product,
+            quantity: Number(item.quantity) * ratio,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+            totalPrice: item.unitPrice * Number(item.quantity),
+            manufactureDate: item.manufacture_day,
+            expiryDate: item.expiry_day,
+            productName: item.productName,
+            productSKU: item.productSKU
+          };
+        }),
+        ...additionalItems.map(item => {
+          const selectedUnit = supplierProducts.find(
+            (product) => product._id === item.product
+          )?.units?.find((u) => u.name === item.unit);
+          const ratio = selectedUnit?.ratio || 1;
+
+          return {
+            productId: item.product,
+            quantity: Number(item.quantity) * ratio,
+            unit: item.unit,
+            unitPrice: Number(item.unitPrice),
+            totalPrice: Number(item.unitPrice) * Number(item.quantity),
+            manufactureDate: item.manufacture_day,
+            expiryDate: item.expiry_day,
+            productName: item.productName,
+            productSKU: item.productSKU
+          };
+        })
       ];
 
       const additionalTotal = additionalItems.reduce((sum, item) => 
