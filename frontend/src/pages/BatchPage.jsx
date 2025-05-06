@@ -45,10 +45,41 @@ function ShelfInventoryPage() {
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [quantityChanges, setQuantityChanges] = useState([]);
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [receipt, setReceipt] = useState([]);
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [selectedTransferBatch, setSelectedTransferBatch] = useState(null);
+  const [transferQuantity, setTransferQuantity] = useState("");
+  const [transferError, setTransferError] = useState(null);
+
+  const handleOpenTransferDialog = (batch) => {
+    setSelectedTransferBatch(batch);
+    setTransferDialogOpen(true);
+    setTransferQuantity("");
+    setTransferError(null);
+  };
+
+  const handleTransferQuantityChange = (event) => {
+    setTransferQuantity(event.target.value.replace(/\D/g, ""));
+  };
+
+  const handleTransferSubmit = async () => {
+    if (!transferQuantity || parseInt(transferQuantity) <= 0) {
+      setTransferError("Vui lòng nhập số lượng hợp lệ");
+      return;
+    }
+    const userId = localStorage.getItem("userId");
+    try {
+      await axios.put(
+        `http://localhost:8000/api/batches/${selectedTransferBatch._id}/transfer-to-shelf`,
+        { quantity: parseInt(transferQuantity) }
+      );
+      await fetchData();
+      setTransferDialogOpen(false);
+    } catch (err) {
+      setTransferError(
+        err.response?.data?.message || err.message || "Lỗi khi chuyển hàng"
+      );
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -86,80 +117,6 @@ function ShelfInventoryPage() {
       setSortColumn(column);
       setSortDirection("asc");
     }
-  };
-
-  const handleQuantityChange = (batchId, field, value) => {
-    setShelfData((prevData) =>
-      prevData.map((item) => {
-        if (item._id === batchId) {
-          const updatedItem = { ...item };
-          const difference = value - item[field];
-          if (field === "quantity_on_shelf") {
-            updatedItem.quantity_on_shelf = value;
-            updatedItem.remaining_quantity -= difference;
-          } else if (field === "remaining_quantity") {
-            updatedItem.remaining_quantity = value;
-            updatedItem.quantity_on_shelf -= difference;
-          }
-          return updatedItem;
-        }
-        return item;
-      })
-    );
-
-    setQuantityChanges((prevChanges) => {
-      const existingChange = prevChanges.find(
-        (change) => change.batchId === batchId
-      );
-      if (existingChange) {
-        return prevChanges.map((change) =>
-          change.batchId === batchId
-            ? { ...change, [field]: value }
-            : change
-        );
-      } else {
-        return [...prevChanges, { batchId, [field]: value }];
-      }
-    });
-  };
-
-  const handleSaveChanges = () => {
-    setConfirmDialogOpen(true);
-  };
-
-  const handleConfirmSave = async () => {
-    try {
-      const updatedBatches = [];
-      for (const change of quantityChanges) {
-        const response = await axios.put(
-          `http://localhost:8000/api/batches/${change.batchId}`,
-          {
-            quantity_on_shelf: change.quantity_on_shelf,
-            remaining_quantity: change.remaining_quantity,
-          }
-        );
-        updatedBatches.push({
-          batchId: change.batchId,
-          quantity_on_shelf: change.quantity_on_shelf,
-          remaining_quantity: change.remaining_quantity,
-        });
-      }
-      setReceipt(updatedBatches);
-      setQuantityChanges([]);
-      setConfirmDialogOpen(false);
-      setSaveDialogOpen(true);
-    } catch (error) {
-      console.error("Lỗi khi lưu thay đổi:", error);
-      alert("Đã xảy ra lỗi khi lưu thay đổi.");
-    }
-  };
-
-  const handleCloseConfirmDialog = () => {
-    setConfirmDialogOpen(false);
-  };
-
-  const handleCloseSaveDialog = () => {
-    setSaveDialogOpen(false);
   };
 
   const productQuantities = useMemo(() => {
@@ -246,9 +203,6 @@ function ShelfInventoryPage() {
       } else if (sortColumn === "status") {
         valueA = a.status || "";
         valueB = b.status || "";
-      } else if (sortColumn === "totalQuantity") {
-        valueA = productQuantities[a.product?._id]?.initial || 0;
-        valueB = productQuantities[b.product?._id]?.initial || 0;
       }
 
       if (valueA == null || valueB == null) {
@@ -267,18 +221,6 @@ function ShelfInventoryPage() {
       }
     });
   }, [shelfData, sortColumn, sortDirection]);
-
-  const groupedShelfData = useMemo(() => {
-    const grouped = {};
-    sortedShelfData.forEach((item) => {
-      const productId = item.product?._id;
-      if (!grouped[productId]) {
-        grouped[productId] = [];
-      }
-      grouped[productId].push(item);
-    });
-    return Object.values(grouped);
-  }, [sortedShelfData]);
 
   const handleBatchClick = (batchId) => {
     const batchInfo = shelfData.find((item) => item._id === batchId);
@@ -317,50 +259,44 @@ function ShelfInventoryPage() {
   return (
     <Container
       maxWidth="xl"
-      sx={{ height: "100vh", display: "flex", flexDirection: "column"}}
+      sx={{ height: "100vh", display: "flex", flexDirection: "column", py: 2 }}
     >
       <Typography variant="h4" component="h1" gutterBottom>
         Quản lý hàng tồn kho và trên quầy
       </Typography>
-
       <Box mb={2}>
-        <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-          <Stack direction="row" spacing={2} alignItems="center">
-            <TextField
-              label="Tìm kiếm (Tên/SKU/Mã Lô)"
-              value={searchTerm}
-              onChange={handleSearchChange}
-              size="small"
-            />
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel id="status-filter-label">Trạng Thái Lô</InputLabel>
-              <Select
-                labelId="status-filter-label"
-                id="status-filter"
-                value={statusFilter}
-                label="Trạng Thái Lô"
-                onChange={handleStatusChange}
-              >
-                <MenuItem value="">Tất cả</MenuItem>
-                <MenuItem value="active">Hoạt động</MenuItem>
-                <MenuItem value="inactive">Không hoạt động</MenuItem>
-                <MenuItem value="expired">Hết hạn</MenuItem>
-                <MenuItem value="sold_out">Hết hàng</MenuItem>
-              </Select>
-            </FormControl>
-          </Stack>
-          {quantityChanges.length > 0 && (
-            <Button 
-              variant="contained" 
-              color="primary" 
-              onClick={handleSaveChanges}
+        <Stack direction="row" spacing={2} alignItems="center">
+          <TextField
+            label="Tìm kiếm (Tên/SKU/Mã Lô)"
+            value={searchTerm}
+            onChange={handleSearchChange}
+            size="small"
+          />
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel id="status-filter-label" shrink>
+              Trạng Thái Lô
+            </InputLabel>
+            <Select
+              labelId="status-filter-label"
+              id="status-filter"
+              value={statusFilter}
+              label="Trạng Thái Lô"
+              onChange={handleStatusChange}
+              displayEmpty
+              renderValue={(value) => (value === "" ? "Tất cả" : value)}
+              inputProps={{
+                "aria-label": "Trạng thái lô hàng",
+              }}
             >
-              Lưu thay đổi
-            </Button>
-          )}
+              <MenuItem value="">Tất cả</MenuItem>
+              <MenuItem value="active">Hoạt động</MenuItem>
+              <MenuItem value="inactive">Không hoạt động</MenuItem>
+              <MenuItem value="expired">Hết hạn</MenuItem>
+              <MenuItem value="sold_out">Hết hàng trong ko</MenuItem>
+            </Select>
+          </FormControl>
         </Stack>
       </Box>
-
       {loading ? (
         <Box
           display="flex"
@@ -378,14 +314,14 @@ function ShelfInventoryPage() {
             component={Paper}
             sx={{
               height: "100%",
-              maxHeight: "calc(100vh - 150px)",
+              maxHeight: "calc(100vh - 220px)",
               "& .MuiTable-root": { minWidth: 1000 },
-              "& .MuiTableCell-root": { border: "1px solid #ddd" }, // Add border to all table cells
             }}
           >
             <Table stickyHeader aria-label="shelf inventory table">
               <TableHead>
                 <TableRow>
+                  <TableCell>STT</TableCell>
                   <TableCell
                     style={{ cursor: "pointer" }}
                     onClick={() => handleSort("productName")}
@@ -394,14 +330,6 @@ function ShelfInventoryPage() {
                     {sortColumn === "productName" &&
                       (sortDirection === "asc" ? "▲" : "▼")}
                   </TableCell>
-                  {/* <TableCell
-                    style={{ cursor: "pointer" }}
-                    onClick={() => handleSort("totalQuantity")}
-                  >
-                    Tổng Số Lượng{" "}
-                    {sortColumn === "totalQuantity" &&
-                      (sortDirection === "asc" ? "▲" : "▼")}
-                  </TableCell> */}
                   <TableCell
                     style={{ cursor: "pointer" }}
                     onClick={() => handleSort("SKU")}
@@ -461,151 +389,101 @@ function ShelfInventoryPage() {
                       (sortDirection === "asc" ? "▲" : "▼")}
                   </TableCell>
                   <TableCell>Cảnh báo</TableCell>
+                  <TableCell>Thao tác</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {groupedShelfData.map((group) =>
-                  group.map((item, index) => (
-                    <TableRow
-                      key={item._id}
-                      sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
+                {sortedShelfData?.map((item, index) => (
+                  <TableRow
+                    key={item._id}
+                    sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
+                  >
+                    <TableCell>{index + 1}</TableCell>
+                    <TableCell
+                      component="th"
+                      scope="row"
+                      style={{
+                        cursor: "pointer",
+                        color: "blue",
+                        textDecoration: "underline",
+                      }}
+                      onClick={() => handleProductClick(item.product?._id)}
                     >
-                      {index === 0 && (
-                        <>
-                          <TableCell
-                            rowSpan={group.length}
-                            component="th"
-                            scope="row"
-                            style={{
-                              cursor: "pointer",
-                              color: "blue",
-                              textDecoration: "underline",
-                            }}
-                            onClick={() => handleProductClick(item.product?._id)}
-                          >
-                            {item.product?.name}{" "}
-                            {/* {item.product?.units && item.product.units.length > 0
-                              ? `(${item.product.units.find((u) => u.default)?.name || item.product.units[0].name})`
-                              : "(N/A)"} */}
-                          </TableCell>
-                          {/* <TableCell rowSpan={group.length} align="right">
-                            {productQuantities[item.product?._id]?.initial || 0}
-                          </TableCell> */}
-                        </>
-                      )}
-                      <TableCell>{item.product?.SKU}</TableCell>
-                      <TableCell
-                        style={{
-                          cursor: "pointer",
-                          color: "blue",
-                          textDecoration: "underline",
+                      {item.product?.name}
+                    </TableCell>
+                    <TableCell>{item.product?.SKU}</TableCell>
+                    <TableCell
+                      style={{
+                        cursor: "pointer",
+                        color: "blue",
+                        textDecoration: "underline",
+                      }}
+                      onClick={() => handleBatchClick(item._id)}
+                    >
+                      {item._id}
+                    </TableCell>
+                    <TableCell align="right">
+                      {item.quantity_on_shelf}
+                    </TableCell>
+                    <TableCell align="right">
+                      {item.remaining_quantity}
+                    </TableCell>
+                    <TableCell>
+                      {item.manufacture_day
+                        ? format(new Date(item.manufacture_day), "dd/MM/yyyy")
+                        : "-"}
+                    </TableCell>
+                    <TableCell
+                      style={
+                        item.expiry_day &&
+                        isBefore(
+                          new Date(item.expiry_day),
+                          addDays(new Date(), EXPIRY_THRESHOLD_DAYS)
+                        )
+                          ? { color: "red" }
+                          : {}
+                      }
+                    >
+                      {item.expiry_day
+                        ? format(new Date(item.expiry_day), "dd/MM/yyyy")
+                        : "-"}
+                    </TableCell>
+                    <TableCell>{item.status}</TableCell>
+                    <TableCell>
+                      {item.warnings.map((warning, index) => (
+                        <Chip
+                          key={index}
+                          label={warning}
+                          color="warning"
+                          size="small"
+                          sx={{ mr: 0.5 }}
+                        />
+                      ))}
+                    </TableCell>
+
+                    <TableCell>
+                      <Button
+                        size="small"
+                        sx={{
+                          fontSize: "0.7rem",
+                          padding: "2px 6px",
+                          margin: "0 2px",
+                          textTransform: "none",
                         }}
-                        onClick={() => handleBatchClick(item._id)}
+                        variant="contained"
+                        onClick={() => handleOpenTransferDialog(item)}
+                        disabled={item.remaining_quantity <= 0}
                       >
-                        {item._id}
-                      </TableCell>
-                      <TableCell align="right">
-                        <TextField
-                          type="number"
-                          value={item.quantity_on_shelf}
-                          onChange={(e) =>
-                            handleQuantityChange(
-                              item._id,
-                              "quantity_on_shelf",
-                              parseInt(e.target.value, 10)
-                            )
-                          }
-                          size="small"
-                          inputProps={{ min: 0 }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <TextField
-                          type="number"
-                          value={item.remaining_quantity}
-                          onChange={(e) =>
-                            handleQuantityChange(
-                              item._id,
-                              "remaining_quantity",
-                              parseInt(e.target.value, 10)
-                            )
-                          }
-                          size="small"
-                          inputProps={{ min: 0 }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {item.manufacture_day
-                          ? format(
-                              new Date(item.manufacture_day),
-                              "dd/MM/yyyy"
-                            )
-                          : "-"}
-                      </TableCell>
-                      <TableCell
-                        style={
-                          item.expiry_day &&
-                          isBefore(
-                            new Date(item.expiry_day),
-                            addDays(new Date(), EXPIRY_THRESHOLD_DAYS)
-                          )
-                            ? { color: "red" }
-                            : {}
-                        }
-                      >
-                        {item.expiry_day
-                          ? format(new Date(item.expiry_day), "dd/MM/yyyy")
-                          : "-"}
-                      </TableCell>
-                      <TableCell>
-                        {item.status === "active"
-                          ? "Hoạt động"
-                          : item.status === "inactive"
-                          ? "Không hoạt động"
-                          : item.status === "expired"
-                          ? "Hết hạn"
-                          : item.status === "sold_out"
-                          ? "Hết hàng"
-                          : item.status}
-                      </TableCell>
-                      <TableCell>
-                        {item.warnings.map((warning, index) => (
-                          <Chip
-                            key={index}
-                            label={warning}
-                            color="warning"
-                            size="small"
-                            sx={{ mr: 0.5 }}
-                          />
-                        ))}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                        chuyển lên quầy
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </TableContainer>
-          <Box mt={2}>
-            <Typography variant="h6">Danh sách thay đổi:</Typography>
-            {quantityChanges.length > 0 ? (
-              <ul>
-                {quantityChanges.map((change, index) => (
-                  <li key={index}>
-                    <Typography>
-                      Lô hàng {change.batchId}: 
-                      {change.quantity_on_shelf !== undefined && ` Số lượng trên quầy: ${change.quantity_on_shelf}`}
-                      {change.remaining_quantity !== undefined && ` Số lượng trong kho: ${change.remaining_quantity}`}
-                    </Typography>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <Typography>Không có thay đổi nào.</Typography>
-            )}
-          </Box>
         </Box>
       )}
-
       <Dialog open={batchDialogOpen} onClose={handleCloseBatchDialog}>
         <DialogTitle>Thông tin Lô hàng</DialogTitle>
         <DialogContent>
@@ -659,11 +537,6 @@ function ShelfInventoryPage() {
                 Số lượng trên quầy: {selectedBatch.quantity_on_shelf}
               </Typography>
               <Typography>Trạng thái: {selectedBatch.status}</Typography>
-              {selectedBatch.goodReceipt && (
-                <Typography>
-                  Phiếu nhập hàng: {selectedBatch.goodReceipt.receiptNumber}
-                </Typography>
-              )}
               {selectedBatch.supplier && (
                 <Typography>
                   Nhà cung cấp: {selectedBatch.supplier.name}
@@ -692,6 +565,37 @@ function ShelfInventoryPage() {
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={transferDialogOpen}
+        onClose={() => setTransferDialogOpen(false)}
+      >
+        <DialogTitle>Chuyển hàng lên quầy</DialogTitle>
+        <DialogContent>
+          <Box sx={{ minWidth: 300, pt: 2 }}>
+            <TextField
+              fullWidth
+              label="Số lượng chuyển"
+              value={transferQuantity}
+              onChange={handleTransferQuantityChange}
+              error={!!transferError}
+              helperText={transferError}
+            />
+            <Typography variant="body2" color="text.secondary" mt={1}>
+              Có sẵn trong kho: {selectedTransferBatch?.remaining_quantity}
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTransferDialogOpen(false)}>Hủy</Button>
+          <Button
+            onClick={handleTransferSubmit}
+            variant="contained"
+            color="primary"
+          >
+            Xác nhận
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={productDialogOpen} onClose={handleCloseProductDialog}>
         <DialogTitle>Thông tin Sản phẩm</DialogTitle>
         <DialogContent>
@@ -744,57 +648,6 @@ function ShelfInventoryPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseProductDialog}>Đóng</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={confirmDialogOpen} onClose={handleCloseConfirmDialog}>
-        <DialogTitle>Xác nhận thay đổi</DialogTitle>
-        <DialogContent>
-          {quantityChanges.length > 0 ? (
-            <ul>
-              {quantityChanges.map((change, index) => (
-                <li key={index}>
-                  <Typography>
-                    Lô hàng {change.batchId}: 
-                    {change.quantity_on_shelf !== undefined && ` Số lượng trên quầy: ${change.quantity_on_shelf}`}
-                    {change.remaining_quantity !== undefined && ` Số lượng trong kho: ${change.remaining_quantity}`}
-                  </Typography>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Typography>Không có thay đổi nào.</Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseConfirmDialog}>Hủy</Button>
-          <Button variant="contained" color="primary" onClick={handleConfirmSave}>
-            Xác nhận và lưu
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={saveDialogOpen} onClose={handleCloseSaveDialog}>
-        <DialogTitle>Phiếu thay đổi</DialogTitle>
-        <DialogContent>
-          {receipt.length > 0 ? (
-            <ul>
-              {receipt.map((batch, index) => (
-                <li key={index}>
-                  <Typography>
-                    Lô hàng {batch.batchId}: 
-                    Số lượng trên quầy: {batch.quantity_on_shelf}, 
-                    Số lượng trong kho: {batch.remaining_quantity}
-                  </Typography>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Typography>Không có thay đổi nào.</Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseSaveDialog}>Đóng</Button>
         </DialogActions>
       </Dialog>
     </Container>

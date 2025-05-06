@@ -3,20 +3,6 @@ const mongoose = require("mongoose");
 
 const batchSchema = new mongoose.Schema(
   {
-    // batchCode: {
-    //   type: String,
-    //   required: [true, "Mã lô hàng là bắt buộc"],
-    //   unique: true,
-    //   trim: true,
-    //   uppercase: true,
-    //   maxlength: [50, "Mã lô hàng không vượt quá 50 ký tự"],
-    //   validate: {
-    //     validator: function (v) {
-    //       return /^BATCH-\d+-[A-Z0-9]{7}$/.test(v);
-    //     },
-    //     message: "Định dạng mã lô hàng không hợp lệ",
-    //   },
-    // },
     manufacture_day: {
       type: Date,
       required: true,
@@ -112,11 +98,20 @@ const batchSchema = new mongoose.Schema(
       discountValue: {
         type: Number,
         min: 0,
-        max: function () {
-          return this.discountType === "percentage"
-            ? 100
-            : Number.MAX_SAFE_INTEGER;
+        max: function() { 
+          return this.discountType === "percentage" 
+            ? 100 
+            : Number.MAX_SAFE_INTEGER
         },
+        validate: {
+          validator: function(value) {
+            if (this.discountType === 'percentage') {
+              return value <= 100
+            }
+            return true
+          },
+          message: 'Percentage discount must be <= 100'
+        }
       },
       discountStartDate: Date,
       discountEndDate: Date,

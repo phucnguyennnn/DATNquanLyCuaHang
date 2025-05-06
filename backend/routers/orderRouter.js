@@ -1,41 +1,30 @@
 const express = require("express");
-const orderController = require("../controllers/orderController");
-const { protect } = require("../middlewares/authMiddleware");
-
 const router = express.Router();
+const orderController = require("../controllers/orderController");
+const { protect, restrictTo } = require("../middlewares/authMiddleware");
 
-// Tạo đơn hàng
-router.post("/create", orderController.createOrder);
+// Apply protect middleware to all routes in this router
+router.use(protect);
 
-// Lấy chi tiết đơn hàng theo ID
+// Apply restrictTo middleware to all routes in this router, allowing only 'admin' and 'employee'
+router.use(restrictTo('admin', 'employee'));
+
+// Routes for Order Management (now relative to /api/orders)
+router.post("/", orderController.createOrder);
 router.get("/:orderId", orderController.getOrderById);
-
-// Cập nhật trạng thái đã thanh toán
-router.put(
-  "/:orderId/payment-success",
-  protect,
-  orderController.processPaymentSuccess
-);
-
-// Lấy danh sách đơn hàng
-router.get("/", protect, orderController.getAllOrders);
-
-// Hủy đơn hàng
-router.put("/:orderId/cancel", protect, orderController.cancelOrder);
-
-// Tạo đơn hàng chờ
-router.post("/hold", protect, orderController.holdOrder);
-
-// Tiếp tục đơn hàng chờ
-router.put("/:orderId/resume", protect, orderController.resumeOrder);
-
-// Ghi nhận đặt cọc
-router.put("/:orderId/deposit", protect, orderController.recordDeposit);
-
-// Xử lý thanh toán trực tuyến thành công
-router.put(
-  "/:orderId/online-payment-success",
+router.post("/:orderId/payment/success", orderController.processPaymentSuccess);
+router.get("/", orderController.getAllOrders);
+router.put("/:orderId/cancel", orderController.cancelOrder);
+router.put("/:orderId/hold", orderController.holdOrder);
+router.put("/:orderId/resume", orderController.resumeOrder);
+router.put("/:orderId/add-item", orderController.addItemToHoldOrder);
+router.put("/:orderId/deposit", orderController.recordDeposit);
+router.post("/deposit/from-cart", orderController.createDepositOrderFromCart);
+router.post(
+  "/:orderId/payment/online/success",
   orderController.processOnlinePaymentSuccess
 );
+router.post("/:orderId/payment/cash", orderController.processCashPayment);
+router.post("/:orderId/change", orderController.calculateChange);
 
 module.exports = router;
