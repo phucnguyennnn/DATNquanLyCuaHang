@@ -31,7 +31,7 @@ import { format, isBefore, addDays } from "date-fns";
 import axios from "axios";
 
 const EXPIRY_THRESHOLD_DAYS = 30;
-const LOW_QUANTITY_THRESHOLD = 5;
+const LOW_QUANTITY_THRESHOLD = 1;
 
 function ShelfInventoryPage() {
   const [shelfData, setShelfData] = useState([]);
