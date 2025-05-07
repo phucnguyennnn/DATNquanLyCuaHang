@@ -19,6 +19,7 @@ import {
   FormControlLabel,
   Radio,
   OutlinedInput,
+  Box,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 
@@ -65,7 +66,6 @@ function CreateOrder() {
       );
     }
     if (category !== "Tất cả") {
-      // results = results.filter(product => product.category === category);
     }
     setFilteredProducts(results);
   };
@@ -114,18 +114,16 @@ function CreateOrder() {
   };
 
   return (
-    <Container
-      maxWidth="lg"
-      sx={{ mt: 4, overflow: "auto", minHeight: "100vh" }}
-    >
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={7}>
+    <Container maxWidth="lg" sx={{ mt: 4, height: "100vh" }}>
+      <Grid container spacing={3} sx={{ height: "100%" }}>
+        <Grid item xs={12} md={7} sx={{ height: "100%" }}>
           <Paper
             sx={{
               p: 2,
+              height: "100%",
               display: "flex",
               flexDirection: "column",
-              height: "100%",
+              minHeight: 0,
             }}
           >
             <TextField
@@ -137,100 +135,113 @@ function CreateOrder() {
               value={searchTerm}
               onChange={handleSearchChange}
             />
-            <List sx={{ mb: 2 }}>
-              <ListItemButton
-                key="Tất cả"
-                selected={selectedCategory === "Tất cả"}
-                onClick={() => handleCategoryClick("Tất cả")}
-              >
-                <ListItemText primary="Tất cả" />
-              </ListItemButton>
-              {categories.map((category) => (
-                <ListItemButton
-                  key={category}
-                  selected={selectedCategory === category}
-                  onClick={() => handleCategoryClick(category)}
-                >
-                  <ListItemText primary={category} />
-                </ListItemButton>
-              ))}
-            </List>
-            <Grid container spacing={2}>
-              {filteredProducts.map((product) => (
-                <Grid item xs={12} sm={6} md={6} key={product.id}>
-                  <Card sx={{ mb: 1 }}>
-                    <CardContent>
-                      <Typography variant="h6">{product.name}</Typography>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        Mã: {product.code}
-                      </Typography>
-                      <Typography variant="body2">
-                        Giá: {product.price.toLocaleString("vi-VN")} VNĐ
-                      </Typography>
-                    </CardContent>
-                    <CardActions>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="primary"
-                        onClick={() => handleAddToCart(product)}
-                      >
-                        Thêm
-                      </Button>
-                    </CardActions>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
+            <Box sx={{ flexShrink: 0 }}>
+              <List sx={{ display: "flex", flexWrap: "wrap", p: 0 }}>
+                {categories.map((category) => (
+                  <ListItemButton
+                    key={category}
+                    selected={selectedCategory === category}
+                    onClick={() => handleCategoryClick(category)}
+                    sx={{
+                      width: "auto",
+                      mr: 1,
+                      mb: 1,
+                      borderRadius: 2,
+                      px: 2,
+                      bgcolor:
+                        selectedCategory === category ? "#1976d2" : "inherit",
+                      color: selectedCategory === category ? "#fff" : "inherit",
+                    }}
+                  >
+                    <ListItemText primary={category} />
+                  </ListItemButton>
+                ))}
+              </List>
+            </Box>
+            <Box sx={{ flexGrow: 1, overflowY: "auto" }}>
+              <Grid container spacing={2}>
+                {filteredProducts.map((product) => (
+                  <Grid item xs={12} sm={6} key={product.id}>
+                    <Card sx={{ mb: 1 }}>
+                      <CardContent>
+                        <Typography variant="h6">{product.name}</Typography>
+                        <Typography variant="subtitle2" color="text.secondary">
+                          Mã: {product.code}
+                        </Typography>
+                        <Typography variant="body2">
+                          Giá: {product.price.toLocaleString("vi-VN")} VNĐ
+                        </Typography>
+                      </CardContent>
+                      <CardActions>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          onClick={() => handleAddToCart(product)}
+                        >
+                          Thêm
+                        </Button>
+                      </CardActions>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
           </Paper>
         </Grid>
-        <Grid item xs={12} md={5}>
+
+        <Grid item xs={12} md={5} sx={{ height: "100%" }}>
           <Paper
             sx={{
               p: 2,
+              height: "100%",
               display: "flex",
               flexDirection: "column",
-              height: "100%",
+              minHeight: 0,
             }}
           >
             <Typography variant="h6" gutterBottom>
               Đơn hàng
             </Typography>
-            <List sx={{ flexGrow: 1, overflow: "auto" }}>
-              {orderItems.map((item) => (
-                <ListItem
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    mb: 1,
-                  }}
-                  key={item.id}
-                >
-                  <ListItemText
-                    primary={item.name}
-                    secondary={`Giá: ${item.price.toLocaleString("vi-VN")} VNĐ`}
-                  />
-                  <OutlinedInput
-                    type="number"
-                    size="small"
-                    value={item.quantity}
-                    onChange={(e) =>
-                      handleChangeQuantity(item.id, parseInt(e.target.value))
-                    }
-                    inputProps={{ min: 1 }}
-                    sx={{ width: 80 }}
-                  />
-                  <IconButton
-                    edge="end"
-                    aria-label="delete"
-                    onClick={() => handleRemoveItem(item.id)}
+            <Box sx={{ flexGrow: 1, overflowY: "auto", minHeight: 0 }}>
+              <List>
+                {orderItems.map((item) => (
+                  <ListItem
+                    key={item.id}
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      mb: 1,
+                    }}
                   >
-                    <DeleteIcon />
-                  </IconButton>
-                </ListItem>
-              ))}
-            </List>
+                    <ListItemText
+                      primary={item.name}
+                      secondary={`Giá: ${item.price.toLocaleString(
+                        "vi-VN"
+                      )} VNĐ`}
+                    />
+                    <OutlinedInput
+                      type="number"
+                      size="small"
+                      value={item.quantity}
+                      onChange={(e) =>
+                        handleChangeQuantity(item.id, parseInt(e.target.value))
+                      }
+                      inputProps={{ min: 1 }}
+                      sx={{ width: 80 }}
+                    />
+                    <IconButton
+                      edge="end"
+                      aria-label="delete"
+                      onClick={() => handleRemoveItem(item.id)}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
             <Typography variant="h5" sx={{ mt: 2, fontWeight: "bold" }}>
               Tổng tiền: {calculateTotal().toLocaleString("vi-VN")} VNĐ
             </Typography>

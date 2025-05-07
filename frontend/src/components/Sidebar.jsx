@@ -275,14 +275,14 @@ const Sidebar = () => {
             <Divider />
 
             {/* Providers - Chỉ hiển thị cho admin */}
-            {role === "admin" && (
+            {/* {role === "admin" && (
               <ListItemButton onClick={() => navigate("/products_page")}>
                 <ListItemIcon>
                   <BusinessCenter />
                 </ListItemIcon>
                 <ListItemText primary="Giao diện sản phẩm khách hàng" />
               </ListItemButton>
-            )}
+            )} */}
 
             {/* Settings - Hiển thị cho tất cả các role */}
             <ListItemButton onClick={() => navigate("/settings")}>

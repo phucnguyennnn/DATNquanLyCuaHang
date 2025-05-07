@@ -279,7 +279,7 @@ function ManagerOrder() {
               <TableCell>Khách hàng</TableCell>
               <TableCell>Ngày tạo</TableCell>
               <TableCell>Nhân viên tạo đơn hàng</TableCell>
-              <TableCell>Tổng tiền</TableCell>
+              <TableCell>Thành tiền</TableCell>
               <TableCell sx={{ width: "150px" }}>TT Thanh toán</TableCell>
               <TableCell align="right">Hành động</TableCell>
             </TableRow>
@@ -452,7 +452,7 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
                 <TableCell>Đơn vị</TableCell>
                 <TableCell>Giá đơn vị</TableCell>
                 <TableCell>Giảm giá (%)</TableCell>
-                <TableCell>Tổng tiền</TableCell>
+                <TableCell>Thành tiền</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -507,7 +507,7 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
               )}
               <TableRow>
                 <TableCell colSpan={5} align="right">
-                  Thành tiền:
+                  Tổng thành tiền:
                 </TableCell>
                 <TableCell>
                   {order.finalAmount?.toLocaleString("vi-VN", {

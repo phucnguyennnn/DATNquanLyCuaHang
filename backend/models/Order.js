@@ -60,6 +60,7 @@ const orderSchema = new mongoose.Schema({
     enum: ["cash", "transfer"],
     default: "cash",
   },
+  //them trương thanh tien
   paymentStatus: {
     type: String,
     enum: ["pending", "paid", "unpaid", "deposit"],
