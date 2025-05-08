@@ -68,8 +68,8 @@ const batchSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["active", "inactive", "expired", "sold_out"],
-      default: "active",
+      enum: ["hoạt động", "không hoạt động", "hết hạn", "hết hàng"],
+      default: "hoạt động",
       required: true,
     },
     supplier: {
@@ -98,13 +98,13 @@ const batchSchema = new mongoose.Schema(
       discountValue: {
         type: Number,
         min: 0,
-        max: function() { 
-          return this.discountType === "percentage" 
-            ? 100 
+        max: function () {
+          return this.discountType === "percentage"
+            ? 100
             : Number.MAX_SAFE_INTEGER
         },
         validate: {
-          validator: function(value) {
+          validator: function (value) {
             if (this.discountType === 'percentage') {
               return value <= 100
             }
@@ -179,13 +179,13 @@ batchSchema.pre("save", function (next) {
   if (this.remaining_quantity < 0)
     return next(new Error("Remaining quantity cannot be negative."));
   if (this.remaining_quantity === 0 && this.initial_quantity > 0)
-    this.status = "sold_out";
-  else if (this.expiry_day < new Date()) this.status = "expired";
+    this.status = "hết hàng";
+  else if (this.expiry_day < new Date()) this.status = "hết hạn";
   else if (
-    this.status === "active" &&
+    this.status === "hoạt động" &&
     this.remaining_quantity < this.initial_quantity * 0.2
   )
-    this.status = "inactive";
+    this.status = "không hoạt động";
   next();
 });
 

@@ -108,14 +108,6 @@ const productSchema = new mongoose.Schema(
             trim: true,
             maxlength: [1000, 'Description cannot exceed 1000 characters']
         },
-        SKU: {
-            type: String,
-            required: [true, 'SKU is required'],
-            unique: true,
-            uppercase: true,
-            trim: true,
-            maxlength: [50, 'SKU cannot exceed 50 characters']
-        },
         barcode: {
             type: String,
             trim: true,
@@ -239,7 +231,7 @@ productSchema.pre('save', function (next) {
     next();
 });
 
-productSchema.index({ name: 'text', description: 'text', SKU: 'text', barcode: 'text' });
+productSchema.index({ name: 'text', description: 'text', barcode: 'text' });
 productSchema.index({ category: 1 });
 productSchema.index({ active: 1 });
 productSchema.index({ 'suppliers.supplier': 1 });
@@ -254,19 +246,19 @@ productSchema.virtual('primarySupplier').get(function () {
 productSchema.methods.getBatchDiscountedPrice = function (batch) {
     const basePrice = this.units.find(unit => unit.ratio === 1)?.salePrice || this.price; // Lấy giá từ units hoặc price nếu không có units
     let discountedPrice = basePrice;
-  
+
     if (batch && batch.discountInfo && batch.discountInfo.isDiscounted) {
-      const discountValue = batch.discountInfo.discountValue;
-      const discountType = batch.discountInfo.discountType;
-  
-      if (discountType === 'percentage') {
-        discountedPrice = discountedPrice * (1 - discountValue / 100);
-      } else if (discountType === 'fixed') {
-        discountedPrice = Math.max(0, discountedPrice - discountValue);
-      }
+        const discountValue = batch.discountInfo.discountValue;
+        const discountType = batch.discountInfo.discountType;
+
+        if (discountType === 'percentage') {
+            discountedPrice = discountedPrice * (1 - discountValue / 100);
+        } else if (discountType === 'fixed') {
+            discountedPrice = Math.max(0, discountedPrice - discountValue);
+        }
     }
     return discountedPrice;
-  };
+};
 productSchema.pre('remove', async function (next) {
     const Batch = mongoose.model('Batch');
     await Batch.deleteMany({ product: this._id });

@@ -8,7 +8,6 @@ const purchaseOrderItemSchema = new mongoose.Schema(
       required: true,
     },
     productName: { type: String }, // Store product name for historical reference
-    productSKU: { type: String }, // Store SKU for historical reference
     quantity: {
       type: Number,
       required: true,

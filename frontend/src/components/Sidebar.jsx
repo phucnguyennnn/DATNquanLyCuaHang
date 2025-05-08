@@ -198,7 +198,7 @@ const Sidebar = () => {
               <ListItemIcon>
                 <Warehouse />
               </ListItemIcon>
-              <ListItemText primary="Số lượng tồn" />
+              <ListItemText primary="Quản lý tồn kho" />
             </ListItemButton>
 
             {(role === "admin" || role === "employee") && (

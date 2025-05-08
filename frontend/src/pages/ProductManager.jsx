@@ -41,7 +41,6 @@ import * as yup from "yup";
 const productSchema = yup.object({
     name: yup.string().required("Tên sản phẩm là bắt buộc"),
     category: yup.string().required("Danh mục là bắt buộc"),
-    SKU: yup.string().required("SKU là bắt buộc"),
     units: yup.array().of(
         yup.object().shape({
             name: yup.string().required("Tên đơn vị là bắt buộc"),
@@ -175,7 +174,6 @@ const ProductManager = () => {
             name: "",
             category: "",
             description: "",
-            SKU: "",
             units: defaultUnits,
             suppliers: [],
             active: false,
@@ -196,7 +194,6 @@ const ProductManager = () => {
                 formData.append("name", values.name);
                 formData.append("category", values.category);
                 formData.append("description", values.description || "");
-                formData.append("SKU", values.SKU);
                 formData.append("active", values.active);
                 formData.append("barcode", values.barcode || "");
 
@@ -293,7 +290,6 @@ const ProductManager = () => {
             name: product.name,
             category: product.category?._id || product.category || "",
             description: product.description || "",
-            SKU: product.SKU || "",
             units: product.units || [],
             suppliers: (product.suppliers || []).map((s) => ({
                 supplier: s.supplier?._id || s.supplier || "",
@@ -429,10 +425,10 @@ const ProductManager = () => {
                     <TableHead>
                         <TableRow>
                             <TableCell>STT</TableCell>
+                            <TableCell>Hình ảnh</TableCell> {/* New column for images */}
                             <TableCell>Tên sản phẩm</TableCell>
                             <TableCell>Danh mục</TableCell>
                             <TableCell>Giá bán theo đơn vị</TableCell>
-                            <TableCell>SKU</TableCell>
                             <TableCell>Đơn vị</TableCell>
                             <TableCell>Trạng thái</TableCell>
                             <TableCell>Hành động</TableCell>
@@ -448,6 +444,17 @@ const ProductManager = () => {
                                 .map((product, index) => (
                                     <TableRow key={product._id}>
                                         <TableCell>{index + 1}</TableCell>
+                                        <TableCell>
+                                            {product.images && product.images.length > 0 ? (
+                                                <img
+                                                    src={product.images[0]}
+                                                    alt="Product"
+                                                    style={{ width: 50, height: 50, objectFit: "cover" }}
+                                                />
+                                            ) : (
+                                                "Không có hình ảnh"
+                                            )}
+                                        </TableCell> {/* Display the first image */}
                                         <TableCell>{product.name}</TableCell>
                                         <TableCell>{product.category?.name || "Không có danh mục"}</TableCell>
                                         <TableCell>
@@ -458,7 +465,6 @@ const ProductManager = () => {
                                                 })
                                                 : "Chưa có giá"}
                                         </TableCell>
-                                        <TableCell>{product.SKU}</TableCell>
                                         <TableCell>
                                             {(product.units || []).map((unit) => unit.name).join(", ")}
                                         </TableCell>
@@ -592,7 +598,7 @@ const ProductManager = () => {
                                     Tạo danh mục mới
                                 </Button>
                             </Grid>
-                            <Grid item xs={12} md={6}>
+                            {/* <Grid item xs={12} md={6}>
                                 <TextField
                                     fullWidth
                                     id="SKU"
@@ -604,7 +610,7 @@ const ProductManager = () => {
                                     helperText={formik.touched.SKU && formik.errors.SKU}
                                     margin="normal"
                                 />
-                            </Grid>
+                            </Grid> */}
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth margin="normal">
                                     <InputLabel id="status-label">Trạng thái *</InputLabel>
@@ -895,9 +901,6 @@ const ProductManager = () => {
                         <Grid container spacing={2}>
                             <Grid item xs={12}>
                                 <Typography variant="subtitle1">Danh mục: {currentProduct.category?.name || "Không có"}</Typography>
-                            </Grid>
-                            <Grid item xs={12}>
-                                <Typography variant="subtitle1">SKU: {currentProduct.SKU}</Typography>
                             </Grid>
                             <Grid item xs={12}>
                                 <Typography variant="subtitle1">Trạng thái: {currentProduct.active ? "Hoạt động" : "Không hoạt động"}</Typography>

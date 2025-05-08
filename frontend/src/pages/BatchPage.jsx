@@ -26,9 +26,13 @@ import {
   ImageList,
   ImageListItem,
   Chip,
+  IconButton,
+  Collapse,
 } from "@mui/material";
 import { format, isBefore, addDays } from "date-fns";
 import axios from "axios";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 
 const EXPIRY_THRESHOLD_DAYS = 30;
 const LOW_QUANTITY_THRESHOLD = 1;
@@ -49,6 +53,7 @@ function ShelfInventoryPage() {
   const [selectedTransferBatch, setSelectedTransferBatch] = useState(null);
   const [transferQuantity, setTransferQuantity] = useState("");
   const [transferError, setTransferError] = useState(null);
+  const [openRows, setOpenRows] = useState({});
 
   const handleOpenTransferDialog = (batch) => {
     setSelectedTransferBatch(batch);
@@ -182,9 +187,6 @@ function ShelfInventoryPage() {
       if (sortColumn === "productName") {
         valueA = a.product?.name || "";
         valueB = b.product?.name || "";
-      } else if (sortColumn === "SKU") {
-        valueA = a.product?.SKU || "";
-        valueB = b.product?.SKU || "";
       } else if (sortColumn === "batchCode") {
         valueA = a._id || "";
         valueB = b._id || "";
@@ -194,6 +196,9 @@ function ShelfInventoryPage() {
       } else if (sortColumn === "warehouseQuantity") {
         valueA = a.remaining_quantity;
         valueB = b.remaining_quantity;
+      } else if (sortColumn === "totalQuantity") {
+        valueA = (a.quantity_on_shelf || 0) + (a.remaining_quantity || 0);
+        valueB = (b.quantity_on_shelf || 0) + (b.remaining_quantity || 0);
       } else if (sortColumn === "manufactureDay") {
         valueA = a.manufacture_day ? new Date(a.manufacture_day) : null;
         valueB = b.manufacture_day ? new Date(b.manufacture_day) : null;
@@ -221,6 +226,155 @@ function ShelfInventoryPage() {
       }
     });
   }, [shelfData, sortColumn, sortDirection]);
+
+  const groupedByProduct = useMemo(() => {
+    const grouped = {};
+
+    sortedShelfData.forEach((item) => {
+      if (!item.product) return;
+
+      const productId = item.product._id;
+      const productName = item.product.name;
+
+      if (!grouped[productId]) {
+        grouped[productId] = {
+          productId,
+          productName,
+          batches: [],
+          totalShelfQuantity: 0,
+          totalWarehouseQuantity: 0,
+          warnings: new Set(),
+          earliestExpiryDate: null,
+          latestManufactureDate: null,
+        };
+      }
+
+      // Add batch to group
+      grouped[productId].batches.push(item);
+      grouped[productId].totalShelfQuantity += item.quantity_on_shelf;
+      grouped[productId].totalWarehouseQuantity += item.remaining_quantity;
+
+      // Track earliest expiry date
+      if (item.expiry_day) {
+        const expiryDate = new Date(item.expiry_day);
+        if (!grouped[productId].earliestExpiryDate || 
+            expiryDate < new Date(grouped[productId].earliestExpiryDate)) {
+          grouped[productId].earliestExpiryDate = item.expiry_day;
+        }
+      }
+      
+      // Track latest manufacture date
+      if (item.manufacture_day) {
+        const manufactureDate = new Date(item.manufacture_day);
+        if (!grouped[productId].latestManufactureDate || 
+            manufactureDate > new Date(grouped[productId].latestManufactureDate)) {
+          grouped[productId].latestManufactureDate = item.manufacture_day;
+        }
+      }
+
+      // Collect warnings
+      item.warnings.forEach((warning) => {
+        grouped[productId].warnings.add(warning);
+      });
+    });
+
+    // Calculate total quantity for each product
+    let groupedArray = Object.values(grouped);
+    groupedArray.forEach(product => {
+      product.totalQuantity = product.totalShelfQuantity + product.totalWarehouseQuantity;
+      
+      // Sort the batches within each group if sortColumn is specified
+      if (sortColumn) {
+        product.batches.sort((a, b) => {
+          let valueA, valueB;
+
+          if (sortColumn === "batchCode") {
+            valueA = a._id || "";
+            valueB = b._id || "";
+          } else if (sortColumn === "shelfQuantity") {
+            valueA = a.quantity_on_shelf;
+            valueB = b.quantity_on_shelf;
+          } else if (sortColumn === "warehouseQuantity") {
+            valueA = a.remaining_quantity;
+            valueB = b.remaining_quantity;
+          } else if (sortColumn === "totalQuantity") {
+            valueA = (a.quantity_on_shelf || 0) + (a.remaining_quantity || 0);
+            valueB = (b.quantity_on_shelf || 0) + (b.remaining_quantity || 0);
+          } else if (sortColumn === "manufactureDay") {
+            valueA = a.manufacture_day ? new Date(a.manufacture_day) : null;
+            valueB = b.manufacture_day ? new Date(b.manufacture_day) : null;
+          } else if (sortColumn === "expiryDay") {
+            valueA = a.expiry_day ? new Date(a.expiry_day) : null;
+            valueB = b.expiry_day ? new Date(b.expiry_day) : null;
+          } else if (sortColumn === "status") {
+            valueA = a.status || "";
+            valueB = b.status || "";
+          } else {
+            return 0; // No sort
+          }
+
+          if (valueA == null || valueB == null) {
+            return valueA == null ? 1 : -1;
+          }
+
+          if (typeof valueA === "string") {
+            valueA = valueA.toLowerCase();
+            valueB = valueB.toLowerCase();
+          }
+
+          if (sortDirection === "asc") {
+            return valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
+          } else {
+            return valueA > valueB ? -1 : valueA < valueB ? 1 : 0;
+          }
+        });
+      }
+    });
+    
+    // Sort product groups by the selected sort column
+    if (sortColumn) {
+      groupedArray.sort((a, b) => {
+        let valueA, valueB;
+        
+        if (sortColumn === "productName") {
+          valueA = a.productName || "";
+          valueB = b.productName || "";
+        } else if (sortColumn === "totalQuantity") {
+          valueA = a.totalQuantity;
+          valueB = b.totalQuantity;
+        } else if (sortColumn === "shelfQuantity" || sortColumn === "totalShelfQuantity") {
+          valueA = a.totalShelfQuantity;
+          valueB = b.totalShelfQuantity;
+        } else if (sortColumn === "warehouseQuantity" || sortColumn === "totalWarehouseQuantity") {
+          valueA = a.totalWarehouseQuantity;
+          valueB = b.totalWarehouseQuantity;
+        } else if (sortColumn === "manufactureDay") {
+          valueA = a.latestManufactureDate ? new Date(a.latestManufactureDate) : null;
+          valueB = b.latestManufactureDate ? new Date(b.latestManufactureDate) : null;
+        } else if (sortColumn === "expiryDay") {
+          valueA = a.earliestExpiryDate ? new Date(a.earliestExpiryDate) : null;
+          valueB = b.earliestExpiryDate ? new Date(b.earliestExpiryDate) : null;
+        }
+
+        if (valueA == null || valueB == null) {
+          return valueA == null ? 1 : -1;
+        }
+
+        if (typeof valueA === "string") {
+          valueA = valueA.toLowerCase();
+          valueB = valueB.toLowerCase();
+        }
+
+        if (sortDirection === "asc") {
+          return valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
+        } else {
+          return valueA > valueB ? -1 : valueA < valueB ? 1 : 0;
+        }
+      });
+    }
+
+    return groupedArray;
+  }, [sortedShelfData, sortColumn, sortDirection]);
 
   const handleBatchClick = (batchId) => {
     const batchInfo = shelfData.find((item) => item._id === batchId);
@@ -256,6 +410,13 @@ function ShelfInventoryPage() {
     setSelectedProduct(null);
   };
 
+  const toggleRow = (productId) => {
+    setOpenRows((prev) => ({
+      ...prev,
+      [productId]: !prev[productId],
+    }));
+  };
+
   return (
     <Container
       maxWidth="xl"
@@ -267,7 +428,7 @@ function ShelfInventoryPage() {
       <Box mb={2}>
         <Stack direction="row" spacing={2} alignItems="center">
           <TextField
-            label="Tìm kiếm (Tên/SKU/Mã Lô)"
+            label="Tìm kiếm (Tên/Mã Lô hàng)"
             value={searchTerm}
             onChange={handleSearchChange}
             size="small"
@@ -321,6 +482,7 @@ function ShelfInventoryPage() {
             <Table stickyHeader aria-label="shelf inventory table">
               <TableHead>
                 <TableRow>
+                  <TableCell width="30px"></TableCell>
                   <TableCell>STT</TableCell>
                   <TableCell
                     style={{ cursor: "pointer" }}
@@ -331,44 +493,37 @@ function ShelfInventoryPage() {
                       (sortDirection === "asc" ? "▲" : "▼")}
                   </TableCell>
                   <TableCell
+                    align="right"
                     style={{ cursor: "pointer" }}
-                    onClick={() => handleSort("SKU")}
+                    onClick={() => handleSort("totalQuantity")}
                   >
-                    SKU{" "}
-                    {sortColumn === "SKU" &&
-                      (sortDirection === "asc" ? "▲" : "▼")}
-                  </TableCell>
-                  <TableCell
-                    style={{ cursor: "pointer" }}
-                    onClick={() => handleSort("batchCode")}
-                  >
-                    Mã Lô Hàng{" "}
-                    {sortColumn === "batchCode" &&
+                    Tổng số Lượng{" "}
+                    {sortColumn === "totalQuantity" &&
                       (sortDirection === "asc" ? "▲" : "▼")}
                   </TableCell>
                   <TableCell
                     align="right"
                     style={{ cursor: "pointer" }}
-                    onClick={() => handleSort("shelfQuantity")}
+                    onClick={() => handleSort("totalShelfQuantity")}
                   >
-                    Số Lượng Trên Quầy{" "}
-                    {sortColumn === "shelfQuantity" &&
+                    Tổng số Lượng Trên Quầy{" "}
+                    {sortColumn === "totalShelfQuantity" &&
                       (sortDirection === "asc" ? "▲" : "▼")}
                   </TableCell>
                   <TableCell
                     align="right"
                     style={{ cursor: "pointer" }}
-                    onClick={() => handleSort("warehouseQuantity")}
+                    onClick={() => handleSort("totalWarehouseQuantity")}
                   >
-                    Số Lượng Trong Kho{" "}
-                    {sortColumn === "warehouseQuantity" &&
+                    Tổng số Lượng Trong Kho{" "}
+                    {sortColumn === "totalWarehouseQuantity" &&
                       (sortDirection === "asc" ? "▲" : "▼")}
                   </TableCell>
                   <TableCell
                     style={{ cursor: "pointer" }}
                     onClick={() => handleSort("manufactureDay")}
                   >
-                    Ngày Sản Xuất{" "}
+                    Ngày Sản Xuất gần nhất{" "}
                     {sortColumn === "manufactureDay" &&
                       (sortDirection === "asc" ? "▲" : "▼")}
                   </TableCell>
@@ -376,108 +531,226 @@ function ShelfInventoryPage() {
                     style={{ cursor: "pointer" }}
                     onClick={() => handleSort("expiryDay")}
                   >
-                    Hạn Sử Dụng{" "}
+                    Hạn Sử Dụng gần nhất{" "}
                     {sortColumn === "expiryDay" &&
                       (sortDirection === "asc" ? "▲" : "▼")}
                   </TableCell>
-                  <TableCell
-                    style={{ cursor: "pointer" }}
-                    onClick={() => handleSort("status")}
-                  >
-                    Trạng Thái Lô{" "}
-                    {sortColumn === "status" &&
-                      (sortDirection === "asc" ? "▲" : "▼")}
-                  </TableCell>
                   <TableCell>Cảnh báo</TableCell>
-                  <TableCell>Thao tác</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sortedShelfData?.map((item, index) => (
-                  <TableRow
-                    key={item._id}
-                    sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
-                  >
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell
-                      component="th"
-                      scope="row"
-                      style={{
-                        cursor: "pointer",
-                        color: "blue",
-                        textDecoration: "underline",
-                      }}
-                      onClick={() => handleProductClick(item.product?._id)}
-                    >
-                      {item.product?.name}
-                    </TableCell>
-                    <TableCell>{item.product?.SKU}</TableCell>
-                    <TableCell
-                      style={{
-                        cursor: "pointer",
-                        color: "blue",
-                        textDecoration: "underline",
-                      }}
-                      onClick={() => handleBatchClick(item._id)}
-                    >
-                      {item._id}
-                    </TableCell>
-                    <TableCell align="right">
-                      {item.quantity_on_shelf}
-                    </TableCell>
-                    <TableCell align="right">
-                      {item.remaining_quantity}
-                    </TableCell>
-                    <TableCell>
-                      {item.manufacture_day
-                        ? format(new Date(item.manufacture_day), "dd/MM/yyyy")
-                        : "-"}
-                    </TableCell>
-                    <TableCell
-                      style={
-                        item.expiry_day &&
-                        isBefore(
-                          new Date(item.expiry_day),
-                          addDays(new Date(), EXPIRY_THRESHOLD_DAYS)
-                        )
-                          ? { color: "red" }
-                          : {}
-                      }
-                    >
-                      {item.expiry_day
-                        ? format(new Date(item.expiry_day), "dd/MM/yyyy")
-                        : "-"}
-                    </TableCell>
-                    <TableCell>{item.status}</TableCell>
-                    <TableCell>
-                      {item.warnings.map((warning, index) => (
-                        <Chip
-                          key={index}
-                          label={warning}
-                          color="warning"
+                {groupedByProduct.map((group, index) => (
+                  <React.Fragment key={group.productId}>
+                    <TableRow>
+                      <TableCell>
+                        <IconButton
+                          aria-label="expand row"
                           size="small"
-                          sx={{ mr: 0.5 }}
-                        />
-                      ))}
-                    </TableCell>
-
-                    <TableCell>
-                      <Button
-                        size="small"
-                        sx={{
-                          fontSize: "0.7rem",
-                          padding: "2px 6px",
-                          margin: "0 2px",
-                          textTransform: "none",
+                          onClick={() => toggleRow(group.productId)}
+                        >
+                          {openRows[group.productId] ? (
+                            <KeyboardArrowUpIcon />
+                          ) : (
+                            <KeyboardArrowDownIcon />
+                          )}
+                        </IconButton>
+                      </TableCell>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell
+                        component="th"
+                        scope="row"
+                        style={{
+                          cursor: "pointer",
+                          fontWeight: "bold",
                         }}
-                        variant="contained"
-                        onClick={() => handleOpenTransferDialog(item)}
-                        disabled={item.remaining_quantity <= 0}
+                        onClick={() => handleProductClick(group.productId)}
                       >
-                        chuyển lên quầy
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                        {group.productName}
+                      </TableCell>
+                      <TableCell align="right">
+                        {group.totalQuantity}
+                      </TableCell>
+                      <TableCell align="right">
+                        {group.totalShelfQuantity}
+                      </TableCell>
+                      <TableCell align="right">
+                        {group.totalWarehouseQuantity}
+                      </TableCell>
+                      <TableCell>
+                        {group.latestManufactureDate 
+                          ? format(new Date(group.latestManufactureDate), "dd/MM/yyyy") 
+                          : "-"}
+                      </TableCell>
+                      <TableCell
+                        style={
+                          group.earliestExpiryDate &&
+                          isBefore(
+                            new Date(group.earliestExpiryDate),
+                            addDays(new Date(), EXPIRY_THRESHOLD_DAYS)
+                          )
+                            ? { color: "red" }
+                            : {}
+                        }
+                      >
+                        {group.earliestExpiryDate 
+                          ? format(new Date(group.earliestExpiryDate), "dd/MM/yyyy") 
+                          : "-"}
+                      </TableCell>
+                      <TableCell>
+                        {Array.from(group.warnings).map((warning, idx) => (
+                          <Chip
+                            key={idx}
+                            label={warning}
+                            color="warning"
+                            size="small"
+                            sx={{ mr: 0.5 }}
+                          />
+                        ))}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell
+                        style={{ paddingBottom: 0, paddingTop: 0 }}
+                        colSpan={10}
+                      >
+                        <Collapse in={openRows[group.productId]} timeout="auto" unmountOnExit>
+                          <Box sx={{ margin: 1 }}>
+                            <Typography variant="h6" gutterBottom component="div">
+                              Chi tiết lô hàng
+                            </Typography>
+                            <Table size="small" aria-label="batch details">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell
+                                    style={{ cursor: "pointer" }}
+                                    onClick={() => handleSort("batchCode")}
+                                  >
+                                    Mã Lô Hàng{" "}
+                                    {sortColumn === "batchCode" &&
+                                      (sortDirection === "asc" ? "▲" : "▼")}
+                                  </TableCell>
+                                  <TableCell 
+                                    align="right"
+                                    style={{ cursor: "pointer" }}
+                                    onClick={() => handleSort("shelfQuantity")}
+                                  >
+                                    Số Lượng Trên Quầy{" "}
+                                    {sortColumn === "shelfQuantity" &&
+                                      (sortDirection === "asc" ? "▲" : "▼")}
+                                  </TableCell>
+                                  <TableCell 
+                                    align="right"
+                                    style={{ cursor: "pointer" }}
+                                    onClick={() => handleSort("warehouseQuantity")}
+                                  >
+                                    Số Lượng Trong Kho{" "}
+                                    {sortColumn === "warehouseQuantity" &&
+                                      (sortDirection === "asc" ? "▲" : "▼")}
+                                  </TableCell>
+                                  <TableCell
+                                    style={{ cursor: "pointer" }}
+                                    onClick={() => handleSort("manufactureDay")}
+                                  >
+                                    Ngày Sản Xuất{" "}
+                                    {sortColumn === "manufactureDay" &&
+                                      (sortDirection === "asc" ? "▲" : "▼")}
+                                  </TableCell>
+                                  <TableCell
+                                    style={{ cursor: "pointer" }}
+                                    onClick={() => handleSort("expiryDay")}
+                                  >
+                                    Hạn Sử Dụng{" "}
+                                    {sortColumn === "expiryDay" &&
+                                      (sortDirection === "asc" ? "▲" : "▼")}
+                                  </TableCell>
+                                  <TableCell
+                                    style={{ cursor: "pointer" }}
+                                    onClick={() => handleSort("status")}
+                                  >
+                                    Trạng Thái Lô{" "}
+                                    {sortColumn === "status" &&
+                                      (sortDirection === "asc" ? "▲" : "▼")}
+                                  </TableCell>
+                                  <TableCell>Cảnh báo</TableCell>
+                                  <TableCell>Thao tác</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {group.batches.map((batch) => (
+                                  <TableRow key={batch._id}>
+                                    <TableCell
+                                      style={{
+                                        cursor: "pointer",
+                                        color: "blue",
+                                        textDecoration: "underline",
+                                      }}
+                                      onClick={() => handleBatchClick(batch._id)}
+                                    >
+                                      {batch._id}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      {batch.quantity_on_shelf}
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      {batch.remaining_quantity}
+                                    </TableCell>
+                                    <TableCell>
+                                      {batch.manufacture_day
+                                        ? format(new Date(batch.manufacture_day), "dd/MM/yyyy")
+                                        : "-"}
+                                    </TableCell>
+                                    <TableCell
+                                      style={
+                                        batch.expiry_day &&
+                                        isBefore(
+                                          new Date(batch.expiry_day),
+                                          addDays(new Date(), EXPIRY_THRESHOLD_DAYS)
+                                        )
+                                          ? { color: "red" }
+                                          : {}
+                                      }
+                                    >
+                                      {batch.expiry_day
+                                        ? format(new Date(batch.expiry_day), "dd/MM/yyyy")
+                                        : "-"}
+                                    </TableCell>
+                                    <TableCell>{batch.status}</TableCell>
+                                    <TableCell>
+                                      {batch.warnings.map((warning, idx) => (
+                                        <Chip
+                                          key={idx}
+                                          label={warning}
+                                          color="warning"
+                                          size="small"
+                                          sx={{ mr: 0.5 }}
+                                        />
+                                      ))}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Button
+                                        size="small"
+                                        sx={{
+                                          fontSize: "0.7rem",
+                                          padding: "2px 6px",
+                                          margin: "0 2px",
+                                          textTransform: "none",
+                                        }}
+                                        variant="contained"
+                                        onClick={() => handleOpenTransferDialog(batch)}
+                                        disabled={batch.remaining_quantity <= 0}
+                                      >
+                                        chuyển lên quầy
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </Box>
+                        </Collapse>
+                      </TableCell>
+                    </TableRow>
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
@@ -596,60 +869,7 @@ function ShelfInventoryPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog open={productDialogOpen} onClose={handleCloseProductDialog}>
-        <DialogTitle>Thông tin Sản phẩm</DialogTitle>
-        <DialogContent>
-          {selectedProduct && (
-            <Box>
-              <Typography>Tên sản phẩm: {selectedProduct.name}</Typography>
-              <Typography>SKU: {selectedProduct.SKU}</Typography>
-              <Typography
-                style={
-                  selectedProduct.overallShelfQuantity <= LOW_QUANTITY_THRESHOLD
-                    ? { color: "orange" }
-                    : {}
-                }
-              >
-                Tổng số lượng trên quầy: {selectedProduct.overallShelfQuantity}
-              </Typography>
-              <Typography
-                style={
-                  selectedProduct.overallWarehouseQuantity <=
-                  LOW_QUANTITY_THRESHOLD
-                    ? { color: "orange" }
-                    : {}
-                }
-              >
-                Tổng số lượng trong kho:{" "}
-                {selectedProduct.overallWarehouseQuantity}
-              </Typography>
-              <Typography>
-                Tổng số lượng: {selectedProduct.overallTotalQuantity}
-              </Typography>
-              {selectedProduct.images && selectedProduct.images.length > 0 && (
-                <Box mt={2}>
-                  <Typography>Hình ảnh:</Typography>
-                  <ImageList rowHeight={100} cols={3}>
-                    {selectedProduct.images.map((image, index) => (
-                      <ImageListItem key={index}>
-                        <img
-                          src={image}
-                          alt={`Product ${selectedProduct.name} - ${index}`}
-                          loading="lazy"
-                          style={{ height: "100%", objectFit: "contain" }}
-                        />
-                      </ImageListItem>
-                    ))}
-                  </ImageList>
-                </Box>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseProductDialog}>Đóng</Button>
-        </DialogActions>
-      </Dialog>
+
     </Container>
   );
 }
