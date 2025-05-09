@@ -27,6 +27,7 @@ import {
     Alert,
     CircularProgress,
     Autocomplete,
+    InputAdornment,
 } from "@mui/material";
 import {
     Add as AddIcon,
@@ -37,6 +38,7 @@ import {
 import axios from "axios";
 import { useFormik } from "formik";
 import * as yup from "yup";
+import { useSettings } from '../contexts/SettingsContext';
 
 const productSchema = yup.object({
     name: yup.string().required("Tên sản phẩm là bắt buộc"),
@@ -59,6 +61,8 @@ const productSchema = yup.object({
         })
     ),
     barcode: yup.string(),
+    expiryThresholdDays: yup.number().min(0, "Ngưỡng cảnh báo hết hạn phải >= 0"),
+    lowQuantityThreshold: yup.number().min(0, "Ngưỡng cảnh báo số lượng thấp phải >= 0"),
 });
 
 const defaultUnits = [
@@ -93,17 +97,14 @@ const ProductManager = () => {
     });
     const [imagePreviews, setImagePreviews] = useState([]);
     const [selectedImages, setSelectedImages] = useState([]);
-    const [showOptionalFields, setShowOptionalFields] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [openCategoryDialog, setOpenCategoryDialog] = useState(false);
     const [newCategory, setNewCategory] = useState({ name: "", description: "" });
     const token = localStorage.getItem("authToken");
 
-    const predefinedUnits = ["cái", "gói", "bao", "thùng", "chai", "lọ", "hộp", "kg", "gram", "liter", "ml"];
+    const { settings } = useSettings();
 
-    const toggleOptionalFields = () => {
-        setShowOptionalFields(!showOptionalFields);
-    };
+    const predefinedUnits = ["cái", "gói", "bao", "thùng", "chai", "lọ", "hộp", "kg", "gram", "liter", "ml"];
 
     const handleOpenCategoryDialog = () => {
         setNewCategory({ name: "", description: "" });
@@ -179,6 +180,8 @@ const ProductManager = () => {
             active: false,
             images: [],
             barcode: "",
+            expiryThresholdDays: "",
+            lowQuantityThreshold: "",
         },
         validationSchema: productSchema,
         validate: (values) => {
@@ -196,6 +199,8 @@ const ProductManager = () => {
                 formData.append("description", values.description || "");
                 formData.append("active", values.active);
                 formData.append("barcode", values.barcode || "");
+                formData.append("expiryThresholdDays", values.expiryThresholdDays || "");
+                formData.append("lowQuantityThreshold", values.lowQuantityThreshold || "");
 
                 values.units.forEach((unit, index) => {
                     formData.append(`units[${index}][name]`, unit.name);
@@ -279,6 +284,8 @@ const ProductManager = () => {
         setCurrentProduct(null);
         formik.resetForm();
         formik.setFieldValue("units", defaultUnits);
+        formik.setFieldValue("expiryThresholdDays", "");
+        formik.setFieldValue("lowQuantityThreshold", "");
         setImagePreviews([]);
         setSelectedImages([]);
         setOpenDialog(true);
@@ -300,6 +307,8 @@ const ProductManager = () => {
             active: product.active,
             images: [],
             barcode: product.barcode || "",
+            expiryThresholdDays: product.expiryThresholdDays || "",
+            lowQuantityThreshold: product.lowQuantityThreshold || "",
         });
         setImagePreviews(product.images || []);
         setSelectedImages([]);
@@ -313,30 +322,64 @@ const ProductManager = () => {
     };
 
     const handleDeleteProduct = async (id) => {
-        const confirmDelete = window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này?");
+        // Find the product to determine its current active status
+        const product = products.find(p => p._id === id);
+        
+        if (!product) return;
+        
+        // Different confirmation message based on active status
+        const confirmMessage = product.active 
+            ? "Bạn có chắc chắn muốn đánh dấu sản phẩm này thành không hoạt động?"
+            : "Bạn có chắc chắn muốn xóa vĩnh viễn sản phẩm này?";
+            
+        const confirmDelete = window.confirm(confirmMessage);
         if (!confirmDelete) return;
 
         try {
-            await axios.patch(
-                `http://localhost:8000/api/products/${id}`,
-                { active: false },
-                {
-                    headers: { Authorization: `Bearer ${token}` },
-                }
-            );
-            setProducts(
-                products.map((p) => (p._id === id ? { ...p, active: false } : p))
-            );
-            setSnackbar({
-                open: true,
-                message: "Sản phẩm đã được đánh dấu là không hoạt động",
-                severity: "success",
-            });
+            if (product.active) {
+                // Soft delete - update to inactive
+                await axios.patch(
+                    `http://localhost:8000/api/products/${id}`,
+                    { active: false },
+                    {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }
+                );
+                
+                setProducts(
+                    products.map((p) => (p._id === id ? { ...p, active: false } : p))
+                );
+                
+                setSnackbar({
+                    open: true,
+                    message: "Sản phẩm đã được đánh dấu là không hoạt động",
+                    severity: "success",
+                });
+            } else {
+                // Hard delete - remove from database
+                await axios.delete(
+                    `http://localhost:8000/api/products/${id}`,
+                    {
+                        headers: { Authorization: `Bearer ${token}` },
+                    }
+                );
+                
+                // Remove from the products list
+                setProducts(
+                    products.filter((p) => p._id !== id)
+                );
+                
+                setSnackbar({
+                    open: true,
+                    message: "Sản phẩm đã được xóa thành công",
+                    severity: "success",
+                });
+            }
         } catch (error) {
-            console.error("Error deleting product:", error);
+            console.error("Error processing product deletion:", error);
             setSnackbar({
                 open: true,
-                message: "Lỗi khi xóa sản phẩm",
+                message: "Lỗi khi xử lý sản phẩm",
                 severity: "error",
             });
         }
@@ -510,45 +553,6 @@ const ProductManager = () => {
                         <Grid container spacing={3}>
                             <Grid item xs={12}>
                                 <Typography variant="h6" gutterBottom>
-                                    Hình ảnh sản phẩm
-                                </Typography>
-                                <input
-                                    accept="image/*"
-                                    style={{ display: 'none' }}
-                                    id="contained-button-file"
-                                    multiple
-                                    type="file"
-                                    onChange={handleImageChange}
-                                />
-                                <label htmlFor="contained-button-file">
-                                    <Button variant="contained" color="primary" component="span">
-                                        Thêm hình ảnh
-                                    </Button>
-                                </label>
-                                <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                    {imagePreviews.map((preview, index) => (
-                                        <Box key={index} sx={{ position: 'relative' }}>
-                                            <img src={preview} alt={`Preview ${index}`} style={{ width: 100, height: 100, objectFit: 'cover' }} />
-                                            <IconButton
-                                                size="small"
-                                                sx={{ position: 'absolute', top: -10, right: -10, backgroundColor:'error.main', color: 'white', '&:hover': { backgroundColor: 'error.dark' } }}
-                                                onClick={() => {
-                                                    const newPreviews = [...imagePreviews];
-                                                    newPreviews.splice(index, 1);
-                                                    setImagePreviews(newPreviews);
-                                                    const newSelectedImages = [...selectedImages];
-                                                    newSelectedImages.splice(index, 1);
-                                                    setSelectedImages(newSelectedImages);
-                                                }}
-                                            >
-                                                <DeleteIcon sx={{ fontSize: 16 }} />
-                                            </IconButton>
-                                        </Box>
-                                    ))}
-                                </Box>
-                            </Grid>
-                            <Grid item xs={12}>
-                                <Typography variant="h6" gutterBottom>
                                     Thông tin cơ bản
                                 </Typography>
                             </Grid>
@@ -598,19 +602,6 @@ const ProductManager = () => {
                                     Tạo danh mục mới
                                 </Button>
                             </Grid>
-                            {/* <Grid item xs={12} md={6}>
-                                <TextField
-                                    fullWidth
-                                    id="SKU"
-                                    name="SKU"
-                                    label="SKU *"
-                                    value={formik.values.SKU}
-                                    onChange={formik.handleChange}
-                                    error={formik.touched.SKU && Boolean(formik.errors.SKU)}
-                                    helperText={formik.touched.SKU && formik.errors.SKU}
-                                    margin="normal"
-                                />
-                            </Grid> */}
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth margin="normal">
                                     <InputLabel id="status-label">Trạng thái *</InputLabel>
@@ -641,6 +632,91 @@ const ProductManager = () => {
                                     margin="normal"
                                 />
                             </Grid>
+                            <Grid item xs={12} md={6}>
+                                <TextField
+                                    fullWidth
+                                    id="expiryThresholdDays"
+                                    name="expiryThresholdDays"
+                                    label="Ngưỡng cảnh báo hết hạn (ngày)"
+                                    type="number"
+                                    value={formik.values.expiryThresholdDays}
+                                    onChange={formik.handleChange}
+                                    helperText={`Để trống để sử dụng giá trị mặc định (${settings.expiryThresholdDays} ngày)`}
+                                    margin="normal"
+                                    InputProps={{
+                                        endAdornment: <InputAdornment position="end">ngày</InputAdornment>,
+                                    }}
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                                <TextField
+                                    fullWidth
+                                    id="lowQuantityThreshold"
+                                    name="lowQuantityThreshold"
+                                    label="Ngưỡng cảnh báo số lượng thấp"
+                                    type="number"
+                                    value={formik.values.lowQuantityThreshold}
+                                    onChange={formik.handleChange}
+                                    helperText={`Để trống để sử dụng giá trị mặc định (${settings.lowQuantityThreshold} sản phẩm)`}
+                                    margin="normal"
+                                    InputProps={{
+                                        endAdornment: <InputAdornment position="end">sản phẩm</InputAdornment>,
+                                    }}
+                                />
+                            </Grid>
+                            <Grid item xs={12}>
+                                <TextField
+                                    fullWidth
+                                    id="description"
+                                    name="description"
+                                    label="Mô tả"
+                                    multiline
+                                    rows={3}
+                                    value={formik.values.description}
+                                    onChange={formik.handleChange}
+                                    margin="normal"
+                                />
+                            </Grid>
+                            
+                            <Grid item xs={12}>
+                                <Typography variant="h6" gutterBottom>
+                                    Hình ảnh sản phẩm
+                                </Typography>
+                                <input
+                                    accept="image/*"
+                                    style={{ display: 'none' }}
+                                    id="contained-button-file"
+                                    multiple
+                                    type="file"
+                                    onChange={handleImageChange}
+                                />
+                                <label htmlFor="contained-button-file">
+                                    <Button variant="contained" color="primary" component="span">
+                                        Thêm hình ảnh
+                                    </Button>
+                                </label>
+                                <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                    {imagePreviews.map((preview, index) => (
+                                        <Box key={index} sx={{ position: 'relative' }}>
+                                            <img src={preview} alt={`Preview ${index}`} style={{ width: 100, height: 100, objectFit: 'cover' }} />
+                                            <IconButton
+                                                size="small"
+                                                sx={{ position: 'absolute', top: -10, right: -10, backgroundColor:'error.main', color: 'white', '&:hover': { backgroundColor: 'error.dark' } }}
+                                                onClick={() => {
+                                                    const newPreviews = [...imagePreviews];
+                                                    newPreviews.splice(index, 1);
+                                                    setImagePreviews(newPreviews);
+                                                    const newSelectedImages = [...selectedImages];
+                                                    newSelectedImages.splice(index, 1);
+                                                    setSelectedImages(newSelectedImages);
+                                                }}
+                                            >
+                                                <DeleteIcon sx={{ fontSize: 16 }} />
+                                            </IconButton>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            </Grid>
 
                             <Grid item xs={12}>
                                 <Typography variant="h6" gutterBottom>
@@ -648,7 +724,7 @@ const ProductManager = () => {
                                 </Typography>
                             </Grid>
                             {formik.values.units.map((unit, index) => (
-                                <Grid container spacing={2} key={index} sx={{ mb: 2 }}>
+                                <Grid container spacing={2} key={index} sx={{ mb: 2, pl: 2 }}>
                                     <Grid item xs={4}>
                                         <Autocomplete
                                             freeSolo
@@ -752,12 +828,12 @@ const ProductManager = () => {
 
                             <Grid item xs={12}>
                                 <Typography variant="h6" gutterBottom>
-                                    Nhà cung cấp *
+                                    Nhà cung cấp
                                 </Typography>
                             </Grid>
                             {formik.values.suppliers.map((supplier, index) => (
-                                <Grid container spacing={2} key={index} sx={{ mb: 2 }}>
-                                    <Grid item xs={4}>
+                                <Grid container spacing={2} key={index} sx={{ mb: 2, pl: 2 }}>
+                                    <Grid item xs={10}>
                                         <FormControl fullWidth>
                                             <InputLabel id={`supplier-label-${index}`}>Nhà cung cấp *</InputLabel>
                                             <Select
@@ -782,7 +858,7 @@ const ProductManager = () => {
                                             )}
                                         </FormControl>
                                     </Grid>
-                                    <Grid item xs={4}>
+                                    {/* <Grid item xs={3}>
                                         <TextField
                                             fullWidth
                                             label="Số lượng tối thiểu"
@@ -793,25 +869,26 @@ const ProductManager = () => {
                                             }
                                         />
                                     </Grid>
-                                    <Grid item xs={3}>
+                                    <Grid item xs={2}>
                                         <TextField
                                             fullWidth
-                                            label="Thời gian giao hàng (ngày)"
+                                            label="Thời gian (ngày)"
                                             type="number"
                                             value={supplier.leadTime || ""}
                                             onChange={(e) =>
                                                 handleSupplierChange(index, "leadTime", parseInt(e.target.value))
                                             }
                                         />
-                                    </Grid>
-                                    <Grid item xs={1}>
+                                    </Grid> */}
+                                    {/* <Grid item xs={1} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         <IconButton
                                             onClick={() => handleSupplierChange(index, "isPrimary", !supplier.isPrimary)}
                                             color={supplier.isPrimary ? "primary" : "default"}
+                                            title="Nhà cung cấp chính"
                                         >
-                                            <Typography variant="caption">Chính</Typography>
+                                            {supplier.isPrimary ? <Typography variant="caption" color="primary">Chính</Typography> : <Typography variant="caption">Chính</Typography>}
                                         </IconButton>
-                                    </Grid>
+                                    </Grid> */}
                                     <Grid item xs={2}>
                                         <Button
                                             variant="outlined"
@@ -830,57 +907,6 @@ const ProductManager = () => {
                                     onClick={handleAddSupplier}
                                 >
                                     Thêm nhà cung cấp
-                                </Button>
-                            </Grid>
-
-                            {showOptionalFields && (
-                                <Grid item xs={12}>
-                                    <Typography variant="h6" gutterBottom>
-                                        Thông tin chi tiết
-                                    </Typography>
-                                    <TextField
-                                        fullWidth
-                                        id="description"
-                                        name="description"
-                                        label="Mô tả"
-                                        multiline
-                                        rows={3}
-                                        value={formik.values.description}
-                                        onChange={formik.handleChange}
-                                        margin="normal"
-                                    />
-                                    <TextField
-                                        fullWidth
-                                        id="barcode-optional"
-                                        name="barcode"
-                                        label="Mã vạch"
-                                        value={formik.values.barcode}
-                                        onChange={formik.handleChange}
-                                        margin="normal"
-                                    />
-                                    <FormControl fullWidth margin="normal">
-                                        <InputLabel id="status-label-optional">Trạng thái</InputLabel>
-                                        <Select
-                                            labelId="status-label-optional"
-                                            id="status-optional"
-                                            name="status"
-                                            value={formik.values.active ? "active" : "inactive"}
-                                            onChange={(e) =>
-                                                formik.setFieldValue("active", e.target.value === "active")
-                                            }
-                                        >
-                                            <MenuItem value="active">Hoạt động</MenuItem>
-                                            <MenuItem value="inactive">Không hoạt động</MenuItem>
-                                        </Select>
-                                    </FormControl>
-                                </Grid>
-                            )}
-                            <Grid item xs={12}>
-                                <Button
-                                    variant="text"
-                                    onClick={toggleOptionalFields}
-                                >
-                                    {showOptionalFields ? "Ẩn chi tiết" : "Thêm chi tiết"}
                                 </Button>
                             </Grid>
                         </Grid>
@@ -929,6 +955,16 @@ const ProductManager = () => {
                                     </Box>
                                 </Grid>
                             )}
+                            <Grid item xs={12}>
+                                <Typography variant="subtitle1">
+                                    Ngưỡng cảnh báo hết hạn: {currentProduct.expiryThresholdDays || settings.expiryThresholdDays} ngày
+                                </Typography>
+                            </Grid>
+                            <Grid item xs={12}>
+                                <Typography variant="subtitle1">
+                                    Ngưỡng cảnh báo số lượng thấp: {currentProduct.lowQuantityThreshold || settings.lowQuantityThreshold} sản phẩm
+                                </Typography>
+                            </Grid>
                         </Grid>
                     )}
                 </DialogContent>

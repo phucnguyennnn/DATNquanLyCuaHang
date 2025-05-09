@@ -124,6 +124,24 @@ const productSchema = new mongoose.Schema(
                 message: '{VALUE} is not an integer value'
             }
         },
+        expiryThresholdDays: {
+            type: Number,
+            min: 0,
+            validate: {
+                validator: Number.isInteger,
+                message: '{VALUE} is not an integer value'
+            },
+            description: "Product-specific expiry threshold in days"
+        },
+        lowQuantityThreshold: {
+            type: Number,
+            min: 0,
+            validate: {
+                validator: Number.isInteger,
+                message: '{VALUE} is not an integer value'
+            },
+            description: "Product-specific low quantity threshold"
+        },
         reorderLevel: {
             type: Number,
             min: 0,

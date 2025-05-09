@@ -75,17 +75,17 @@ const Settings = () => {
       
       <Paper sx={{ p: 3, mt: 4 }}>
         <Typography variant="h6" gutterBottom>
-          Cài đặt ngưỡng cảnh báo hàng tồn kho
+          Cài đặt ngưỡng cảnh báo hàng tồn kho mặc định
         </Typography>
         <Divider sx={{ mb: 3 }} />
         
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <TextField
-            label="Ngưỡng cảnh báo sắp hết hạn"
+            label="Ngưỡng cảnh báo sắp hết hạn mặc định"
             value={expiryThreshold}
             onChange={handleExpiryChange}
             fullWidth
-            helperText="Số ngày trước khi sản phẩm hết hạn sẽ hiển thị cảnh báo"
+            helperText="Số ngày trước khi sản phẩm hết hạn sẽ hiển thị cảnh báo (có thể thiết lập riêng cho từng sản phẩm)"
             InputProps={{
               endAdornment: <InputAdornment position="end">ngày</InputAdornment>,
             }}
@@ -98,11 +98,11 @@ const Settings = () => {
           </Alert>
           
           <TextField
-            label="Ngưỡng cảnh báo số lượng thấp"
+            label="Ngưỡng cảnh báo số lượng thấp mặc định"
             value={quantityThreshold}
             onChange={handleQuantityChange}
             fullWidth
-            helperText="Số lượng tồn kho thấp sẽ hiển thị cảnh báo"
+            helperText="Số lượng tồn kho thấp sẽ hiển thị cảnh báo (có thể thiết lập riêng cho từng sản phẩm)"
             InputProps={{
               endAdornment: <InputAdornment position="end">sản phẩm</InputAdornment>,
             }}
