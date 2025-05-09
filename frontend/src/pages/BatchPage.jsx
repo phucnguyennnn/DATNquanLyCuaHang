@@ -33,11 +33,11 @@ import { format, isBefore, addDays } from "date-fns";
 import axios from "axios";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-
-const EXPIRY_THRESHOLD_DAYS = 30;
-const LOW_QUANTITY_THRESHOLD = 1;
+import { useSettings } from "../contexts/SettingsContext";
 
 function ShelfInventoryPage() {
+  // Use settings from context instead of constants
+  const { settings } = useSettings();
   const [shelfData, setShelfData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -191,16 +191,16 @@ function ShelfInventoryPage() {
 
       if (
         expiryDate &&
-        isBefore(expiryDate, addDays(now, EXPIRY_THRESHOLD_DAYS))
+        isBefore(expiryDate, addDays(now, settings.expiryThresholdDays))
       ) {
         warnings.push("Sắp hết hạn");
       }
 
-      if (item.quantity_on_shelf <= LOW_QUANTITY_THRESHOLD) {
+      if (item.quantity_on_shelf <= settings.lowQuantityThreshold) {
         warnings.push("Ít trên quầy");
       }
 
-      if (item.remaining_quantity <= LOW_QUANTITY_THRESHOLD) {
+      if (item.remaining_quantity <= settings.lowQuantityThreshold) {
         warnings.push("Ít trong kho");
       }
 
@@ -265,7 +265,7 @@ function ShelfInventoryPage() {
         return valueA > valueB ? -1 : valueA < valueB ? 1 : 0;
       }
     });
-  }, [shelfData, sortColumn, sortDirection]);
+  }, [shelfData, sortColumn, sortDirection, settings]);
 
   const groupedByProduct = useMemo(() => {
     const grouped = {};
@@ -626,7 +626,7 @@ function ShelfInventoryPage() {
                           group.earliestExpiryDate &&
                           isBefore(
                             new Date(group.earliestExpiryDate),
-                            addDays(new Date(), EXPIRY_THRESHOLD_DAYS)
+                            addDays(new Date(), settings.expiryThresholdDays)
                           )
                             ? { color: "red" }
                             : {}
@@ -744,7 +744,7 @@ function ShelfInventoryPage() {
                                         batch.expiry_day &&
                                         isBefore(
                                           new Date(batch.expiry_day),
-                                          addDays(new Date(), EXPIRY_THRESHOLD_DAYS)
+                                          addDays(new Date(), settings.expiryThresholdDays)
                                         )
                                           ? { color: "red" }
                                           : {}
@@ -834,7 +834,7 @@ function ShelfInventoryPage() {
                   selectedBatch.expiry_day &&
                   isBefore(
                     new Date(selectedBatch.expiry_day),
-                    addDays(new Date(), EXPIRY_THRESHOLD_DAYS)
+                    addDays(new Date(), settings.expiryThresholdDays)
                   )
                     ? { color: "red" }
                     : {}
@@ -859,7 +859,7 @@ function ShelfInventoryPage() {
               </Typography>
               <Typography
                 style={
-                  selectedBatch.quantity_on_shelf <= LOW_QUANTITY_THRESHOLD
+                  selectedBatch.quantity_on_shelf <= settings.lowQuantityThreshold
                     ? { color: "orange" }
                     : {}
                 }

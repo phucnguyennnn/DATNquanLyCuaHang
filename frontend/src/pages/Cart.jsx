@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { Delete as DeleteIcon, ShoppingCart as ShoppingCartIcon, Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useCart } from '../context/CartContext';
+import { useCart } from '../contexts/CartContext';
 
 const CartPage = () => {
   const { cartItems, updateCartItem, removeFromCart, clearCart } = useCart();

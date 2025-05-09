@@ -2,7 +2,8 @@ import React, { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import AppRouter from "./routes/Routes";
-import { CartProvider } from "./context/CartContext";
+import { CartProvider } from "./contexts/CartContext";
+import { SettingsProvider } from "./contexts/SettingsContext";
 
 const AppWrapper = () => {
   const [key, setKey] = useState(0);
@@ -20,9 +21,11 @@ const AppWrapper = () => {
   }, []);
 
   return (
-    <CartProvider>
-      <AppRouter key={key} />
-    </CartProvider>
+    <SettingsProvider>
+      <CartProvider>
+        <AppRouter key={key} />
+      </CartProvider>
+    </SettingsProvider>
   );
 };
 
