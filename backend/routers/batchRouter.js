@@ -18,4 +18,7 @@ router.put("/:id", batchController.updateBatch);
 router.delete("/:id", batchController.deleteBatch);
 // 
 router.put("/:id/transfer-to-shelf", batchController.transferToShelf);
+// Route để chuyển sản phẩm từ quầy xuống kho
+router.put("/:id/transfer-to-warehouse", batchController.transferToWarehouse);
+
 module.exports = router;

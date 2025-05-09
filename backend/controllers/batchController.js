@@ -190,3 +190,32 @@ exports.transferToShelf = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+exports.transferToWarehouse = async (req, res) => {
+  try {
+    const { quantity } = req.body;
+    const batch = await Batch.findById(req.params.id);
+
+    if (!batch) {
+      return res.status(404).json({ message: "Lô hàng không tồn tại" });
+    }
+
+    if (quantity <= 0) {
+      return res.status(400).json({ message: "Số lượng phải lớn hơn 0" });
+    }
+
+    if (batch.quantity_on_shelf < quantity) {
+      return res.status(400).json({
+        message: "Số lượng trên quầy không đủ để chuyển",
+      });
+    }
+
+    batch.remaining_quantity += quantity;
+    batch.quantity_on_shelf -= quantity;
+
+    const updatedBatch = await batch.save({ validateModifiedOnly: true })
+    res.status(200).json(updatedBatch);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

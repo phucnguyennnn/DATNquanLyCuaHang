@@ -53,6 +53,10 @@ function ShelfInventoryPage() {
   const [selectedTransferBatch, setSelectedTransferBatch] = useState(null);
   const [transferQuantity, setTransferQuantity] = useState("");
   const [transferError, setTransferError] = useState(null);
+  const [warehouseTransferDialogOpen, setWarehouseTransferDialogOpen] = useState(false);
+  const [selectedWarehouseTransferBatch, setSelectedWarehouseTransferBatch] = useState(null);
+  const [warehouseTransferQuantity, setWarehouseTransferQuantity] = useState("");
+  const [warehouseTransferError, setWarehouseTransferError] = useState(null);
   const [openRows, setOpenRows] = useState({});
 
   const handleOpenTransferDialog = (batch) => {
@@ -60,6 +64,13 @@ function ShelfInventoryPage() {
     setTransferDialogOpen(true);
     setTransferQuantity("");
     setTransferError(null);
+  };
+
+  const handleOpenWarehouseTransferDialog = (batch) => {
+    setSelectedWarehouseTransferBatch(batch);
+    setWarehouseTransferDialogOpen(true);
+    setWarehouseTransferQuantity("");
+    setWarehouseTransferError(null);
   };
 
   const handleTransferQuantityChange = (event) => {
@@ -81,6 +92,35 @@ function ShelfInventoryPage() {
       setTransferDialogOpen(false);
     } catch (err) {
       setTransferError(
+        err.response?.data?.message || err.message || "Lỗi khi chuyển hàng"
+      );
+    }
+  };
+
+  const handleWarehouseTransferQuantityChange = (event) => {
+    setWarehouseTransferQuantity(event.target.value.replace(/\D/g, ""));
+  };
+
+  const handleWarehouseTransferSubmit = async () => {
+    if (!warehouseTransferQuantity || parseInt(warehouseTransferQuantity) <= 0) {
+      setWarehouseTransferError("Vui lòng nhập số lượng hợp lệ");
+      return;
+    }
+
+    if (parseInt(warehouseTransferQuantity) > selectedWarehouseTransferBatch.quantity_on_shelf) {
+      setWarehouseTransferError("Số lượng không thể lớn hơn số lượng trên quầy");
+      return;
+    }
+
+    try {
+      await axios.put(
+        `http://localhost:8000/api/batches/${selectedWarehouseTransferBatch._id}/transfer-to-warehouse`,
+        { quantity: parseInt(warehouseTransferQuantity) }
+      );
+      await fetchData();
+      setWarehouseTransferDialogOpen(false);
+    } catch (err) {
+      setWarehouseTransferError(
         err.response?.data?.message || err.message || "Lỗi khi chuyển hàng"
       );
     }
@@ -450,10 +490,10 @@ function ShelfInventoryPage() {
               }}
             >
               <MenuItem value="">Tất cả</MenuItem>
-              <MenuItem value="active">Hoạt động</MenuItem>
-              <MenuItem value="inactive">Không hoạt động</MenuItem>
-              <MenuItem value="expired">Hết hạn</MenuItem>
-              <MenuItem value="sold_out">Hết hàng trong ko</MenuItem>
+              <MenuItem value="hoạt động">Hoạt động</MenuItem>
+              <MenuItem value="không hoạt động">Không hoạt động</MenuItem>
+              <MenuItem value="hết hạn">Hết hạn</MenuItem>
+              <MenuItem value="hết hàng">Hết hàng trong kho</MenuItem>
             </Select>
           </FormControl>
         </Stack>
@@ -727,20 +767,37 @@ function ShelfInventoryPage() {
                                       ))}
                                     </TableCell>
                                     <TableCell>
-                                      <Button
-                                        size="small"
-                                        sx={{
-                                          fontSize: "0.7rem",
-                                          padding: "2px 6px",
-                                          margin: "0 2px",
-                                          textTransform: "none",
-                                        }}
-                                        variant="contained"
-                                        onClick={() => handleOpenTransferDialog(batch)}
-                                        disabled={batch.remaining_quantity <= 0}
-                                      >
-                                        chuyển lên quầy
-                                      </Button>
+                                      <Stack direction="row" spacing={1}>
+                                        <Button
+                                          size="small"
+                                          sx={{
+                                            fontSize: "0.7rem",
+                                            padding: "2px 6px",
+                                            margin: "0 2px",
+                                            textTransform: "none",
+                                          }}
+                                          variant="contained"
+                                          onClick={() => handleOpenTransferDialog(batch)}
+                                          disabled={batch.remaining_quantity <= 0}
+                                        >
+                                          chuyển lên quầy
+                                        </Button>
+                                        <Button
+                                          size="small"
+                                          sx={{
+                                            fontSize: "0.7rem",
+                                            padding: "2px 6px",
+                                            margin: "0 2px",
+                                            textTransform: "none",
+                                          }}
+                                          variant="outlined"
+                                          color="primary"
+                                          onClick={() => handleOpenWarehouseTransferDialog(batch)}
+                                          disabled={batch.quantity_on_shelf <= 0}
+                                        >
+                                          chuyển xuống kho
+                                        </Button>
+                                      </Stack>
                                     </TableCell>
                                   </TableRow>
                                 ))}
@@ -870,6 +927,38 @@ function ShelfInventoryPage() {
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={warehouseTransferDialogOpen}
+        onClose={() => setWarehouseTransferDialogOpen(false)}
+      >
+        <DialogTitle>Chuyển hàng xuống kho</DialogTitle>
+        <DialogContent>
+          <Box sx={{ minWidth: 300, pt: 2 }}>
+            <TextField
+              fullWidth
+              label="Số lượng chuyển"
+              value={warehouseTransferQuantity}
+              onChange={handleWarehouseTransferQuantityChange}
+              error={!!warehouseTransferError}
+              helperText={warehouseTransferError}
+            />
+            <Typography variant="body2" color="text.secondary" mt={1}>
+              Có sẵn trên quầy: {selectedWarehouseTransferBatch?.quantity_on_shelf}
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWarehouseTransferDialogOpen(false)}>Hủy</Button>
+          <Button
+            onClick={handleWarehouseTransferSubmit}
+            variant="contained"
+            color="primary"
+          >
+            Xác nhận
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
     </Container>
   );
 }
