@@ -83,7 +83,7 @@ const goodReceiptController = {
   confirmGoodReceipt: async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
-    
+
     try {
       const receiptId = req.params.id;
       const receipt = await GoodReceipt.findById(receiptId)
@@ -110,7 +110,7 @@ const goodReceiptController = {
           expiry_day: item.expiryDate,
           initial_quantity: item.quantity,
           remaining_quantity: item.quantity,
-          status: "active",
+          status: "hoạt động",
           goodReceipt: receiptId,
         });
 
@@ -132,7 +132,7 @@ const goodReceiptController = {
 
       await session.commitTransaction();
       res.json({ batches });
-      
+
     } catch (error) {
       await session.abortTransaction();
       res.status(500).json({ error: error.message });

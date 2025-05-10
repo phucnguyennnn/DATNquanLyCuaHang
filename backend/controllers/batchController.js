@@ -86,7 +86,6 @@ exports.getAllBatches = async (req, res) => {
       const products = await Product.find({
         $or: [
           { name: { $regex: search, $options: "i" } },
-          { SKU: { $regex: search, $options: "i" } },
         ],
       }).select("_id");
 

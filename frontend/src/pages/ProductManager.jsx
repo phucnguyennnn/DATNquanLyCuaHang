@@ -104,7 +104,7 @@ const ProductManager = () => {
 
     const { settings } = useSettings();
 
-    const predefinedUnits = ["cái", "gói", "bao", "thùng", "chai", "lọ", "hộp", "kg", "gram", "liter", "ml"];
+    const predefinedUnits = ["cái", "gói", "bao", "thùng", "chai", "lọ", "lon",  "hộp", "kg", "gram", "liter", "ml"];
 
     const handleOpenCategoryDialog = () => {
         setNewCategory({ name: "", description: "" });

@@ -3,6 +3,11 @@ const mongoose = require("mongoose");
 
 const batchSchema = new mongoose.Schema(
   {
+    batchCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     manufacture_day: {
       type: Date,
       required: true,
@@ -130,63 +135,93 @@ batchSchema.virtual("daysUntilExpiry").get(function () {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 });
 
-batchSchema.pre("save", function (next) {
-  // Generate batchCode if not provided
-  if (!this.batchCode) {
-    const randomCode = Math.random().toString(36).substring(2, 9).toUpperCase();
-    this.batchCode = `BATCH-${Date.now()}-${randomCode}`;
-  }
+batchSchema.pre("save", async function (next) {
+  try {
+    // Generate batchCode if not provided
+    if (!this.batchCode) {
+      // Get product code
+      const Product = mongoose.model('Product');
+      const product = await Product.findById(this.product);
+      const productCode = product ? product.code || product._id.toString().slice(-6) : 'PROD';
 
-  const daysLeft = this.daysUntilExpiry;
-  if (
-    !this.discountInfo.isDiscounted ||
-    this.discountInfo.discountReason === "near_expiry"
-  ) {
-    if (daysLeft <= 7) {
-      this.discountInfo = {
-        isDiscounted: true,
-        discountType: "percentage",
-        discountValue: 30,
-        discountStartDate: new Date(),
-        discountEndDate: this.expiry_day,
-        discountReason: "near_expiry",
-      };
-    } else if (daysLeft <= 14 && daysLeft > 7) {
-      this.discountInfo = {
-        isDiscounted: true,
-        discountType: "percentage",
-        discountValue: 15,
-        discountStartDate: new Date(),
-        discountEndDate: this.expiry_day,
-        discountReason: "near_expiry",
-      };
-    } else if (
-      daysLeft > 14 &&
+      // Format date as ddmmyy
+      const now = this.createdAt || new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = String(now.getFullYear()).slice(-2);
+      const dateString = `${day}${month}${year}`;
+
+      // Get sequence number
+      const Batch = mongoose.model('Batch');
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(now);
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const count = await Batch.countDocuments({
+        product: this.product,
+        createdAt: { $gte: todayStart, $lte: todayEnd }
+      });
+
+      const sequence = String(count + 1).padStart(3, '0');
+
+      // Create batchCode with format [ProductCode]-[ddmmyy]-[Sequence]
+      this.batchCode = `${productCode}-${dateString}-${sequence}`;
+    }
+
+    const daysLeft = this.daysUntilExpiry;
+    if (
+      !this.discountInfo.isDiscounted ||
       this.discountInfo.discountReason === "near_expiry"
     ) {
-      this.discountInfo.isDiscounted = false;
-      this.discountInfo.discountValue = 0;
-      this.discountInfo.discountStartDate = undefined;
-      this.discountInfo.discountEndDate = undefined;
-      this.discountInfo.discountReason = undefined;
+      if (daysLeft <= 7) {
+        this.discountInfo = {
+          isDiscounted: true,
+          discountType: "percentage",
+          discountValue: 30,
+          discountStartDate: new Date(),
+          discountEndDate: this.expiry_day,
+          discountReason: "near_expiry",
+        };
+      } else if (daysLeft <= 14 && daysLeft > 7) {
+        this.discountInfo = {
+          isDiscounted: true,
+          discountType: "percentage",
+          discountValue: 15,
+          discountStartDate: new Date(),
+          discountEndDate: this.expiry_day,
+          discountReason: "near_expiry",
+        };
+      } else if (
+        daysLeft > 14 &&
+        this.discountInfo.discountReason === "near_expiry"
+      ) {
+        this.discountInfo.isDiscounted = false;
+        this.discountInfo.discountValue = 0;
+        this.discountInfo.discountStartDate = undefined;
+        this.discountInfo.discountEndDate = undefined;
+        this.discountInfo.discountReason = undefined;
+      }
     }
+    this.remaining_quantity =
+      this.initial_quantity -
+      this.sold_quantity -
+      this.lost_quantity -
+      this.quantity_on_shelf;
+    if (this.remaining_quantity < 0)
+      return next(new Error("Remaining quantity cannot be negative."));
+    if (this.remaining_quantity === 0 && this.initial_quantity > 0)
+      this.status = "hết hàng";
+    else if (this.expiry_day < new Date()) this.status = "hết hạn";
+    else if (
+      this.status === "hoạt động" &&
+      this.remaining_quantity < this.initial_quantity * 0.2
+    )
+      this.status = "không hoạt động";
+    next();
+  } catch (error) {
+    return next(error);
   }
-  this.remaining_quantity =
-    this.initial_quantity -
-    this.sold_quantity -
-    this.lost_quantity -
-    this.quantity_on_shelf;
-  if (this.remaining_quantity < 0)
-    return next(new Error("Remaining quantity cannot be negative."));
-  if (this.remaining_quantity === 0 && this.initial_quantity > 0)
-    this.status = "hết hàng";
-  else if (this.expiry_day < new Date()) this.status = "hết hạn";
-  else if (
-    this.status === "hoạt động" &&
-    this.remaining_quantity < this.initial_quantity * 0.2
-  )
-    this.status = "không hoạt động";
-  next();
 });
 
 batchSchema.methods.getDiscountedPrice = function (originalPrice) {

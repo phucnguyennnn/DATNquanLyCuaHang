@@ -29,7 +29,6 @@ exports.createProduct = async (req, res) => {
       name,
       category,
       description,
-      SKU,
       barcode,
       units,
       minStockLevel,
@@ -41,7 +40,7 @@ exports.createProduct = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    const requiredFields = { name, category, SKU, units };
+    const requiredFields = { name, category, units };
     for (const [field, value] of Object.entries(requiredFields)) {
       if (!value) {
         return res.status(400).json({
@@ -67,19 +66,12 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    // Check for duplicate SKU or barcode
-    const existingProduct = await Product.findOne({
-      $or: [
-        { SKU: SKU },
-        ...(barcode ? [{ barcode: barcode }] : [])
-      ]
-    });
-    if (existingProduct) {
-      return res.status(400).json({
-        success: false,
-        message: "Product with this SKU or barcode already exists."
-      });
-    }
+    // if (existingProduct) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Product with this SKU or barcode already exists."
+    //   });
+    // }
 
     // Process and validate suppliers
     let supplierInfo = [];
@@ -138,7 +130,6 @@ exports.createProduct = async (req, res) => {
       name,
       category,
       description,
-      SKU,
       barcode,
       units,
       minStockLevel,
@@ -389,28 +380,6 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
-    // Handle SKU/barcode uniqueness
-    if (updates.SKU || updates.barcode) {
-      const existingProduct = await Product.findOne({
-        $and: [
-          { _id: { $ne: id } },
-          {
-            $or: [
-              ...(updates.SKU ? [{ SKU: updates.SKU }] : []),
-              ...(updates.barcode ? [{ barcode: updates.barcode }] : [])
-            ]
-          }
-        ]
-      });
-
-      if (existingProduct) {
-        return res.status(400).json({
-          success: false,
-          message: "Another product with this SKU or barcode already exists."
-        });
-      }
-    }
-
     // Handle suppliers update
     if (updates.suppliers !== undefined) {
       if (!Array.isArray(updates.suppliers)) {
@@ -497,7 +466,7 @@ exports.updateProduct = async (req, res) => {
     // Update other fields
     const allowedUpdates = [
       'name', 'category', 'description',
-      'SKU', 'barcode', 'units', 'minStockLevel', 'reorderLevel',
+      'barcode', 'units', 'minStockLevel', 'reorderLevel',
       'weight', 'dimensions', 'taxRate', 'tags', 'expiryDiscountRules',
       'discount', 'active'
     ];

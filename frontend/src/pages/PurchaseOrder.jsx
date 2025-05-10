@@ -37,7 +37,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-const UNITS = ["thùng", "bao", "chai", "lọ", "hộp", "gói", "cái", "kg", "liter"];
+const UNITS = ["thùng", "bao", "chai", "lọ", "lon", "hộp", "gói", "cái", "kg", "liter"];
 const STATUSES = [
   { value: "draft", label: "Nháp" },
   { value: "pending", label: "Đang chờ" },
@@ -152,7 +152,6 @@ const PurchaseOrderManagement = () => {
       setOrderItems([...orderItems, {
         product: selectedProduct,
         name: product.name,
-        SKU: product.SKU,
         quantity: Number(quantity),
         unit,
         unitPrice: Number(unitPrice),
@@ -196,10 +195,9 @@ const PurchaseOrderManagement = () => {
       const payload = {
         supplier: selectedSupplier,
         supplierName: suppliers.find(s => s._id === selectedSupplier)?.name || "",
-        items: orderItems.map(({ product, name, SKU, quantity, unit, unitPrice }) => ({
+        items: orderItems.map(({ product, name, quantity, unit, unitPrice }) => ({
           product,
           productName: name,
-          productSKU: SKU,
           quantity,
           unit,
           unitPrice,
@@ -263,7 +261,6 @@ const PurchaseOrderManagement = () => {
         items: editOrderItems.map(({ product, quantity, unit, unitPrice }) => ({
           product: product._id,
           productName: product.name || "",
-          productSKU: product.SKU || "",
           quantity,
           unit,
           unitPrice,
@@ -392,7 +389,7 @@ const PurchaseOrderManagement = () => {
                 >
                   {products.map((p) => (
                     <MenuItem key={p._id} value={p._id}>
-                      {p.name} - {p.SKU} ({p.units[0]?.name || "N/A"})
+                      {p.name} - ({p.units[0]?.name || "N/A"})
                     </MenuItem>
                   ))}
                 </Select>
@@ -536,7 +533,6 @@ const PurchaseOrderManagement = () => {
                     <TableRow>
                       <TableCell width="50px">STT</TableCell>
                       <TableCell>Tên sản phẩm</TableCell>
-                      <TableCell>SKU</TableCell>
                       <TableCell>Đơn vị</TableCell>
                       <TableCell>Số lượng</TableCell>
                       <TableCell>Giá nhập</TableCell>
@@ -549,7 +545,6 @@ const PurchaseOrderManagement = () => {
                       <TableRow key={index}>
                         <TableCell>{index + 1}</TableCell>
                         <TableCell>{item.name}</TableCell>
-                        <TableCell>{item.SKU}</TableCell>
                         <TableCell>{item.unit}</TableCell>
                        
                         <TableCell>
@@ -658,7 +653,6 @@ const PurchaseOrderManagement = () => {
                       <TableRow>
                         <TableCell>STT</TableCell>
                         <TableCell>Tên sản phẩm</TableCell>
-                        <TableCell>SKU</TableCell>
                         <TableCell>Đơn vị</TableCell>
                         <TableCell>SL</TableCell>
                         <TableCell>Giá nhập</TableCell>
@@ -671,7 +665,6 @@ const PurchaseOrderManagement = () => {
                         <TableRow key={index}>
                           <TableCell>{index + 1}</TableCell>
                           <TableCell>{item.name}</TableCell>
-                          <TableCell>{item.SKU}</TableCell>
                           <TableCell>{item.unit}</TableCell>
                           <TableCell>
                             <TextField

@@ -282,16 +282,31 @@ const SupplierPage = () => {
     setOpenDialog(true);
   };
 
-  const handleDelete = async (id) => {
+  const handleDeleteClick = (supplier) => {
+    setSupplierToDelete(supplier);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!supplierToDelete) return;
+    
     try {
-      await axios.delete(`${API_URL}/${id}`, {
+      await axios.delete(`${API_URL}/${supplierToDelete._id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` }
       });
       fetchSuppliers();
       showSnackbar('Đã xóa nhà cung cấp thành công');
     } catch (error) {
       showSnackbar(error.response?.data?.message || 'Xóa thất bại', 'error');
+    } finally {
+      setDeleteDialogOpen(false);
+      setSupplierToDelete(null);
     }
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setSupplierToDelete(null);
   };
 
   const handleCloseDialog = () => {
@@ -411,7 +426,7 @@ const SupplierPage = () => {
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Xóa">
-                    <IconButton onClick={() => handleDelete(supplier._id)}>
+                    <IconButton onClick={() => handleDeleteClick(supplier)}>
                       <Delete fontSize="small" />
                     </IconButton>
                   </Tooltip>
@@ -891,6 +906,33 @@ const SupplierPage = () => {
             </Button>
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleCloseDeleteDialog}
+        aria-labelledby="delete-dialog-title"
+      >
+        <DialogTitle id="delete-dialog-title">
+          Xác nhận xóa nhà cung cấp
+        </DialogTitle>
+        <DialogContent>
+          {supplierToDelete && (
+            <Typography>
+              Bạn có chắc chắn muốn xóa nhà cung cấp "{supplierToDelete.name}"? 
+              Hành động này không thể hoàn tác.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteDialog} color="primary">
+            Hủy bỏ
+          </Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained">
+            Xác nhận xóa
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Snackbar

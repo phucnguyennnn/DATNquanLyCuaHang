@@ -228,8 +228,8 @@ function ShelfInventoryPage() {
         valueA = a.product?.name || "";
         valueB = b.product?.name || "";
       } else if (sortColumn === "batchCode") {
-        valueA = a._id || "";
-        valueB = b._id || "";
+        valueA = a.batchCode || "";
+        valueB = b.batchCode || "";
       } else if (sortColumn === "shelfQuantity") {
         valueA = a.quantity_on_shelf;
         valueB = b.quantity_on_shelf;
@@ -245,6 +245,9 @@ function ShelfInventoryPage() {
       } else if (sortColumn === "expiryDay") {
         valueA = a.expiry_day ? new Date(a.expiry_day) : null;
         valueB = b.expiry_day ? new Date(b.expiry_day) : null;
+      } else if (sortColumn === "importDate") {
+        valueA = a.createdAt ? new Date(a.createdAt) : null;
+        valueB = b.createdAt ? new Date(b.createdAt) : null;
       } else if (sortColumn === "status") {
         valueA = a.status || "";
         valueB = b.status || "";
@@ -329,8 +332,8 @@ function ShelfInventoryPage() {
           let valueA, valueB;
 
           if (sortColumn === "batchCode") {
-            valueA = a._id || "";
-            valueB = b._id || "";
+            valueA = a.batchCode || "";
+            valueB = b.batchCode || "";
           } else if (sortColumn === "shelfQuantity") {
             valueA = a.quantity_on_shelf;
             valueB = b.quantity_on_shelf;
@@ -346,9 +349,9 @@ function ShelfInventoryPage() {
           } else if (sortColumn === "expiryDay") {
             valueA = a.expiry_day ? new Date(a.expiry_day) : null;
             valueB = b.expiry_day ? new Date(b.expiry_day) : null;
-          } else if (sortColumn === "status") {
-            valueA = a.status || "";
-            valueB = b.status || "";
+          } else if (sortColumn === "importDate") {
+            valueA = a.createdAt ? new Date(a.createdAt) : null;
+            valueB = b.createdAt ? new Date(b.createdAt) : null;
           } else {
             return 0; // No sort
           }
@@ -394,6 +397,9 @@ function ShelfInventoryPage() {
         } else if (sortColumn === "expiryDay") {
           valueA = a.earliestExpiryDate ? new Date(a.earliestExpiryDate) : null;
           valueB = b.earliestExpiryDate ? new Date(b.earliestExpiryDate) : null;
+        } else if (sortColumn === "importDate") {
+          valueA = a.createdAt ? new Date(a.createdAt) : null;
+          valueB = b.createdAt ? new Date(b.createdAt) : null;
         }
 
         if (valueA == null || valueB == null) {
@@ -705,6 +711,14 @@ function ShelfInventoryPage() {
                                   </TableCell>
                                   <TableCell
                                     style={{ cursor: "pointer" }}
+                                    onClick={() => handleSort("importDate")}
+                                  >
+                                    Ngày Nhập{" "}
+                                    {sortColumn === "importDate" &&
+                                      (sortDirection === "asc" ? "▲" : "▼")}
+                                  </TableCell>
+                                  <TableCell
+                                    style={{ cursor: "pointer" }}
                                     onClick={() => handleSort("status")}
                                   >
                                     Trạng Thái Lô{" "}
@@ -726,7 +740,7 @@ function ShelfInventoryPage() {
                                       }}
                                       onClick={() => handleBatchClick(batch._id)}
                                     >
-                                      {batch._id}
+                                      {batch.batchCode || batch._id}
                                     </TableCell>
                                     <TableCell align="right">
                                       {batch.quantity_on_shelf}
@@ -752,6 +766,11 @@ function ShelfInventoryPage() {
                                     >
                                       {batch.expiry_day
                                         ? format(new Date(batch.expiry_day), "dd/MM/yyyy")
+                                        : "-"}
+                                    </TableCell>
+                                    <TableCell>
+                                      {batch.createdAt
+                                        ? format(new Date(batch.createdAt), "dd/MM/yyyy")
                                         : "-"}
                                     </TableCell>
                                     <TableCell>{batch.status}</TableCell>
@@ -819,7 +838,7 @@ function ShelfInventoryPage() {
         <DialogContent>
           {selectedBatch && (
             <Box>
-              <Typography>Mã Lô: {selectedBatch._id}</Typography>
+              <Typography>Mã Lô: {selectedBatch.batchCode || selectedBatch._id}</Typography>
               <Typography>
                 Ngày Sản Xuất:{" "}
                 {selectedBatch.manufacture_day
@@ -843,6 +862,12 @@ function ShelfInventoryPage() {
                 Hạn Sử Dụng:{" "}
                 {selectedBatch.expiry_day
                   ? format(new Date(selectedBatch.expiry_day), "dd/MM/yyyy")
+                  : "-"}
+              </Typography>
+              <Typography>
+                Ngày Nhập:{" "}
+                {selectedBatch.createdAt
+                  ? format(new Date(selectedBatch.createdAt), "dd/MM/yyyy")
                   : "-"}
               </Typography>
               <Typography>
