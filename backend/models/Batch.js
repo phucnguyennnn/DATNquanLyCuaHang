@@ -139,10 +139,29 @@ batchSchema.pre("save", async function (next) {
   try {
     // Generate batchCode if not provided
     if (!this.batchCode) {
-      // Get product code
+      // Get product code (abbreviated name)
       const Product = mongoose.model('Product');
       const product = await Product.findById(this.product);
-      const productCode = product ? product.code || product._id.toString().slice(-6) : 'PROD';
+
+      // Use product code or create abbreviation from product name
+      let productCode;
+      if (product) {
+        if (product.code) {
+          productCode = product.code;
+        } else if (product.name) {
+          // Create abbreviation from product name (first letters of each word, max 5 chars)
+          productCode = product.name
+            .split(/\s+/)
+            .map(word => word.charAt(0))
+            .join('')
+            .toUpperCase()
+            .substring(0, 5);
+        } else {
+          productCode = product._id.toString().slice(-4).toUpperCase();
+        }
+      } else {
+        productCode = 'LH';
+      }
 
       // Format date as ddmmyy
       const now = this.createdAt || new Date();
@@ -165,7 +184,7 @@ batchSchema.pre("save", async function (next) {
 
       const sequence = String(count + 1).padStart(3, '0');
 
-      // Create batchCode with format [ProductCode]-[ddmmyy]-[Sequence]
+      // Create batchCode with format [ProductAbbrev]-[ddmmyy]-[Sequence]
       this.batchCode = `${productCode}-${dateString}-${sequence}`;
     }
 
@@ -210,7 +229,7 @@ batchSchema.pre("save", async function (next) {
       this.quantity_on_shelf;
     if (this.remaining_quantity < 0)
       return next(new Error("Remaining quantity cannot be negative."));
-    if (this.remaining_quantity === 0 && this.initial_quantity > 0)
+    if (this.remaining_quantity === 0 && this.initial_quantity > 0 && this.quantity_on_shelf === 0)
       this.status = "hết hàng";
     else if (this.expiry_day < new Date()) this.status = "hết hạn";
     else if (

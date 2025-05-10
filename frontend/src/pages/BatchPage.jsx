@@ -499,7 +499,7 @@ function ShelfInventoryPage() {
               <MenuItem value="hoạt động">Hoạt động</MenuItem>
               <MenuItem value="không hoạt động">Không hoạt động</MenuItem>
               <MenuItem value="hết hạn">Hết hạn</MenuItem>
-              <MenuItem value="hết hàng">Hết hàng trong kho</MenuItem>
+              <MenuItem value="hết hàng">Hết hàng</MenuItem>
             </Select>
           </FormControl>
         </Stack>
