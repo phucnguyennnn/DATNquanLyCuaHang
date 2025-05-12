@@ -2,7 +2,7 @@ const Batch = require("../models/Batch");
 const Supplier = require("../models/Supplier");
 const Product = require("../models/Product");
 const mongoose = require("mongoose");
-const TransferLog = require('../models/TransferLog');
+
 exports.createBatch = async (req, res) => {
   try {
     const {
@@ -183,7 +183,8 @@ exports.transferToShelf = async (req, res) => {
     batch.remaining_quantity -= quantity;
     batch.quantity_on_shelf += quantity;
 
-    const updatedBatch = await batch.save({ validateModifiedOnly: true })
+    const updatedBatch = await batch.save({ validateModifiedOnly: true });
+
     res.status(200).json(updatedBatch);
   } catch (error) {
     res.status(500).json({ message: error.message });

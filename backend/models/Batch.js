@@ -103,20 +103,20 @@ const batchSchema = new mongoose.Schema(
       discountValue: {
         type: Number,
         min: 0,
-        max: function () {
-          return this.discountType === "percentage"
-            ? 100
-            : Number.MAX_SAFE_INTEGER
-        },
         validate: {
           validator: function (value) {
-            if (this.discountType === 'percentage') {
-              return value <= 100
+            if (this.discountInfo?.discountType === 'percentage') {
+              return value <= 100;
             }
-            return true
+            return value <= Number.MAX_SAFE_INTEGER;
           },
-          message: 'Percentage discount must be <= 100'
-        }
+          message: function (props) {
+            return this.discountInfo?.discountType === 'percentage'
+              ? 'Percentage discount must be <= 100'
+              : `Discount value exceeds maximum allowed`;
+          },
+        },
+        default: 0,
       },
       discountStartDate: Date,
       discountEndDate: Date,

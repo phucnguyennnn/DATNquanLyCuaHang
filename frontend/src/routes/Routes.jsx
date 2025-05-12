@@ -27,6 +27,7 @@ import VerifyOTPPage from "../pages/VerifyOTPPage";
 import VerifyResetOTPPage from "../pages/VerifyResetOTP";
 import SalesPage from "../pages/SalesPage";
 import BatchPage from "../pages/BatchPage";
+import ReturnHistory from "../pages/ReturnHistory";
 
 
 const useAuth = () => {
@@ -83,6 +84,7 @@ const AppRouter = () => {
           {/* <Route path="products_page" element={<ProductsPage />} /> */}
           <Route path="Sales_page" element={<SalesPage />} />
           <Route path="Batchs_page" element={<BatchPage/>} />
+          <Route path="return-history" element={<ReturnHistory />} />
         </Route>
         
         {/* 404 page */}

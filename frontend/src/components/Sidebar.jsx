@@ -46,6 +46,8 @@ const Sidebar = () => {
   const [openInventory, setOpenInventory] = useState(false);
   const [openDashboard, setOpenDashboard] = useState(false);
   const [openLogoutDialog, setOpenLogoutDialog] = useState(false);
+  // Thêm state mới cho quản lý tồn kho
+  const [openStockManagement, setOpenStockManagement] = useState(false);
 
   const role = localStorage.getItem("userRole"); // Lấy role từ localStorage
 
@@ -193,13 +195,37 @@ const Sidebar = () => {
               <ListItemText primary="Bán hàng" />
             </ListItemButton>
 
-                        {/* Products - Hiển thị cho tất cả các role */}
-            <ListItemButton onClick={() => navigate("/Batchs_page")}>
+            {/* Quản lý tồn kho với các menu con */}
+            <ListItemButton onClick={() => setOpenStockManagement(!openStockManagement)}>
               <ListItemIcon>
                 <Warehouse />
               </ListItemIcon>
               <ListItemText primary="Quản lý tồn kho" />
+              {openStockManagement ? <ExpandLess /> : <ExpandMore />}
             </ListItemButton>
+
+            <Collapse in={openStockManagement} timeout="auto" unmountOnExit>
+              <List component="div" disablePadding>
+                <ListItemButton
+                  sx={{ pl: 4 }}
+                  onClick={() => navigate("/Batchs_page")}
+                >
+                  <ListItemIcon>
+                    <Inventory />
+                  </ListItemIcon>
+                  <ListItemText primary="Danh sách tồn kho" />
+                </ListItemButton>
+                <ListItemButton
+                  sx={{ pl: 4 }}
+                  onClick={() => navigate("/return-history")}
+                >
+                  <ListItemIcon>
+                    <Description />
+                  </ListItemIcon>
+                  <ListItemText primary="Lịch sử trả hàng" />
+                </ListItemButton>
+              </List>
+            </Collapse>
 
             {(role === "admin" || role === "employee") && (
               <>

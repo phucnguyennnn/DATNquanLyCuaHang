@@ -28,6 +28,7 @@ import {
   Chip,
   IconButton,
   Collapse,
+  FormHelperText,
 } from "@mui/material";
 import { format, isBefore, addDays } from "date-fns";
 import axios from "axios";
@@ -58,6 +59,102 @@ function ShelfInventoryPage() {
   const [warehouseTransferQuantity, setWarehouseTransferQuantity] = useState("");
   const [warehouseTransferError, setWarehouseTransferError] = useState(null);
   const [openRows, setOpenRows] = useState({});
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [selectedReturnBatch, setSelectedReturnBatch] = useState(null);
+  const [returnQuantity, setReturnQuantity] = useState("");
+  const [returnReason, setReturnReason] = useState("");
+  const [returnError, setReturnError] = useState(null);
+  const [returnSuccess, setReturnSuccess] = useState(false);
+  const [returnDate, setReturnDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [returnType, setReturnType] = useState("return");
+
+  // Add handler for opening return dialog
+  const handleOpenReturnDialog = (batch) => {
+    setSelectedReturnBatch(batch);
+    setReturnDialogOpen(true);
+    setReturnQuantity("");
+    setReturnReason("");
+    setReturnError(null);
+    setReturnSuccess(false);
+    setReturnDate(format(new Date(), "yyyy-MM-dd"));
+  };
+
+  // Add handler for return quantity changes
+  const handleReturnQuantityChange = (event) => {
+    setReturnQuantity(event.target.value.replace(/\D/g, ""));
+  };
+
+  // Add handler for return reason changes
+  const handleReturnReasonChange = (event) => {
+    setReturnReason(event.target.value);
+  };
+
+  // Add handler for return date changes
+  const handleReturnDateChange = (event) => {
+    setReturnDate(event.target.value);
+  };
+
+  // Add handler for return type changes
+  const handleReturnTypeChange = (event) => {
+    setReturnType(event.target.value);
+  };
+
+  // Add handler for submitting return
+  const handleReturnSubmit = async () => {
+    // Validate inputs
+    if (!returnQuantity || parseInt(returnQuantity) <= 0) {
+      setReturnError("Vui lòng nhập số lượng hợp lệ");
+      return;
+    }
+
+    // Validate that return quantity doesn't exceed total available quantity
+    const totalAvailable = selectedReturnBatch.remaining_quantity + selectedReturnBatch.quantity_on_shelf;
+    if (parseInt(returnQuantity) > totalAvailable) {
+      setReturnError(`Số lượng đổi/trả không thể vượt quá tổng số lượng hiện có (${totalAvailable})`);
+      return;
+    }
+
+    if (!returnReason.trim()) {
+      setReturnError("Vui lòng nhập lý do đổi/trả hàng");
+      return;
+    }
+
+    try {
+      // Submit return receipt
+      const response = await axios.post("http://localhost:8000/api/returns", {
+        batchId: selectedReturnBatch._id,
+        supplierId: selectedReturnBatch.supplier?._id,
+        quantity: parseInt(returnQuantity),
+        reason: returnReason,
+        returnDate: returnDate,
+        productId: selectedReturnBatch.product?._id,
+        type: returnType
+      });
+
+      // Send email to supplier
+      if (selectedReturnBatch.supplier?.contact?.email) {
+        try {
+          await axios.post(`http://localhost:8000/api/returns/${response.data._id}/resend-email`);
+          alert("Email đã được gửi thành công đến nhà cung cấp.");
+        } catch (emailError) {
+          console.error("Lỗi khi gửi email:", emailError);
+          alert("Phiếu đã được tạo nhưng không thể gửi email đến nhà cung cấp.");
+        }
+      }
+
+      setReturnSuccess(true);
+      await fetchData();
+      
+      // Close dialog after 2 seconds of showing success message
+      setTimeout(() => {
+        setReturnDialogOpen(false);
+      }, 2000);
+    } catch (err) {
+      setReturnError(
+        err.response?.data?.message || err.message || "Lỗi khi trả hàng cho nhà cung cấp"
+      );
+    }
+  };
 
   const handleOpenTransferDialog = (batch) => {
     setSelectedTransferBatch(batch);
@@ -466,7 +563,7 @@ function ShelfInventoryPage() {
   return (
     <Container
       maxWidth="xl"
-      sx={{ height: "100vh", display: "flex", flexDirection: "column", py: 2 }}
+      sx={{ height: "100vh", display: "flex", flexDirection: "column" }}
     >
       <Typography variant="h4" component="h1" gutterBottom>
         Quản lý hàng tồn kho và trên quầy
@@ -521,7 +618,7 @@ function ShelfInventoryPage() {
             component={Paper}
             sx={{
               height: "100%",
-              maxHeight: "calc(100vh - 220px)",
+              maxHeight: "calc(110vh - 220px)",
               "& .MuiTable-root": { minWidth: 1000 },
             }}
           >
@@ -816,6 +913,21 @@ function ShelfInventoryPage() {
                                         >
                                           chuyển xuống kho
                                         </Button>
+                                        <Button
+                                          size="small"
+                                          sx={{
+                                            fontSize: "0.7rem",
+                                            padding: "2px 6px",
+                                            margin: "0 2px",
+                                            textTransform: "none",
+                                          }}
+                                          variant="outlined"
+                                          color="error"
+                                          onClick={() => handleOpenReturnDialog(batch)}
+                                          disabled={batch.remaining_quantity + batch.quantity_on_shelf <= 0 || !batch.supplier}
+                                        >
+                                          đổi/trả hàng NCC
+                                        </Button>
                                       </Stack>
                                     </TableCell>
                                   </TableRow>
@@ -982,6 +1094,124 @@ function ShelfInventoryPage() {
             Xác nhận
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Return to Supplier Dialog */}
+      <Dialog
+        open={returnDialogOpen}
+        onClose={() => setReturnDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Đổi/trả hàng cho nhà cung cấp</DialogTitle>
+        <DialogContent>
+          {returnSuccess ? (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              Đã tạo phiếu trả hàng thành công!
+            </Alert>
+          ) : (
+            <Box sx={{ minWidth: 300, pt: 2 }}>
+              <Typography variant="body2" gutterBottom>
+                <strong>Sản phẩm:</strong> {selectedReturnBatch?.product?.name}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Mã lô:</strong> {selectedReturnBatch?.batchCode || selectedReturnBatch?._id}
+              </Typography>
+              <Typography variant="body2" gutterBottom>
+                <strong>Nhà cung cấp:</strong> {selectedReturnBatch?.supplier?.name || "Không có thông tin"}
+              </Typography>
+              
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Loại phiếu</InputLabel>
+                <Select
+                  value={returnType}
+                  onChange={handleReturnTypeChange}
+                  label="Loại phiếu"
+                >
+                  <MenuItem value="return">Trả hàng</MenuItem>
+                  <MenuItem value="exchange">Đổi hàng</MenuItem>
+                </Select>
+                <FormHelperText>
+                  {returnType === "return" 
+                    ? "Trả hàng: Trừ số lượng khi phiếu được chuyển thành hoàn thành" 
+                    : "Đổi hàng: Không trừ số lượng từ kho/quầy"}
+                </FormHelperText>
+              </FormControl>
+              
+              <TextField
+                fullWidth
+                margin="normal"
+                label="Ngày lập phiếu"
+                type="date"
+                value={returnDate}
+                onChange={handleReturnDateChange}
+                InputLabelProps={{ shrink: true }}
+              />
+              
+              <TextField
+                fullWidth
+                margin="normal"
+                label="Số lượng đổi/trả"
+                value={returnQuantity}
+                onChange={handleReturnQuantityChange}
+                error={!!returnError && returnError.includes("số lượng")}
+              />
+              
+              <FormControl fullWidth margin="normal" error={!!returnError && returnError.includes("lý do")}>
+                <InputLabel id="return-reason-label">Lý do đổi/trả hàng</InputLabel>
+                <Select
+                  labelId="return-reason-label"
+                  value={returnReason}
+                  onChange={handleReturnReasonChange}
+                  label="Lý do đổi/trả hàng"
+                >
+                  <MenuItem value="Sản phẩm hỏng">Sản phẩm hỏng</MenuItem>
+                  <MenuItem value="Sản phẩm hết hạn">Sản phẩm hết hạn</MenuItem>
+                  <MenuItem value="Sản phẩm bị lỗi">Sản phẩm bị lỗi</MenuItem>
+                  <MenuItem value="Chất lượng không đạt">Chất lượng không đạt</MenuItem>
+                  <MenuItem value="Nhập sai/thừa">Nhập sai/thừa</MenuItem>
+                  <MenuItem value="Đổi trả theo thỏa thuận">Đổi trả theo thỏa thuận</MenuItem>
+                  <MenuItem value="Lý do khác">Lý do khác</MenuItem>
+                </Select>
+                {returnReason === "Lý do khác" && (
+                  <TextField
+                    margin="normal"
+                    label="Chi tiết lý do"
+                    fullWidth
+                    onChange={(e) => setReturnReason(e.target.value)}
+                  />
+                )}
+                {!!returnError && returnError.includes("lý do") && (
+                  <FormHelperText>{returnError}</FormHelperText>
+                )}
+              </FormControl>
+              
+              <Typography variant="body2" color="text.secondary" mt={2}>
+                <strong>Tổng số lượng có thể đổi/trả:</strong> {selectedReturnBatch ? 
+                  (selectedReturnBatch.remaining_quantity + selectedReturnBatch.quantity_on_shelf) : 0}
+              </Typography>
+              
+              {returnError && !returnError.includes("lý do") && !returnError.includes("số lượng") && (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                  {returnError}
+                </Alert>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        {!returnSuccess && (
+          <DialogActions>
+            <Button onClick={() => setReturnDialogOpen(false)}>Hủy</Button>
+            <Button
+              onClick={handleReturnSubmit}
+              variant="contained"
+              color="primary"
+              disabled={!selectedReturnBatch?.supplier}
+            >
+              Tạo phiếu đổi/trả hàng
+            </Button>
+          </DialogActions>
+        )}
       </Dialog>
       
     </Container>
