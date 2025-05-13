@@ -39,12 +39,10 @@ import { useNavigate } from "react-router-dom";
 
 const UNITS = ["thùng", "bao", "chai", "lọ", "lon", "hộp", "gói", "cái", "kg", "liter"];
 const STATUSES = [
-  { value: "draft", label: "Nháp" },
-  { value: "pending", label: "Đang chờ" },
-  { value: "approved", label: "Đã duyệt" },
-  { value: "partially_received", label: "Nhận một phần" },
-  { value: "completed", label: "Hoàn thành" },
-  { value: "cancelled", label: "Đã hủy" },
+  { value: "đã gửi NCC", label: "Đã gửi NCC" },
+  { value: "đã nhận 1 phần", label: "Đã nhận một phần" },
+  { value: "hoàn thành", label: "Hoàn thành" },
+  { value: "đã hủy", label: "Đã hủy" },
 ];
 
 const PurchaseOrderManagement = () => {
@@ -68,7 +66,7 @@ const PurchaseOrderManagement = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [totalPrice, setTotalPrice] = useState(0);
   const [approvalDate, setApprovalDate] = useState(null);
-  const [orderStatus, setOrderStatus] = useState("approved");
+  const [orderStatus, setOrderStatus] = useState("đã gửi NCC");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("orderDate");
@@ -253,7 +251,7 @@ const PurchaseOrderManagement = () => {
   const handleUpdateOrder = async () => {
     if (new Date(editOrder.expectedDeliveryDate) <= new Date(editOrder.orderDate)) return;
     try {
-      const isNewlyApproved = editOrder.status === "approved" && editOrder.originalStatus !== "approved";
+      const isNewlyApproved = editOrder.status === "đã gửi NCC" && editOrder.originalStatus !== "đã gửi NCC";
       const payload = {
         ...editOrder,
         supplier: editOrder.supplier._id,
@@ -634,7 +632,7 @@ const PurchaseOrderManagement = () => {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body1">
-                      <strong>Trạng thái:</strong> {STATUSES.find(status => status.value === orderStatus)?.label || "Nháp"}
+                      <strong>Trạng thái:</strong> {STATUSES.find(status => status.value === orderStatus)?.label || "Đã duyệt"}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -654,7 +652,7 @@ const PurchaseOrderManagement = () => {
                         <TableCell>STT</TableCell>
                         <TableCell>Tên sản phẩm</TableCell>
                         <TableCell>Đơn vị</TableCell>
-                        <TableCell>SL</TableCell>
+                        <TableCell>Số lượng</TableCell>
                         <TableCell>Giá nhập</TableCell>
                         <TableCell>Thành tiền</TableCell>
                         <TableCell>Hành động</TableCell>
@@ -867,7 +865,7 @@ const PurchaseOrderManagement = () => {
                       {order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()} đ
                     </TableCell>
                     <TableCell>
-                      {STATUSES.find(status => status.value === order.status)?.label || "Không xác định"}
+                      {STATUSES.find(status => status.value === order.status)?.label || order.status}
                     </TableCell>
                     <TableCell>
                       <IconButton onClick={() => handleEdit(order)}>
@@ -920,7 +918,7 @@ const PurchaseOrderManagement = () => {
                       <TableRow>
                         <TableCell>Tên sản phẩm</TableCell>
                         <TableCell>Đơn vị</TableCell>
-                        <TableCell>SL</TableCell>
+                        <TableCell>Số lượng</TableCell>
                         <TableCell>Đơn giá</TableCell>
                         <TableCell>Thành tiền</TableCell>
                       </TableRow>

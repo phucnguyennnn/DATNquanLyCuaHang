@@ -64,15 +64,8 @@ const purchaseOrderSchema = new mongoose.Schema(
     createdByName: { type: String },
     status: {
       type: String,
-      enum: [
-        "draft",
-        "pending",
-        "approved",
-        "partially_received",
-        "completed",
-        "cancelled",
-      ],
-      default: "draft",
+      enum: ["đã gửi NCC", "đã nhận 1 phần", "hoàn thành", "đã hủy"],
+      default: "đã gửi NCC",
     },
     items: [purchaseOrderItemSchema],
     totalAmount: { type: Number, required: true, min: 0 },

@@ -50,22 +50,21 @@ const CreateGoodReceipt = () => {
   const fetchOrders = async () => {
     if (!isTokenValid()) return;
     try {
-      const res = await axios.get("http://localhost:8000/api/purchaseOrder", {
+      const purchaseOrdersRes = await axios.get("http://localhost:8000/api/purchaseOrder", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      const approvedOrders = res.data.filter((o) => o.status === "approved");
-      setOrders(approvedOrders);
-      console.log("Approved orders:", approvedOrders);
-      if (approvedOrders.length > 0) {
-        console.log(
-          "First order structure:",
-          JSON.stringify(approvedOrders[0], null, 2)
-        );
-      }
+
+      const purchaseOrders = purchaseOrdersRes.data;
+      const filteredOrders = purchaseOrders.filter(
+        (o) => o.status === "đã gửi NCC" || o.status === "đã nhận 1 phần"
+      );
+
+      setOrders(filteredOrders);
+      console.log("Filtered purchase orders:", filteredOrders);
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching purchase orders:", error);
     }
   };
 
@@ -156,7 +155,8 @@ const CreateGoodReceipt = () => {
         res.data.items.map((item) => ({
           product: item.product?._id || item.product,
           productName: item.product?.name || item.productName,
-          quantity: item.quantity,
+          quantity: 0, // Default input quantity for splitting
+          maxQuantity: item.quantity - item.receivedQuantity, // Remaining quantity available for splitting
           unit: item.unit,
           unitPrice: item.unitPrice,
           totalPrice: item.totalPrice,
@@ -173,16 +173,13 @@ const CreateGoodReceipt = () => {
 
   const handleBatchChange = (index, field, value) => {
     const updated = [...batchInfo];
-    updated[index][field] = value;
-
-    if (field === "quantity" || field === "unit") {
-      const selectedUnit = selectedOrder.items[index]?.product?.units?.find(
-        (u) => u.name === updated[index].unit
-      );
-      const ratio = selectedUnit?.ratio || 1;
-      updated[index].calculatedQuantity = Number(updated[index].quantity) * ratio;
+    if (field === "quantity") {
+      const maxQuantity = updated[index].maxQuantity;
+      const inputQuantity = Math.min(Number(value), maxQuantity); // Ensure input does not exceed maxQuantity
+      updated[index][field] = inputQuantity;
+    } else {
+      updated[index][field] = value;
     }
-
     setBatchInfo(updated);
   };
 
@@ -423,6 +420,46 @@ const CreateGoodReceipt = () => {
     }
   };
 
+  const handleSplitOrder = async () => {
+    if (!selectedOrder) {
+      alert("Vui lòng chọn phiếu đặt mua trước khi chia phiếu!");
+      return;
+    }
+
+    const splitQuantities = batchInfo.map((item, index) => {
+      const selectedUnit = selectedOrder.items[index]?.product?.units?.find(
+        (u) => u.name === item.unit
+      );
+      const ratio = selectedUnit?.ratio || 1;
+      return item.quantity * ratio; // Calculate batch quantity based on unit ratio
+    });
+
+    // if (splitQuantities.some((quantity, index) => quantity > batchInfo[index].maxQuantity)) {
+    //   alert("Số lượng chia không được vượt quá số lượng tối đa.");
+    //   return;
+    // }
+
+    try {
+      const response = await axios.post(
+        `http://localhost:8000/api/purchaseOrder/split/${selectedOrder._id}`,
+        { splitQuantities },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      alert("Chia phiếu thành công!");
+      // Update the selected order details after splitting
+      handleSelectOrder(selectedOrder._id);
+    } catch (error) {
+      console.error("Lỗi khi chia phiếu:", error);
+      const errorMessage =
+        error.response?.data?.message || "Không thể chia phiếu. Vui lòng thử lại!";
+      alert(errorMessage);
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -481,6 +518,9 @@ const CreateGoodReceipt = () => {
                     Số lượng đặt: {item.quantity || 0}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
+                    Số lượng đã nhận: {item.receivedQuantity || 0}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
                     Đơn giá: {item.unitPrice?.toLocaleString() || 0} đ
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
@@ -498,7 +538,7 @@ const CreateGoodReceipt = () => {
                       onChange={(e) =>
                         handleBatchChange(index, "quantity", e.target.value)
                       }
-                      helperText="Số lượng nhập hàng thực tế"
+                      helperText={`Số lượng tối đa: ${batchInfo[index]?.maxQuantity}`}
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
@@ -531,8 +571,11 @@ const CreateGoodReceipt = () => {
                       label="Hạn sử dụng"
                       type="date"
                       fullWidth
-                      error={batchInfo[index]?.manufacture_day && batchInfo[index]?.expiry_day &&
-                        new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)}
+                      error={
+                        batchInfo[index]?.manufacture_day &&
+                        batchInfo[index]?.expiry_day &&
+                        new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)
+                      }
                       InputLabelProps={{ shrink: true }}
                       value={batchInfo[index]?.expiry_day || ""}
                       onChange={(e) =>
@@ -541,8 +584,8 @@ const CreateGoodReceipt = () => {
                       required
                       helperText={
                         batchInfo[index]?.manufacture_day &&
-                          batchInfo[index]?.expiry_day &&
-                          new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)
+                        batchInfo[index]?.expiry_day &&
+                        new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)
                           ? "Hạn sử dụng phải sau ngày sản xuất"
                           : "Hạn sử dụng của lô hàng"
                       }
@@ -755,6 +798,19 @@ const CreateGoodReceipt = () => {
               {loading ? "Đang tạo phiếu..." : confirming ? "Đang nhập kho..." : "Tạo phiếu và nhập kho"}
             </Button>
           </Box>
+
+          {selectedOrder && (
+            <Box mt={2}>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={handleSplitOrder}
+                disabled={loading || confirming}
+              >
+                Nhận 1 phần
+              </Button>
+            </Box>
+          )}
         </Paper>
       )}
 

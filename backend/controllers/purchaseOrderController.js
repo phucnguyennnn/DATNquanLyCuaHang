@@ -2,6 +2,8 @@ const PurchaseOrder = require('../models/PurchaseOrder');
 const { sendEmail } = require('../config/nodemailer');
 const Supplier = require('../models/Supplier');
 const Product = require('../models/Product');
+const mongoose = require('mongoose');
+const GoodReceipt = require('../models/GoodReceipt');
 
 const purchaseOrderController = {
   createPurchaseOrder: async (req, res) => {
@@ -190,6 +192,84 @@ const purchaseOrderController = {
     } catch (error) {
       console.error('Lỗi khi gửi lại email đơn hàng:', error);
       res.status(500).json({ message: 'Lỗi khi gửi lại email đơn hàng', error: error.message });
+    }
+  },
+
+  splitPurchaseOrder: async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      const { splitQuantities } = req.body; // Expect split quantities from the request body
+
+      const order = await PurchaseOrder.findById(orderId).populate({
+        path: 'items.product',
+        populate: { path: 'units' },
+      });
+      if (!order) {
+        return res.status(404).json({ message: "Không tìm thấy phiếu đặt hàng." });
+      }
+
+      if (order.status === "hoàn thành") {
+        return res.status(400).json({ message: "Phiếu đã hoàn thành, không thể chia." });
+      }
+
+      // Validate splitQuantities
+      if (!Array.isArray(splitQuantities) || splitQuantities.length !== order.items.length) {
+        return res.status(400).json({ message: "Dữ liệu số lượng chia không hợp lệ." });
+      }
+
+      const splitItems = order.items.map((item, index) => {
+        const splitQuantity = splitQuantities[index];
+        const unit = item.product.units.find((u) => u.name === item.unit);
+        const ratio = unit?.ratio || 1;
+        const adjustedQuantity = splitQuantity * ratio; // Adjust quantity based on unit ratio
+
+        if (splitQuantity == null || splitQuantity <= 0) {
+          throw new Error(`Số lượng chia phải lớn hơn 0 cho sản phẩm ${item.productName}.`);
+        }
+        if (adjustedQuantity > item.quantity - item.receivedQuantity) {
+          throw new Error(`Số lượng chia vượt quá số lượng còn lại cho sản phẩm ${item.productName}.`);
+        }
+        return {
+          product: item.product._id,
+          quantity: adjustedQuantity,
+          unit: item.unit,
+          unitPrice: item.unitPrice,
+          totalPrice: adjustedQuantity * item.unitPrice,
+        };
+      });
+
+      const remainingItems = order.items.map((item, index) => ({
+        ...item.toObject(),
+        receivedQuantity: (item.receivedQuantity || 0) + splitItems[index].quantity,
+      }));
+
+      const newReceipt = new GoodReceipt({
+        purchaseOrder: order._id,
+        supplier: order.supplier,
+        receivedBy: req.user.id,
+        items: splitItems.map((item) => ({
+          product: item.product,
+          quantity: item.quantity,
+          manufactureDate: new Date(),
+          expiryDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
+        })),
+        status: "draft",
+        notes: "Phiếu nhập kho được tạo từ việc chia phiếu đặt hàng.",
+      });
+
+      await newReceipt.save();
+
+      // Update the purchase order to reflect the received quantities and status
+      order.items = remainingItems;
+      order.status = remainingItems.every((item) => item.receivedQuantity === item.quantity)
+        ? "hoàn thành"
+        : "đã nhận 1 phần";
+      await order.save();
+
+      res.status(201).json({ message: "Chia phiếu thành công.", newReceipt });
+    } catch (error) {
+      console.error("Lỗi khi chia phiếu đặt hàng:", error);
+      res.status(500).json({ message: "Lỗi khi chia phiếu đặt hàng.", error: error.message });
     }
   },
 };

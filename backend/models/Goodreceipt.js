@@ -96,7 +96,7 @@ goodReceiptSchema.pre('save', async function (next) {
           expiry_day: item.expiryDate,
           initial_quantity: item.quantity,
           remaining_quantity: item.quantity,
-          status: 'active',
+          status: 'hoạt động',
           goodReceipt: this._id,
         });
 
