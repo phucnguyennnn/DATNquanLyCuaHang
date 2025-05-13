@@ -37,12 +37,15 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-const UNITS = ["thùng", "bao", "chai", "lọ", "lon", "hộp", "gói", "cái", "kg", "liter"];
+const UNITS = ["thùng", "bao", "chai", "lọ", "lon", "hộp", "gói", "cái", "kg", "liter","thùng 30", "thùng 24", "thùng 12", "lốc 6", "bao 10", "bao 15", "bao 20", "bao 5", "lốc 12"];
 const STATUSES = [
   { value: "đã gửi NCC", label: "Đã gửi NCC" },
   { value: "đã nhận 1 phần", label: "Đã nhận một phần" },
   { value: "hoàn thành", label: "Hoàn thành" },
   { value: "đã hủy", label: "Đã hủy" },
+  { value: "completed", label: "Hoàn thành" },
+
+
 ];
 
 const PurchaseOrderManagement = () => {
@@ -226,6 +229,7 @@ const PurchaseOrderManagement = () => {
   };
 
   const handleEdit = (order) => {
+    const isReadOnly = ["hoàn thành", "completed"].includes(order.status);
     setEditOrder({
       ...order,
       expectedDeliveryDate: order.expectedDeliveryDate.split("T")[0],
@@ -235,6 +239,7 @@ const PurchaseOrderManagement = () => {
       status: order.status || "draft",
       originalStatus: order.status || "draft",
       approvalDate: order.approvalDate || null,
+      isReadOnly, // Add a flag to indicate read-only mode
     });
     setEditOrderItems(order.items);
     setOpenDialog(true);
@@ -333,6 +338,16 @@ const PurchaseOrderManagement = () => {
     setSortOrder(prev => column === sortBy ? (prev === "asc" ? "desc" : "asc") : "asc");
   };
 
+  const formatPrice = (value) => {
+    if (!value) return "";
+    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
+  const handleUnitPriceChange = (value) => {
+    const numericValue = value.replace(/\./g, ""); // Remove existing thousand separators
+    setUnitPrice(Number(numericValue));
+  };
+
   return (
     <Box sx={{ 
       maxWidth: 1200, 
@@ -423,11 +438,11 @@ const PurchaseOrderManagement = () => {
             <Grid item xs={8} sm={4} md={2}>
               <TextField
                 label="Giá nhập"
-                type="number"
+                type="text"
                 fullWidth
-                value={unitPrice}
-                onChange={(e) => setUnitPrice(Number(e.target.value))}
-                inputProps={{ min: 0 }}
+                value={formatPrice(unitPrice)}
+                onChange={(e) => handleUnitPriceChange(e.target.value)}
+                inputProps={{ inputMode: "numeric" }}
               />
             </Grid>
             
@@ -688,27 +703,17 @@ const PurchaseOrderManagement = () => {
                           </TableCell>
                           <TableCell>
                             <TextField
-                              type="number"
+                              type="text"
                               size="small"
-                              value={item.unitPrice}
+                              value={formatPrice(item.unitPrice)}
                               onChange={(e) => {
-                                const newPrice = Math.max(0, parseFloat(e.target.value) || 0);
-                                setOrderItems(prev => 
-                                  prev.map((prevItem, idx) => 
-                                    idx === index 
-                                      ? { 
-                                          ...prevItem, 
-                                          unitPrice: newPrice,
-                                          totalPrice: prevItem.quantity * newPrice 
-                                        } 
-                                      : prevItem
-                                  )
-                                );
+                                const numericValue = e.target.value.replace(/\./g, ""); // Remove existing thousand separators
+                                handleEditOrderItemChange(index, "unitPrice", Number(numericValue));
                               }}
-                              InputProps={{ inputProps: { min: 0 } }}
+                              inputProps={{ inputMode: "numeric" }}
                             />
                           </TableCell>
-                          <TableCell>{item.totalPrice.toLocaleString()} đ</TableCell>
+                          <TableCell>{(item.quantity * item.unitPrice).toLocaleString()} đ</TableCell>
                           <TableCell>
                             <IconButton 
                               color="error" 
@@ -846,7 +851,9 @@ const PurchaseOrderManagement = () => {
                       Trạng thái
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>Hành động</TableCell>
+                  <TableCell>
+                    Hành động
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -854,12 +861,8 @@ const PurchaseOrderManagement = () => {
                   <TableRow key={order._id}>
                     <TableCell>{order._id}</TableCell>
                     <TableCell>{order.supplier.name}</TableCell>
-                    <TableCell>
-                      {new Date(order.orderDate).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      {order.createdByName || "Không xác định"}
-                    </TableCell>
+                    <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                    <TableCell>{order.createdByName || "Không xác định"}</TableCell>
                     <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
                     <TableCell>
                       {order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()} đ
@@ -868,13 +871,21 @@ const PurchaseOrderManagement = () => {
                       {STATUSES.find(status => status.value === order.status)?.label || order.status}
                     </TableCell>
                     <TableCell>
-                      <IconButton onClick={() => handleEdit(order)}>
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton onClick={() => handleDelete(order._id)}>
-                        <DeleteIcon />
-                      </IconButton>
-                      <Button onClick={() => handleResendEmail(order)}>Gửi lại Email</Button>
+                      {["hoàn thành", "completed"].includes(order.status) ? (
+                        <IconButton onClick={() => handleEdit(order)}>
+                          <VisibilityIcon />
+                        </IconButton>
+                      ) : (
+                        <>
+                          <IconButton onClick={() => handleEdit(order)}>
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton onClick={() => handleDelete(order._id)}>
+                            <DeleteIcon />
+                          </IconButton>
+                          <Button onClick={() => handleResendEmail(order)}>Gửi lại Email</Button>
+                        </>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -935,7 +946,9 @@ const PurchaseOrderManagement = () => {
                               }
                             >
                               {UNITS.map(unit => (
-                                <MenuItem key={unit} value={unit}>{unit}</MenuItem>
+                                <MenuItem key={unit} value={unit}>
+                                  {unit}
+                                </MenuItem>
                               ))}
                             </Select>
                           </TableCell>
@@ -950,11 +963,13 @@ const PurchaseOrderManagement = () => {
                           </TableCell>
                           <TableCell>
                             <TextField
-                              type="number"
-                              value={item.unitPrice}
-                              onChange={(e) => 
-                                handleEditOrderItemChange(index, "unitPrice", Number(e.target.value))
-                              }
+                              type="text"
+                              value={formatPrice(item.unitPrice)}
+                              onChange={(e) => {
+                                const numericValue = e.target.value.replace(/\./g, ""); // Remove existing thousand separators
+                                handleEditOrderItemChange(index, "unitPrice", Number(numericValue));
+                              }}
+                              inputProps={{ inputMode: "numeric" }}
                             />
                           </TableCell>
                           <TableCell>{(item.quantity * item.unitPrice).toLocaleString()} đ</TableCell>
@@ -1032,8 +1047,12 @@ const PurchaseOrderManagement = () => {
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setOpenDialog(false)}>Hủy</Button>
-            <Button onClick={handleUpdateOrder} variant="contained">Cập nhật</Button>
+            <Button onClick={() => setOpenDialog(false)}>Đóng</Button>
+            {!editOrder?.isReadOnly && (
+              <Button onClick={handleUpdateOrder} variant="contained">
+                Cập nhật
+              </Button>
+            )}
           </DialogActions>
         </Dialog>
       </Box>
