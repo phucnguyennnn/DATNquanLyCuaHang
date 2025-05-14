@@ -314,6 +314,8 @@ function ManagerOrder() {
           <div class="info-section">
             <div class="info-title">Thông tin thanh toán:</div>
             <div class="info"><span>Phương thức:</span> <span>${
+              order.paymentMethod === "cash" ? "Tiền mặt" :
+              order.paymentMethod === "transfer" ? "Chuyển khoản" :
               order.paymentMethod || "Không xác định"
             }</span></div>
             <div class="info"><span>Trạng thái:</span> <span>${renderPaymentStatus(
@@ -603,7 +605,13 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
         <Typography>
           TT Thanh toán: {renderPaymentStatus(order.paymentStatus)}
         </Typography>
-        <Typography>Phương thức thanh toán: {order.paymentMethod}</Typography>
+        <Typography>
+          Phương thức thanh toán: {order.paymentMethod === "cash"
+            ? "Tiền mặt"
+            : order.paymentMethod === "transfer"
+            ? "Chuyển khoản"
+            : order.paymentMethod}
+        </Typography>
         {order.depositAmount > 0 && (
           <Typography>
             Số tiền đặt cọc:{" "}

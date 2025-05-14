@@ -31,7 +31,7 @@ import axios from "axios";
 const ProductCard = styled(Card)(({ theme }) => ({
   marginBottom: theme.spacing(1),
   width: 200,
-  height: "auto",
+  height: 250,
   display: "flex",
   flexDirection: "column",
   transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
@@ -43,7 +43,7 @@ const ProductCard = styled(Card)(({ theme }) => ({
 
 const ProductCardContent = styled(CardContent)({
   flexGrow: 1,
-  padding: (theme) => theme.spacing(1.5),
+  padding: 12,
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
@@ -61,6 +61,7 @@ function CreateOrder() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   const [cashReceived, setCashReceived] = useState("");
+  const [formattedCashReceived, setFormattedCashReceived] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -218,6 +219,18 @@ function CreateOrder() {
     }, 0);
   };
 
+  const handleCashReceivedChange = (e) => {
+    const value = e.target.value.replace(/[^\d]/g, '');
+    setCashReceived(value);
+    setErrorMessage("");
+    
+    if (value) {
+      setFormattedCashReceived(parseInt(value).toLocaleString('vi-VN'));
+    } else {
+      setFormattedCashReceived("");
+    }
+  };
+
   const calculateChange = () => {
     const total = calculateTotal();
     const received = parseFloat(cashReceived) || 0;
@@ -327,7 +340,10 @@ function CreateOrder() {
           justifyContent: "center",
           alignItems: "center",
           height: "100vh",
+          maxWidth: "100vw !important",
         }}
+        maxWidth={false}
+        disableGutters
       >
         <CircularProgress />
       </Container>
@@ -336,16 +352,24 @@ function CreateOrder() {
 
   if (error) {
     return (
-      <Container sx={{ mt: 4 }}>
-        <Typography color="error">{error}</Typography>
+      <Container sx={{ mt: 4, maxWidth: "100vw !important" }} maxWidth={false} disableGutters>        <Typography color="error">{error}</Typography>
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, height: "100%" }}>
-      <Stack direction="row" spacing={3} sx={{ height: "100vh" }}>
-        <Box sx={{ flex: 1, height: "100vh" }}>
+    <Container
+      sx={{
+        mt: 4,
+        height: "100%",
+        maxWidth: "100vw !important",
+        px: 0,
+      }}
+      maxWidth={false}
+      disableGutters
+    >
+      <Stack direction="row" spacing={3} sx={{ height: "100vh", width: "80vw", m: 0 }}>
+        <Box sx={{ flex: 2, height: "80vh", minWidth: 0 }}>
           <Paper
             sx={{
               p: 2,
@@ -400,61 +424,101 @@ function CreateOrder() {
                 {filteredProducts.map((product) => (
                   <Box key={product._id} sx={{ padding: 1, width: 200 }}>
                     <ProductCard>
+                      <Box sx={{ 
+                        height: 120, 
+                        width: '100%', 
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'grey.100'
+                      }}>
+                        {product.images?.length > 0 ? (
+                          <img
+                            src={product.images[0]}
+                            alt={product.name}
+                            style={{
+                              maxWidth: "100%",
+                              maxHeight: "100%",
+                              objectFit: "contain",
+                            }}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "https://via.placeholder.com/200x120?text=Không+có+hình";
+                            }}
+                          />
+                        ) : (
+                          <Box
+                            sx={{
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              bgcolor: "grey.200",
+                            }}
+                          >
+                            <Typography variant="caption" color="text.secondary">
+                              Không có hình ảnh
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+                      
                       <ProductCardContent>
-                        <Typography variant="subtitle1" noWrap>
+                        <Typography 
+                          variant="subtitle1" 
+                          sx={{ 
+                            fontWeight: 'bold', 
+                            fontSize: '0.9rem',
+                            mb: 0.5,
+                            height: '2.4em',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                          }}
+                        >
                           {product.name}
                         </Typography>
                         <Typography
                           variant="caption"
                           color="text.secondary"
                           noWrap
+                          sx={{ display: 'block', mb: 0.5 }}
                         >
                           Mã: {product.barcode || "N/A"}
                         </Typography>
-                        <Typography variant="caption" noWrap>
-                          Đơn vị:{" "}
-                          {product.units
-                            ?.map(
-                              (unit) =>
-                                `${unit.name} (${unit.salePrice.toLocaleString(
-                                  "vi-VN"
-                                )})`
-                            )
-                            .join(", ")}
-                        </Typography>
-                        {product.images?.length > 0 && (
-                          <Box
-                            sx={{
-                              width: "100%",
-                              height: 80,
-                              mt: 0.5,
-                              overflow: "hidden",
-                              borderRadius: "4px",
-                            }}
-                          >
-                            <img
-                              src={product.images[0]}
-                              alt={product.name}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                              }}
-                            />
-                          </Box>
-                        )}
+                        <Box sx={{ mt: 'auto' }}>
+                          {product.units && product.units[0] && (
+                            <Typography 
+                              variant="body2" 
+                              color="primary" 
+                              fontWeight="bold"
+                              sx={{ mb: 0.5 }}
+                            >
+                              {product.units[0].salePrice.toLocaleString("vi-VN")} VNĐ
+                            </Typography>
+                          )}
+                          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem' }}>
+                            {product.units
+                              ?.map((unit) => `${unit.name}`)
+                              .join(", ")}
+                          </Typography>
+                        </Box>
                       </ProductCardContent>
                       <CardActions
-                        sx={{ padding: (theme) => theme.spacing(0.5, 1) }}
+                        sx={{ padding: 1, justifyContent: 'center' }}
                       >
                         <Button
                           size="small"
                           variant="contained"
                           color="primary"
                           onClick={() => handleAddToCart(product)}
-                          sx={{ margin: "auto", fontSize: "0.8rem" }}
+                          fullWidth
                         >
-                          Thêm
+                          Thêm vào đơn
                         </Button>
                       </CardActions>
                     </ProductCard>
@@ -480,7 +544,7 @@ function CreateOrder() {
               flexDirection: "column",
               minHeight: 0,
               mb: 2,
-              maxHeight: "60vh",
+              maxHeight: "50vh",
               overflowY: "auto",
             }}
           >
@@ -592,21 +656,40 @@ function CreateOrder() {
                   </Box>
                 </ListItem>
               ))}
-              {orderItems.length > 0 && (
-                <Typography
-                  variant="subtitle1"
-                  sx={{ mt: 2, fontWeight: "bold" }}
-                >
-                  Tổng cộng: {calculateTotal().toLocaleString("vi-VN")} VNĐ
-                </Typography>
-              )}
+              
             </List>
+              
+            {orderItems.length > 0 && (
+              <Paper 
+                elevation={2} 
+                sx={{ 
+                  mt: 2, 
+                  p: 1.5, 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  bgcolor: 'primary.light',
+                  color: 'primary.contrastText',
+                  borderRadius: 1
+                }}
+              >
+                <Typography variant="subtitle1" fontWeight="bold">
+                  Tổng cộng:
+                </Typography>
+                <Typography variant="h6" fontWeight="bold">
+                  {calculateTotal().toLocaleString("vi-VN")} VNĐ
+                </Typography>
+              </Paper>
+            )}
+            
             {orderItems.length > 0 && (
               <Button
                 variant="contained"
                 onClick={() => setShowPaymentOptions(true)}
                 sx={{ mt: 2 }}
                 disabled={loading}
+                fullWidth
+                size="large"
               >
                 Thanh toán
               </Button>
@@ -646,15 +729,17 @@ function CreateOrder() {
                   variant="outlined"
                   fullWidth
                   size="small"
-                  type="number"
-                  value={cashReceived}
-                  onChange={(e) => {
-                    setCashReceived(e.target.value);
-                    setErrorMessage("");
-                  }}
+                  value={formattedCashReceived}
+                  onChange={handleCashReceivedChange}
                   sx={{ mb: 1 }}
                   error={!!errorMessage}
                   helperText={errorMessage}
+                  InputProps={{
+                    endAdornment: <Typography variant="body2" sx={{ ml: 1, color: 'text.secondary' }}>VNĐ</Typography>,
+                  }}
+                  inputProps={{
+                    inputMode: 'numeric',
+                  }}
                 />
               )}
 
@@ -663,6 +748,8 @@ function CreateOrder() {
                 color="primary"
                 onClick={handlePayment}
                 disabled={loading}
+                fullWidth
+                sx={{ mb: 1 }}
               >
                 {loading ? (
                   <CircularProgress size={24} color="inherit" />
@@ -671,9 +758,24 @@ function CreateOrder() {
                 )}
               </Button>
               {paymentMethod === "cash" && cashReceived && (
-                <Typography variant="subtitle2" sx={{ mt: 1 }}>
-                  Tiền thối: {calculateChange().toLocaleString("vi-VN")} VNĐ
-                </Typography>
+                <Paper 
+                  elevation={0} 
+                  sx={{ 
+                    mt: 1, 
+                    p: 1, 
+                    bgcolor: 'success.light', 
+                    borderRadius: 1,
+                    display: 'flex',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <Typography variant="subtitle2" fontWeight="bold">
+                    Tiền thối:
+                  </Typography>
+                  <Typography variant="subtitle2" fontWeight="bold">
+                    {calculateChange().toLocaleString("vi-VN")} VNĐ
+                  </Typography>
+                </Paper>
               )}
             </Paper>
           )}
@@ -682,5 +784,6 @@ function CreateOrder() {
     </Container>
   );
 }
+
 
 export default CreateOrder;

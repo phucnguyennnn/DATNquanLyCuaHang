@@ -42,7 +42,7 @@ const orderProductSchema = new mongoose.Schema(
     batchesUsed: [batchUsedSchema],
     itemTotal: { type: Number, required: true, min: 0 },
   },
-  { _id: false }  
+  { _id: false }
 );
 const orderSchema = new mongoose.Schema({
   date: { type: Date, default: Date.now },

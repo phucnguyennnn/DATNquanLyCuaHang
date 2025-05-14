@@ -45,13 +45,12 @@ exports.createOrder = async (req, res) => {
 
       const expectedBaseQuantity = requestedQuantity * selectedUnitInfo.ratio;
       let remainingQuantityNeeded = expectedBaseQuantity;
-      const itemBatches = [];
       let totalBatchDiscountAmount = 0;
-      let usedBatches = [];
 
+      // Lấy tất cả batch trên quầy, sắp xếp theo hạn sử dụng gần nhất
       const availableBatchesOnShelf = await Batch.find({
         product: productId,
-        quantity_on_shelf: { $gte: remainingQuantityNeeded },
+        quantity_on_shelf: { $gt: 0 },
       }).sort({ expiry_day: 1 });
 
       if (!availableBatchesOnShelf || availableBatchesOnShelf.length === 0) {
@@ -60,63 +59,110 @@ exports.createOrder = async (req, res) => {
         });
       }
 
-      const batch = availableBatchesOnShelf[0];
-      const quantityToUse = remainingQuantityNeeded;
+      let totalAvailable = availableBatchesOnShelf.reduce(
+        (sum, batch) => sum + batch.quantity_on_shelf,
+        0
+      );
+      if (totalAvailable < remainingQuantityNeeded) {
+        return res.status(400).json({
+          message: `Không đủ số lượng sản phẩm ${product.name} trên quầy để đáp ứng đơn hàng (cần ${expectedBaseQuantity}, hiện có ${totalAvailable})`,
+        });
+      }
 
-      let baseUnitPrice =
-        product.units.find((u) => u.ratio === 1)?.salePrice || product.price;
-      let batchDiscountPerUnit = 0;
+      // Gom các batch cùng loại giảm giá thành từng nhóm để chia thành nhiều mặt hàng nếu cần
+      let batchGroups = [];
+      let lastDiscountKey = null;
+      let group = null;
 
-      if (batch.discountInfo && batch.discountInfo.isDiscounted) {
-        if (batch.discountInfo.discountType === "percentage") {
-          batchDiscountPerUnit =
-            baseUnitPrice * (batch.discountInfo.discountValue / 100);
-        } else if (batch.discountInfo.discountType === "fixed_amount") {
-          batchDiscountPerUnit = batch.discountInfo.discountValue;
+      for (const batch of availableBatchesOnShelf) {
+        if (remainingQuantityNeeded <= 0) break;
+        const takeQty = Math.min(batch.quantity_on_shelf, remainingQuantityNeeded);
+
+        // Xác định key giảm giá của batch (giá trị giảm + loại giảm)
+        let discountKey = "no_discount";
+        if (batch.discountInfo && batch.discountInfo.isDiscounted) {
+          discountKey = `${batch.discountInfo.discountType}_${batch.discountInfo.discountValue}`;
         }
+
+        // Nếu khác nhóm giảm giá thì tạo nhóm mới
+        if (discountKey !== lastDiscountKey) {
+          if (group) batchGroups.push(group);
+          group = {
+            discountKey,
+            discountInfo: batch.discountInfo && batch.discountInfo.isDiscounted
+              ? {
+                discountType: batch.discountInfo.discountType,
+                discountValue: batch.discountInfo.discountValue,
+              }
+              : null,
+            batches: [],
+            totalQty: 0,
+          };
+          lastDiscountKey = discountKey;
+        }
+
+        group.batches.push({
+          batch,
+          takeQty,
+        });
+        group.totalQty += takeQty;
+        remainingQuantityNeeded -= takeQty;
       }
+      if (group) batchGroups.push(group);
 
-      totalBatchDiscountAmount += batchDiscountPerUnit * quantityToUse;
-      itemBatches.push({
-        batchId: batch._id,
-        quantity: quantityToUse,
-        unitPrice: baseUnitPrice - batchDiscountPerUnit,
-        discountAmount: batchDiscountPerUnit,
-      });
-      usedBatches.push(batch._id);
-      remainingQuantityNeeded -= quantityToUse;
+      // Tạo từng mặt hàng riêng biệt cho từng nhóm batch
+      for (const batchGroup of batchGroups) {
+        let groupBatchDiscountAmount = 0;
+        let groupItemTotal = 0;
+        let groupBatchesUsed = [];
+        let groupOriginalUnitPrice = selectedUnitInfo.salePrice;
+        let groupDiscount = productDiscount;
 
-      if (remainingQuantityNeeded > 0) {
-        console.error(
-          "Lỗi logic: Vẫn còn số lượng cần sau khi tìm batch trên quầy."
-        );
-        return res
-          .status(500)
-          .json({ message: "Lỗi logic khi xử lý số lượng trên quầy." });
+        for (const { batch, takeQty } of batchGroup.batches) {
+          let baseUnitPrice =
+            product.units.find((u) => u.ratio === 1)?.salePrice || product.price;
+          let batchDiscountPerUnit = 0;
+
+          if (batch.discountInfo && batch.discountInfo.isDiscounted) {
+            if (batch.discountInfo.discountType === "percentage") {
+              batchDiscountPerUnit =
+                baseUnitPrice * (batch.discountInfo.discountValue / 100);
+            } else if (batch.discountInfo.discountType === "fixed_amount") {
+              batchDiscountPerUnit = batch.discountInfo.discountValue;
+            }
+          }
+
+          groupBatchDiscountAmount += batchDiscountPerUnit * takeQty;
+          groupBatchesUsed.push({
+            batchId: batch._id,
+            quantity: takeQty,
+            unitPrice: baseUnitPrice - batchDiscountPerUnit,
+            discountAmount: batchDiscountPerUnit,
+          });
+
+          groupItemTotal += (baseUnitPrice - batchDiscountPerUnit) * takeQty;
+        }
+
+        // Áp dụng thêm discount của sản phẩm nếu có
+        const additionalDiscountAmount =
+          groupOriginalUnitPrice * (groupDiscount / 100) * (batchGroup.totalQty / selectedUnitInfo.ratio);
+        const finalItemTotal = groupItemTotal - additionalDiscountAmount;
+        const unitPriceAfterAllDiscounts = finalItemTotal / (batchGroup.totalQty / selectedUnitInfo.ratio);
+
+        orderProducts.push({
+          productId,
+          quantity: batchGroup.totalQty / selectedUnitInfo.ratio,
+          selectedUnitName,
+          batchesUsed: groupBatchesUsed,
+          discount: groupDiscount,
+          itemTotal: finalItemTotal,
+          unitPrice: unitPriceAfterAllDiscounts,
+          originalUnitPrice: groupOriginalUnitPrice,
+        });
+
+        totalAmount += groupOriginalUnitPrice * (batchGroup.totalQty / selectedUnitInfo.ratio);
+        discountAmount += groupBatchDiscountAmount + additionalDiscountAmount;
       }
-
-      const originalUnitPrice = selectedUnitInfo.salePrice;
-      const additionalDiscountAmount =
-        originalUnitPrice * (productDiscount / 100) * requestedQuantity;
-      const itemTotal =
-        originalUnitPrice * requestedQuantity -
-        totalBatchDiscountAmount -
-        additionalDiscountAmount;
-      const unitPriceAfterAllDiscounts = itemTotal / requestedQuantity;
-
-      orderProducts.push({
-        productId,
-        quantity: requestedQuantity,
-        selectedUnitName,
-        batchesUsed: itemBatches,
-        discount: productDiscount,
-        itemTotal: itemTotal,
-        unitPrice: unitPriceAfterAllDiscounts,
-        originalUnitPrice: originalUnitPrice,
-      });
-
-      totalAmount += originalUnitPrice * requestedQuantity;
-      discountAmount += totalBatchDiscountAmount + additionalDiscountAmount;
     }
 
     const finalAmount =
@@ -141,6 +187,7 @@ exports.createOrder = async (req, res) => {
       orderData.paymentStatus = "paid";
       orderData.status = "completed";
 
+      // Trừ số lượng khỏi các batch đã sử dụng
       for (const productItem of orderProducts) {
         for (const batchUsed of productItem.batchesUsed) {
           await Batch.findByIdAndUpdate(batchUsed.batchId, {
@@ -382,7 +429,8 @@ exports.getAllOrders = async (req, res) => {
     let orders = await Order.find(query)
       .populate("customerId", "fullName")
       .populate("employeeId", "fullName")
-      .populate("products.productId", "name"); // Populate thông tin sản phẩm
+      .populate("products.productId", "name")
+      .sort({ createdAt: -1 }); // Sắp xếp mới nhất lên trên
 
     if (orQuery) {
       const filteredOrders = orders.filter((order) => {
