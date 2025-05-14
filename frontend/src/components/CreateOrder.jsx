@@ -630,6 +630,12 @@ function CreateOrder() {
                     control={<Radio />}
                     label="Tiền mặt"
                   />
+                  
+                  <FormControlLabel
+                    value="card"
+                    control={<Radio />}
+                    label="card"
+                  />
                   {/* Thêm các phương thức thanh toán khác nếu cần */}
                 </RadioGroup>
               </FormControl>
