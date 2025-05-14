@@ -61,6 +61,7 @@ function CreateOrder() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   const [cashReceived, setCashReceived] = useState("");
+  const [formattedCashReceived, setFormattedCashReceived] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -216,6 +217,18 @@ function CreateOrder() {
         item.selectedUnit?.salePrice || item.units?.[0]?.salePrice || 0;
       return total + salePrice * item.quantity;
     }, 0);
+  };
+
+  const handleCashReceivedChange = (e) => {
+    const value = e.target.value.replace(/[^\d]/g, '');
+    setCashReceived(value);
+    setErrorMessage("");
+    
+    if (value) {
+      setFormattedCashReceived(parseInt(value).toLocaleString('vi-VN'));
+    } else {
+      setFormattedCashReceived("");
+    }
   };
 
   const calculateChange = () => {
@@ -597,7 +610,7 @@ function CreateOrder() {
                   variant="subtitle1"
                   sx={{ mt: 2, fontWeight: "bold" }}
                 >
-                  Tổng cộng: {calculateTotal().toLocaleString("vi-VN")} VNĐ
+                    Tổng cộng: {calculateTotal().toLocaleString("vi-VN")} VNĐ
                 </Typography>
               )}
             </List>
@@ -640,15 +653,17 @@ function CreateOrder() {
                   variant="outlined"
                   fullWidth
                   size="small"
-                  type="number"
-                  value={cashReceived}
-                  onChange={(e) => {
-                    setCashReceived(e.target.value);
-                    setErrorMessage("");
-                  }}
+                  value={formattedCashReceived}
+                  onChange={handleCashReceivedChange}
                   sx={{ mb: 1 }}
                   error={!!errorMessage}
                   helperText={errorMessage}
+                  InputProps={{
+                    endAdornment: <span style={{ marginLeft: 8 }}>VNĐ</span>,
+                  }}
+                  inputProps={{
+                    inputMode: 'numeric',
+                  }}
                 />
               )}
 
