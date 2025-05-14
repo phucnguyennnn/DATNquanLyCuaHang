@@ -38,11 +38,11 @@ const orderProductSchema = new mongoose.Schema(
     },
     selectedUnitName: { type: String, required: true },
     unitPrice: { type: Number, required: true, min: 0 }, // Thêm trường unitPrice
+    originalUnitPrice: { type: Number, required: true, min: 0 }, // Giá gốc
     batchesUsed: [batchUsedSchema],
-    discount: { type: Number, default: 0, min: 0, max: 100 },
     itemTotal: { type: Number, required: true, min: 0 },
   },
-  { _id: false }
+  { _id: false }  
 );
 const orderSchema = new mongoose.Schema({
   date: { type: Date, default: Date.now },
@@ -54,7 +54,7 @@ const orderSchema = new mongoose.Schema({
   taxRate: { type: Number, default: 0, min: 0 }, // Tỷ lệ thuế, mặc định là 0
   taxAmount: { type: Number, default: 0, min: 0 }, // Số tiền thuế, mặc định là 0
   finalAmount: { type: Number, required: true, min: 0 }, // Tổng tiền khách phải trả
-    orderNumber: { type: String, unique: true },
+  orderNumber: { type: String, unique: true },
   paymentMethod: {
     type: String,
     enum: ["cash", "transfer"],
@@ -67,6 +67,7 @@ const orderSchema = new mongoose.Schema({
     default: "pending",
   },
   depositAmount: { type: Number, default: 0, min: 0 },
+  amountPaid: { type: Number, default: 0, min: 0 },
   notes: { type: String, trim: true, maxlength: 500 },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
