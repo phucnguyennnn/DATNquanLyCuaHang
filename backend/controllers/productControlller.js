@@ -36,7 +36,9 @@ exports.createProduct = async (req, res) => {
       weight,
       dimensions,
       taxRate,
-      tags
+      tags,
+      expiryThresholdDays, // thêm
+      lowQuantityThreshold // thêm
     } = req.body;
 
     // Validate required fields
@@ -66,14 +68,6 @@ exports.createProduct = async (req, res) => {
       });
     }
 
-    // if (existingProduct) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Product with this SKU or barcode already exists."
-    //   });
-    // }
-
-    // Process and validate suppliers
     let supplierInfo = [];
     if (suppliers && Array.isArray(suppliers)) {
       for (const [index, supplier] of suppliers.entries()) {
@@ -125,6 +119,28 @@ exports.createProduct = async (req, res) => {
       });
     }
 
+    // --- Thêm xử lý cho expiryThresholdDays và lowQuantityThreshold ---
+    let expiryThresholdDaysValue = undefined;
+    if (
+      expiryThresholdDays !== undefined &&
+      expiryThresholdDays !== "" &&
+      !isNaN(Number(expiryThresholdDays)) &&
+      Number(expiryThresholdDays) >= 0
+    ) {
+      expiryThresholdDaysValue = parseInt(expiryThresholdDays, 10);
+    }
+
+    let lowQuantityThresholdValue = undefined;
+    if (
+      lowQuantityThreshold !== undefined &&
+      lowQuantityThreshold !== "" &&
+      !isNaN(Number(lowQuantityThreshold)) &&
+      Number(lowQuantityThreshold) >= 0
+    ) {
+      lowQuantityThresholdValue = parseInt(lowQuantityThreshold, 10);
+    }
+    // --- hết thêm ---
+
     // Create new product
     const newProduct = new Product({
       name,
@@ -141,7 +157,10 @@ exports.createProduct = async (req, res) => {
       expiryDiscountRules,
       discount,
       suppliers: supplierInfo,
-      images: req.files?.map(file => file.path) || []
+      images: req.files?.map(file => file.path) || [],
+      // --- Thêm 2 trường mới nếu có ---
+      ...(expiryThresholdDaysValue !== undefined ? { expiryThresholdDays: expiryThresholdDaysValue } : {}),
+      ...(lowQuantityThresholdValue !== undefined ? { lowQuantityThreshold: lowQuantityThresholdValue } : {})
     });
 
     await newProduct.save();
@@ -199,6 +218,11 @@ exports.getAllProducts = async (req, res) => {
     const excludedFields = ['page', 'sort', 'limit', 'fields'];
     excludedFields.forEach(el => delete queryObj[el]);
 
+    // Lọc theo danh mục nếu có
+    if (req.query.category) {
+      queryObj.category = req.query.category;
+    }
+
     let queryStr = JSON.stringify(queryObj);
     queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, match => `$${match}`);
 
@@ -227,8 +251,11 @@ exports.getAllProducts = async (req, res) => {
     }
 
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 100;
+    const limit = parseInt(req.query.limit) || 200;
     const skip = (page - 1) * limit;
+
+    // Đếm tổng số sản phẩm phù hợp (không phân trang)
+    const count = await Product.countDocuments(JSON.parse(queryStr));
 
     query = query.skip(skip).limit(limit);
 
@@ -237,6 +264,7 @@ exports.getAllProducts = async (req, res) => {
     return res.status(200).json({
       success: true,
       results: products.length,
+      count,
       data: products
     });
 
@@ -457,6 +485,30 @@ exports.updateProduct = async (req, res) => {
         );
       }
     }
+
+    // --- Chuẩn hóa cập nhật expiryThresholdDays và lowQuantityThreshold ---
+    if (updates.expiryThresholdDays !== undefined) {
+      if (updates.expiryThresholdDays === "" || updates.expiryThresholdDays === null) {
+        product.expiryThresholdDays = undefined;
+      } else {
+        const value = Number(updates.expiryThresholdDays);
+        if (!isNaN(value) && value >= 0) {
+          product.expiryThresholdDays = value;
+        }
+      }
+    }
+
+    if (updates.lowQuantityThreshold !== undefined) {
+      if (updates.lowQuantityThreshold === "" || updates.lowQuantityThreshold === null) {
+        product.lowQuantityThreshold = undefined;
+      } else {
+        const value = Number(updates.lowQuantityThreshold);
+        if (!isNaN(value) && value >= 0) {
+          product.lowQuantityThreshold = value;
+        }
+      }
+    }
+    // --- hết chuẩn hóa ---
 
     // Handle images update
     if (req.files && req.files.length > 0) {

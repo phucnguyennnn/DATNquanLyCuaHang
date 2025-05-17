@@ -131,7 +131,7 @@ const productSchema = new mongoose.Schema(
                 validator: Number.isInteger,
                 message: '{VALUE} is not an integer value'
             },
-            description: "Product-specific expiry threshold in days"
+            description: "Ngưỡng cảnh báo sắp hết hạn (ngày). Nếu không nhập sẽ dùng giá trị mặc định hệ thống."
         },
         lowQuantityThreshold: {
             type: Number,
@@ -220,6 +220,11 @@ const productSchema = new mongoose.Schema(
             startDate: Date,
             endDate: Date,
             reason: String
+        },
+        status: {
+            type: String,
+            enum: ["active", "inactive"],
+            default: "active"
         }
     },
     {

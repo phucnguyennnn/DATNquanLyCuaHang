@@ -3,7 +3,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
-const { transporter, sendEmail } = require("../config/nodemailer"); 
+const { transporter, sendEmail } = require("../config/nodemailer");
 const { generateOTP, sendOTPEmail } = require("../utils/otpUtils");
 
 let refreshTokens = [];
@@ -116,33 +116,33 @@ const authController = {
       if (req.user.role !== 'admin') {
         return res.status(403).json({ error: 'Không có quyền thực hiện' });
       }
-  
+
       const { username, fullName, email, phone, role } = req.body;
-  
+
       // Validate email
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return res.status(400).json({ error: 'Email không hợp lệ' });
       }
-  
+
       // Kiểm tra user tồn tại
       const existingUser = await User.findOne({ $or: [{ username }, { email }] });
       if (existingUser) {
-        return res.status(400).json({ 
-          error: existingUser.username === username 
-            ? 'Username đã tồn tại' 
+        return res.status(400).json({
+          error: existingUser.username === username
+            ? 'Username đã tồn tại'
             : 'Email đã tồn tại'
         });
       }
-  
+
       // Tạo mật khẩu
       const randomPassword = crypto.randomBytes(8).toString('hex');
       const salt = await bcrypt.genSalt(10); // Thêm salt
       const hashedPassword = await bcrypt.hash(randomPassword, salt); // Hash với salt
-  
+
       // Tạo user mới
       const newUser = new User({
         username,
-        password: randomPassword, 
+        password: randomPassword,
         fullName,
         email,
         phone,
@@ -150,9 +150,9 @@ const authController = {
         isActive: true,
         emailVerified: true // Thêm trường này để không cần xác thực email
       });
-  
+
       const savedUser = await newUser.save();
-  
+
       // Gửi email
       try {
         const emailContent = `
@@ -165,13 +165,13 @@ const authController = {
           </ul>
           <p>Vui lòng đổi mật khẩu ngay sau khi đăng nhập.</p>
         `;
-  
+
         await sendEmail({
           to: email.trim(),
           subject: 'Tài khoản nhân viên đã được tạo',
           html: emailContent
         });
-  
+
       } catch (emailError) {
         console.error('Failed to send email:', emailError);
         const { password: _, ...userInfo } = savedUser._doc;
@@ -180,15 +180,15 @@ const authController = {
           warning: 'Tài khoản đã được tạo nhưng không thể gửi email'
         });
       }
-  
+
       const { password: _, ...userInfo } = savedUser._doc;
       res.status(201).json(userInfo);
-  
+
     } catch (error) {
       console.error('Error in createEmployee:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'Lỗi hệ thống',
-        details: error.message 
+        details: error.message
       });
     }
   },
@@ -277,7 +277,7 @@ const authController = {
   // Các hàm hỗ trợ (giữ nguyên từ code cũ)
   generateAccessToken: (user) => {
     return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: "15m",
+      expiresIn: "1d",
     });
   },
 
@@ -299,10 +299,10 @@ const authController = {
         return res.status(403).json({ error: "Tài khoản đã bị vô hiệu hóa" });
       if (!user.emailVerified && user.role !== 'customer') // Thêm điều kiện này
         return res.status(403).json({ error: "Tài khoản chưa được xác thực" });
-        const validPassword = await user.comparePassword(password);
-        if (!validPassword) {
-          return res.status(400).json({ error: "Mật khẩu không chính xác" });
-        }
+      const validPassword = await user.comparePassword(password);
+      if (!validPassword) {
+        return res.status(400).json({ error: "Mật khẩu không chính xác" });
+      }
 
       const accessToken = authController.generateAccessToken(user);
       const refreshToken = authController.generateRefreshToken(user);

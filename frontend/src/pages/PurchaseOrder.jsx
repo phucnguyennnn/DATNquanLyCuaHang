@@ -27,6 +27,7 @@ import {
   DialogTitle,
   FormControlLabel,
   TableSortLabel,
+  Autocomplete,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -372,18 +373,17 @@ const PurchaseOrderManagement = () => {
             Thông tin nhà cung cấp
           </Typography>
           <FormControl fullWidth>
-            <InputLabel>Chọn nhà cung cấp</InputLabel>
-            <Select
-              value={selectedSupplier}
-              label="Chọn nhà cung cấp"
-              onChange={(e) => setSelectedSupplier(e.target.value)}
-            >
-              {suppliers.map((sup) => (
-                <MenuItem key={sup._id} value={sup._id}>
-                  {sup.name}
-                </MenuItem>
-              ))}
-            </Select>
+            <Autocomplete
+              options={suppliers}
+              getOptionLabel={(option) => option.name || ""}
+              value={suppliers.find(sup => sup._id === selectedSupplier) || null}
+              onChange={(event, newValue) => {
+                setSelectedSupplier(newValue ? newValue._id : "");
+              }}
+              renderInput={(params) => (
+                <TextField {...params} label="Chọn nhà cung cấp" />
+              )}
+            />
           </FormControl>
         </Paper>
 
@@ -393,20 +393,17 @@ const PurchaseOrderManagement = () => {
           </Typography>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={5}>
-              <FormControl fullWidth>
-                <InputLabel>Sản phẩm</InputLabel>
-                <Select
-                  value={selectedProduct}
-                  label="Sản phẩm"
-                  onChange={(e) => setSelectedProduct(e.target.value)}
-                >
-                  {products.map((p) => (
-                    <MenuItem key={p._id} value={p._id}>
-                      {p.name} - ({p.units[0]?.name || "N/A"})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                options={products}
+                getOptionLabel={(option) => `${option.name} - (${option.units[0]?.name || "N/A"})`}
+                value={products.find(p => p._id === selectedProduct) || null}
+                onChange={(event, newValue) => {
+                  setSelectedProduct(newValue ? newValue._id : "");
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Sản phẩm" />
+                )}
+              />
             </Grid>
             
             <Grid item xs={6} sm={3} md={2}>
@@ -905,23 +902,20 @@ const PurchaseOrderManagement = () => {
           <DialogContent dividers sx={{ maxHeight: '70vh', overflowY: 'auto' }}>
             {editOrder && (
               <Stack spacing={2} mt={2}>
-                <FormControl fullWidth>
-                  <InputLabel>Nhà cung cấp</InputLabel>
-                  <Select
-                    value={editOrder.supplier?._id || ""}
-                    label="Nhà cung cấp"
-                    onChange={(e) => setEditOrder({ 
+                <Autocomplete
+                  options={suppliers}
+                  getOptionLabel={(option) => option.name || ""}
+                  value={suppliers.find(sup => sup._id === (editOrder.supplier?._id || "")) || null}
+                  onChange={(event, newValue) => {
+                    setEditOrder({ 
                       ...editOrder, 
-                      supplier: { ...editOrder.supplier, _id: e.target.value }
-                    })}
-                  >
-                    {suppliers.map((sup) => (
-                      <MenuItem key={sup._id} value={sup._id}>
-                        {sup.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                      supplier: { ...editOrder.supplier, _id: newValue ? newValue._id : "" }
+                    });
+                  }}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Nhà cung cấp" />
+                  )}
+                />
 
                 <TableContainer>
                   <Table>
@@ -939,18 +933,16 @@ const PurchaseOrderManagement = () => {
                         <TableRow key={index}>
                           <TableCell>{item.product?.name}</TableCell>
                           <TableCell>
-                            <Select
+                            <Autocomplete
+                              options={UNITS}
                               value={item.unit}
-                              onChange={(e) => 
-                                handleEditOrderItemChange(index, "unit", e.target.value)
+                              onChange={(event, newValue) => 
+                                handleEditOrderItemChange(index, "unit", newValue)
                               }
-                            >
-                              {UNITS.map(unit => (
-                                <MenuItem key={unit} value={unit}>
-                                  {unit}
-                                </MenuItem>
-                              ))}
-                            </Select>
+                              renderInput={(params) => (
+                                <TextField {...params} label="Đơn vị" size="small" />
+                              )}
+                            />
                           </TableCell>
                           <TableCell>
                             <TextField

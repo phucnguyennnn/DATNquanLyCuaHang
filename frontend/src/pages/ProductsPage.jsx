@@ -274,9 +274,11 @@ const ProductListPage = () => {
     ));
   };
 
-  const filteredProducts = products.filter((product) =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProducts = products
+    .filter((product) => product.status !== "inactive")
+    .filter((product) =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
   return (
     <Box sx={{ display: "flex", bgcolor: theme.palette.background.default }}>

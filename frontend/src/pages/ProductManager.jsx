@@ -39,6 +39,7 @@ import axios from "axios";
 import { useFormik } from "formik";
 import * as yup from "yup";
 import { useSettings } from '../contexts/SettingsContext';
+import Pagination from "@mui/material/Pagination";
 
 const productSchema = yup.object({
     name: yup.string().required("Tên sản phẩm là bắt buộc"),
@@ -95,16 +96,21 @@ const ProductManager = () => {
         message: "",
         severity: "success",
     });
-    const [imagePreviews, setImagePreviews] = useState([]);
-    const [selectedImages, setSelectedImages] = useState([]);
+    const [imagePreviews, setImagePreviews] = useState([]); // [{src, isNew}]
+    const [selectedImages, setSelectedImages] = useState([]); // array of File
+    const [removedOldImages, setRemovedOldImages] = useState([]); // array of url string
     const [searchTerm, setSearchTerm] = useState("");
     const [openCategoryDialog, setOpenCategoryDialog] = useState(false);
     const [newCategory, setNewCategory] = useState({ name: "", description: "" });
+    const [submitLoading, setSubmitLoading] = useState(false);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("");
     const token = localStorage.getItem("authToken");
 
     const { settings } = useSettings();
 
-    const predefinedUnits = ["cái", "gói", "bao", "thùng", "chai", "lọ", "lon",  "hộp", "kg", "gram", "liter", "ml"];
+    const predefinedUnits = ["cái", "gói", "bao", "thùng", "thùng 24","thùng 30", "túi", "chai", "lọ", "lon",  "hộp", "kg", "gram", "liter", "ml"];
 
     const handleOpenCategoryDialog = () => {
         setNewCategory({ name: "", description: "" });
@@ -140,8 +146,13 @@ const ProductManager = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
+                // Gọi API với phân trang và lọc danh mục
+                let url = `http://localhost:8000/api/products?page=${page}&limit=20`;
+                if (selectedCategoryFilter) {
+                    url += `&category=${selectedCategoryFilter}`;
+                }
                 const [productsRes, categoriesRes, suppliersRes] = await Promise.all([
-                    axios.get("http://localhost:8000/api/products", {
+                    axios.get(url, {
                         headers: { Authorization: `Bearer ${token}` },
                     }),
                     axios.get("http://localhost:8000/api/categories", {
@@ -156,6 +167,10 @@ const ProductManager = () => {
                 setCategories(categoriesRes.data);
                 setSuppliers(suppliersRes.data);
                 setIsLoading(false);
+
+                // Tính tổng số trang
+                const total = productsRes.data.total || productsRes.data.count || productsRes.data.results || 0;
+                setTotalPages(Math.ceil((productsRes.data.count || productsRes.data.total || 0) / 20) || 1);
             } catch (error) {
                 console.error("Error fetching data:", error);
                 setSnackbar({
@@ -168,7 +183,7 @@ const ProductManager = () => {
         };
 
         fetchData();
-    }, []);
+    }, [page, selectedCategoryFilter, token]);
 
     const formik = useFormik({
         initialValues: {
@@ -192,6 +207,7 @@ const ProductManager = () => {
             return errors;
         },
         onSubmit: async (values) => {
+            setSubmitLoading(true);
             try {
                 const formData = new FormData();
                 formData.append("name", values.name);
@@ -199,8 +215,15 @@ const ProductManager = () => {
                 formData.append("description", values.description || "");
                 formData.append("active", values.active);
                 formData.append("barcode", values.barcode || "");
-                formData.append("expiryThresholdDays", values.expiryThresholdDays || "");
-                formData.append("lowQuantityThreshold", values.lowQuantityThreshold || "");
+                
+                // Simplified handling of threshold values
+                if (values.expiryThresholdDays) {
+                    formData.append("expiryThresholdDays", values.expiryThresholdDays);
+                }
+                
+                if (values.lowQuantityThreshold) {
+                    formData.append("lowQuantityThreshold", values.lowQuantityThreshold);
+                }
 
                 values.units.forEach((unit, index) => {
                     formData.append(`units[${index}][name]`, unit.name);
@@ -214,6 +237,11 @@ const ProductManager = () => {
                 }));
                 formData.append("suppliers", JSON.stringify(processedSuppliers));
 
+                // Xử lý ảnh cũ bị xóa (chỉ khi sửa)
+                if (currentProduct && removedOldImages.length > 0) {
+                    formData.append("removedImages", JSON.stringify(removedOldImages));
+                }
+                // Ảnh mới
                 selectedImages.forEach((image) => {
                     formData.append("images", image);
                 });
@@ -260,6 +288,8 @@ const ProductManager = () => {
                     message: error.response?.data?.message || "Lỗi khi lưu sản phẩm",
                     severity: "error",
                 });
+            } finally {
+                setSubmitLoading(false);
             }
         },
     });
@@ -274,10 +304,42 @@ const ProductManager = () => {
     };
 
     const handleImageChange = (e) => {
-        const files = Array.from(e.target.files);
-        setSelectedImages(files);
-        const previews = files.map((file) => URL.createObjectURL(file));
-        setImagePreviews(previews);
+        if (e.target.files) {
+            const newFiles = Array.from(e.target.files);
+            setSelectedImages(prev => [...prev, ...newFiles]);
+            const newPreviews = newFiles.map((file) => ({
+                src: URL.createObjectURL(file),
+                isNew: true
+            }));
+            setImagePreviews(prev => [...prev, ...newPreviews]);
+        }
+    };
+
+    const handleRemoveImage = (index) => {
+        const preview = imagePreviews[index];
+        if (preview.isNew) {
+            // Remove from selectedImages
+            const newSelected = [...selectedImages];
+            // Find the index of the preview in selectedImages (by order)
+            let newIdx = 0;
+            for (let i = 0, count = 0; i < imagePreviews.length; ++i) {
+                if (imagePreviews[i].isNew) {
+                    if (i === index) {
+                        newSelected.splice(count, 1);
+                        break;
+                    }
+                    count++;
+                }
+            }
+            setSelectedImages(newSelected);
+        } else {
+            // Mark old image as removed
+            setRemovedOldImages(prev => [...prev, preview.src]);
+        }
+        // Remove from previews
+        const newPreviews = [...imagePreviews];
+        newPreviews.splice(index, 1);
+        setImagePreviews(newPreviews);
     };
 
     const handleOpenAddDialog = () => {
@@ -288,6 +350,7 @@ const ProductManager = () => {
         formik.setFieldValue("lowQuantityThreshold", "");
         setImagePreviews([]);
         setSelectedImages([]);
+        setRemovedOldImages([]);
         setOpenDialog(true);
     };
 
@@ -310,8 +373,10 @@ const ProductManager = () => {
             expiryThresholdDays: product.expiryThresholdDays || "",
             lowQuantityThreshold: product.lowQuantityThreshold || "",
         });
-        setImagePreviews(product.images || []);
+        // Hiển thị ảnh cũ (server) và reset ảnh mới
+        setImagePreviews((product.images || []).map(url => ({ src: url, isNew: false })));
         setSelectedImages([]);
+        setRemovedOldImages([]);
         setOpenDialog(true);
     };
 
@@ -319,6 +384,7 @@ const ProductManager = () => {
         setOpenDialog(false);
         setImagePreviews([]);
         setSelectedImages([]);
+        setRemovedOldImages([]);
     };
 
     const handleDeleteProduct = async (id) => {
@@ -402,6 +468,7 @@ const ProductManager = () => {
         setSnackbar({ ...snackbar, open: false });
     };
 
+    // Lọc theo tên sản phẩm (vẫn giữ searchTerm)
     const filteredProducts = products.filter((product) =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -453,6 +520,26 @@ const ProductManager = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                     sx={{ marginRight: 2 }}
                 />
+                <FormControl sx={{ minWidth: 200, marginRight: 2 }}>
+                    <InputLabel id="filter-category-label">Lọc theo danh mục</InputLabel>
+                    <Select
+                        labelId="filter-category-label"
+                        value={selectedCategoryFilter}
+                        label="Lọc theo danh mục"
+                        onChange={(e) => {
+                            setSelectedCategoryFilter(e.target.value);
+                            setPage(1);
+                        }}
+                    >
+                        <MenuItem value="">Tất cả</MenuItem>
+                        {Array.isArray(categories) &&
+                            categories.map((category) => (
+                                <MenuItem key={category._id} value={category._id}>
+                                    {category.category_name || category.name || "Không rõ danh mục"}
+                                </MenuItem>
+                            ))}
+                    </Select>
+                </FormControl>
                 <Button
                     variant="contained"
                     color="primary"
@@ -538,6 +625,14 @@ const ProductManager = () => {
                     </TableBody>
                 </Table>
             </TableContainer>
+            <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+                <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={(_, value) => setPage(value)}
+                    color="primary"
+                />
+            </Box>
 
             <Dialog
                 open={openDialog}
@@ -640,8 +735,8 @@ const ProductManager = () => {
                                     label="Ngưỡng cảnh báo hết hạn (ngày)"
                                     type="number"
                                     value={formik.values.expiryThresholdDays}
+                                    helperText="Nếu để trống, sẽ sử dụng giá trị mặc định trong cài đặt"
                                     onChange={formik.handleChange}
-                                    helperText={`Để trống để sử dụng giá trị mặc định (${settings.expiryThresholdDays} ngày)`}
                                     margin="normal"
                                     InputProps={{
                                         endAdornment: <InputAdornment position="end">ngày</InputAdornment>,
@@ -656,8 +751,8 @@ const ProductManager = () => {
                                     label="Ngưỡng cảnh báo số lượng thấp"
                                     type="number"
                                     value={formik.values.lowQuantityThreshold}
+                                    helperText="Nếu để trống, sẽ sử dụng giá trị mặc định trong cài đặt"
                                     onChange={formik.handleChange}
-                                    helperText={`Để trống để sử dụng giá trị mặc định (${settings.lowQuantityThreshold} sản phẩm)`}
                                     margin="normal"
                                     InputProps={{
                                         endAdornment: <InputAdornment position="end">sản phẩm</InputAdornment>,
@@ -698,21 +793,19 @@ const ProductManager = () => {
                                 <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                                     {imagePreviews.map((preview, index) => (
                                         <Box key={index} sx={{ position: 'relative' }}>
-                                            <img src={preview} alt={`Preview ${index}`} style={{ width: 100, height: 100, objectFit: 'cover' }} />
+                                            <img src={preview.src} alt={`Preview ${index}`} style={{ width: 100, height: 100, objectFit: 'cover' }} />
                                             <IconButton
                                                 size="small"
                                                 sx={{ position: 'absolute', top: -10, right: -10, backgroundColor:'error.main', color: 'white', '&:hover': { backgroundColor: 'error.dark' } }}
-                                                onClick={() => {
-                                                    const newPreviews = [...imagePreviews];
-                                                    newPreviews.splice(index, 1);
-                                                    setImagePreviews(newPreviews);
-                                                    const newSelectedImages = [...selectedImages];
-                                                    newSelectedImages.splice(index, 1);
-                                                    setSelectedImages(newSelectedImages);
-                                                }}
+                                                onClick={() => handleRemoveImage(index)}
                                             >
                                                 <DeleteIcon sx={{ fontSize: 16 }} />
                                             </IconButton>
+                                            {!preview.isNew && (
+                                                <Box sx={{ position: 'absolute', bottom: 2, left: 2, bgcolor: 'rgba(0,0,0,0.5)', color: 'white', px: 0.5, borderRadius: 1, fontSize: 10 }}>
+                                                    Ảnh cũ
+                                                </Box>
+                                            )}
                                         </Box>
                                     ))}
                                 </Box>
@@ -912,8 +1005,14 @@ const ProductManager = () => {
                         </Grid>
                     </DialogContent>
                     <DialogActions>
-                        <Button onClick={handleCloseDialog}>Hủy</Button>
-                        <Button type="submit" color="primary" variant="contained">
+                        <Button onClick={handleCloseDialog} disabled={submitLoading}>Hủy</Button>
+                        <Button
+                            type="submit"
+                            color="primary"
+                            variant="contained"
+                            disabled={submitLoading}
+                            startIcon={submitLoading ? <CircularProgress size={20} color="inherit" /> : null}
+                        >
                             {currentProduct ? "Cập nhật" : "Thêm mới"}
                         </Button>
                     </DialogActions>

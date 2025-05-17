@@ -188,38 +188,77 @@ batchSchema.pre("save", async function (next) {
       this.batchCode = `${productCode}-${dateString}-${sequence}`;
     }
 
+    // Add code to fetch associated product to get discount rules
     const daysLeft = this.daysUntilExpiry;
+
+    // Get the product to check its discount rules
+    const Product = mongoose.model('Product');
+    const product = await Product.findById(this.product);
+
     if (
       !this.discountInfo.isDiscounted ||
       this.discountInfo.discountReason === "near_expiry"
     ) {
-      if (daysLeft <= 7) {
-        this.discountInfo = {
-          isDiscounted: true,
-          discountType: "percentage",
-          discountValue: 30,
-          discountStartDate: new Date(),
-          discountEndDate: this.expiry_day,
-          discountReason: "near_expiry",
-        };
-      } else if (daysLeft <= 14 && daysLeft > 7) {
-        this.discountInfo = {
-          isDiscounted: true,
-          discountType: "percentage",
-          discountValue: 15,
-          discountStartDate: new Date(),
-          discountEndDate: this.expiry_day,
-          discountReason: "near_expiry",
-        };
-      } else if (
-        daysLeft > 14 &&
-        this.discountInfo.discountReason === "near_expiry"
-      ) {
-        this.discountInfo.isDiscounted = false;
-        this.discountInfo.discountValue = 0;
-        this.discountInfo.discountStartDate = undefined;
-        this.discountInfo.discountEndDate = undefined;
-        this.discountInfo.discountReason = undefined;
+      // Use product-specific discount rules if available
+      if (product && product.expiryDiscountRules && Array.isArray(product.expiryDiscountRules) && product.expiryDiscountRules.length > 0) {
+        // Sort rules by days in descending order (larger values first)
+        const sortedRules = [...product.expiryDiscountRules].sort((a, b) =>
+          b.daysBeforeExpiry - a.daysBeforeExpiry
+        );
+
+        // Find the applicable rule based on days left
+        const applicableRule = sortedRules.find(rule => daysLeft <= rule.daysBeforeExpiry);
+
+        if (applicableRule) {
+          this.discountInfo = {
+            isDiscounted: true,
+            discountType: applicableRule.discountType,
+            discountValue: applicableRule.discountValue,
+            discountStartDate: new Date(),
+            discountEndDate: this.expiry_day,
+            discountReason: "near_expiry",
+          };
+        } else if (
+          daysLeft > sortedRules[0]?.daysBeforeExpiry &&
+          this.discountInfo.discountReason === "near_expiry"
+        ) {
+          // Clear discount if days left exceeds the largest threshold
+          this.discountInfo.isDiscounted = false;
+          this.discountInfo.discountValue = 0;
+          this.discountInfo.discountStartDate = undefined;
+          this.discountInfo.discountEndDate = undefined;
+          this.discountInfo.discountReason = undefined;
+        }
+      } else {
+        // Fall back to default rules if no product-specific rules exist
+        if (daysLeft <= 7) {
+          this.discountInfo = {
+            isDiscounted: true,
+            discountType: "percentage",
+            discountValue: 30,
+            discountStartDate: new Date(),
+            discountEndDate: this.expiry_day,
+            discountReason: "near_expiry",
+          };
+        } else if (daysLeft <= 14 && daysLeft > 7) {
+          this.discountInfo = {
+            isDiscounted: true,
+            discountType: "percentage",
+            discountValue: 15,
+            discountStartDate: new Date(),
+            discountEndDate: this.expiry_day,
+            discountReason: "near_expiry",
+          };
+        } else if (
+          daysLeft > 14 &&
+          this.discountInfo.discountReason === "near_expiry"
+        ) {
+          this.discountInfo.isDiscounted = false;
+          this.discountInfo.discountValue = 0;
+          this.discountInfo.discountStartDate = undefined;
+          this.discountInfo.discountEndDate = undefined;
+          this.discountInfo.discountReason = undefined;
+        }
       }
     }
     this.remaining_quantity =
@@ -232,11 +271,11 @@ batchSchema.pre("save", async function (next) {
     if (this.remaining_quantity === 0 && this.initial_quantity > 0 && this.quantity_on_shelf === 0)
       this.status = "hết hàng";
     else if (this.expiry_day < new Date()) this.status = "hết hạn";
-    else if (
-      this.status === "hoạt động" &&
-      this.remaining_quantity < this.initial_quantity * 0.2
-    )
-      this.status = "không hoạt động";
+    // else if (
+    //   this.status === "hoạt động" &&
+    //   this.remaining_quantity < this.initial_quantity * 0.2
+    // )
+    //   this.status = "không hoạt động";
     next();
   } catch (error) {
     return next(error);

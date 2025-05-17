@@ -279,6 +279,30 @@ function ShelfInventoryPage() {
     return quantities;
   }, [shelfData]);
 
+  // Helper functions to consistently get thresholds with proper priority
+  const getExpiryThreshold = (product) => {
+    return product?.expiryThresholdDays !== undefined && 
+           product?.expiryThresholdDays !== null && 
+           product?.expiryThresholdDays !== "" 
+      ? product.expiryThresholdDays 
+      : settings.expiryThresholdDays;
+  };
+
+  const getLowQuantityThreshold = (product) => {
+    return product?.lowQuantityThreshold !== undefined && 
+           product?.lowQuantityThreshold !== null && 
+           product?.lowQuantityThreshold !== "" 
+      ? product.lowQuantityThreshold 
+      : settings.lowQuantityThreshold;
+  };
+
+  // Helper to check if product is nearing expiry
+  const isNearingExpiry = (expiryDate, product) => {
+    if (!expiryDate) return false;
+    const threshold = getExpiryThreshold(product);
+    return isBefore(new Date(expiryDate), addDays(new Date(), threshold));
+  };
+
   const sortedShelfData = useMemo(() => {
     const now = new Date();
 
@@ -286,18 +310,22 @@ function ShelfInventoryPage() {
       let warnings = [];
       const expiryDate = item.expiry_day ? new Date(item.expiry_day) : null;
 
+      // Use helper functions for consistent threshold logic
+      const expiryThreshold = getExpiryThreshold(item.product);
+      const lowQtyThreshold = getLowQuantityThreshold(item.product);
+
       if (
         expiryDate &&
-        isBefore(expiryDate, addDays(now, settings.expiryThresholdDays))
+        isBefore(expiryDate, addDays(now, expiryThreshold))
       ) {
         warnings.push("Sắp hết hạn");
       }
 
-      if (item.quantity_on_shelf <= settings.lowQuantityThreshold) {
+      if (item.quantity_on_shelf <= lowQtyThreshold) {
         warnings.push("Ít trên quầy");
       }
 
-      if (item.remaining_quantity <= settings.lowQuantityThreshold) {
+      if (item.remaining_quantity <= lowQtyThreshold) {
         warnings.push("Ít trong kho");
       }
 
@@ -727,10 +755,7 @@ function ShelfInventoryPage() {
                       <TableCell
                         style={
                           group.earliestExpiryDate &&
-                          isBefore(
-                            new Date(group.earliestExpiryDate),
-                            addDays(new Date(), settings.expiryThresholdDays)
-                          )
+                          isNearingExpiry(group.earliestExpiryDate, group.batches[0]?.product)
                             ? { color: "red" }
                             : {}
                         }
@@ -853,10 +878,7 @@ function ShelfInventoryPage() {
                                     <TableCell
                                       style={
                                         batch.expiry_day &&
-                                        isBefore(
-                                          new Date(batch.expiry_day),
-                                          addDays(new Date(), settings.expiryThresholdDays)
-                                        )
+                                        isNearingExpiry(batch.expiry_day, batch.product)
                                           ? { color: "red" }
                                           : {}
                                       }
@@ -963,10 +985,7 @@ function ShelfInventoryPage() {
               <Typography
                 style={
                   selectedBatch.expiry_day &&
-                  isBefore(
-                    new Date(selectedBatch.expiry_day),
-                    addDays(new Date(), settings.expiryThresholdDays)
-                  )
+                  isNearingExpiry(selectedBatch.expiry_day, selectedBatch.product)
                     ? { color: "red" }
                     : {}
                 }
@@ -996,12 +1015,12 @@ function ShelfInventoryPage() {
               </Typography>
               <Typography
                 style={
-                  selectedBatch.quantity_on_shelf <= settings.lowQuantityThreshold
+                  selectedBatch.quantity_on_shelf <= getLowQuantityThreshold(selectedBatch?.product)
                     ? { color: "orange" }
                     : {}
                 }
               >
-                Số lượng trên quầy: {selectedBatch.quantity_on_shelf}
+                Số lượng trên quầy: {selectedBatch?.quantity_on_shelf}
               </Typography>
               <Typography>Trạng thái: {selectedBatch.status}</Typography>
               {selectedBatch.supplier && (
