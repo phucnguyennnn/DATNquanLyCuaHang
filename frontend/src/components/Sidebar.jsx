@@ -40,6 +40,7 @@ import {
   DashboardCustomize,
   Inventory2,
   MoveToInbox,
+  History as HistoryIcon,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
@@ -333,6 +334,16 @@ const Sidebar = () => {
                     <Description />
                   </ListItemIcon>
                   <ListItemText primary="Lịch sử trả hàng" />
+                </StyledSubListItemButton>
+
+                <StyledSubListItemButton
+                  onClick={() => navigate("/Inventory-history")}
+                  active={isActive("/Inventory-history") ? 1 : 0}
+                >
+                  <ListItemIcon>
+                    <Description />
+                  </ListItemIcon>
+                  <ListItemText primary="Lịch sử nhập kho" />
                 </StyledSubListItemButton>
               </List>
             </Collapse>

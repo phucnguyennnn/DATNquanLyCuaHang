@@ -190,6 +190,8 @@ const CreateGoodReceipt = () => {
     if (field === "quantity") {
       const inputQuantity = Math.max(0, Math.min(Number(value))); 
       updated[index][field] = inputQuantity;
+      // Also update quantity_unit with the same value
+      updated[index].quantity_unit = inputQuantity;
       // Update totalPrice when quantity changes
       updated[index].totalPrice = inputQuantity * updated[index].unitPrice;
     } else if (field === "unitPrice") {
@@ -336,13 +338,14 @@ const CreateGoodReceipt = () => {
 
           return {
             productId: item.product,
-            quantity: Number(item.quantity) * ratio,
-            unit: item.unit,
+            quantity: Number(item.quantity), // Base quantity
+            unit: item.unit, // Unit name
             unitPrice: item.unitPrice,
             totalPrice: item.unitPrice * Number(item.quantity),
             manufactureDate: item.manufacture_day,
             expiryDate: item.expiry_day,
             productName: item.productName,
+            quantity_unit: Number(item.quantity), // Set quantity_unit as same as quantity (actual input)
           };
         }),
         ...additionalItems.map(item => {
@@ -353,13 +356,14 @@ const CreateGoodReceipt = () => {
 
           return {
             productId: item.product,
-            quantity: Number(item.quantity) * ratio,
+            quantity: Number(item.quantity),
             unit: item.unit,
             unitPrice: Number(item.unitPrice),
             totalPrice: Number(item.unitPrice) * Number(item.quantity),
             manufactureDate: item.manufacture_day,
             expiryDate: item.expiry_day,
             productName: item.productName,
+            quantity_unit: Number(item.quantity), // Set quantity_unit as same as quantity
           };
         })
       ];
@@ -506,13 +510,9 @@ const CreateGoodReceipt = () => {
                     Số lượng đặt: {item.quantity || 0}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Số lượng đã nhận: {item.receivedQuantity || 0}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
                     Đơn giá: {item.unitPrice?.toLocaleString() || 0} đ
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {/* Hiển thị thành tiền theo số lượng nhập thực tế */}
                     Thành tiền: {(batchInfo[index]?.quantity * item.unitPrice)?.toLocaleString() || 0} đ
                   </Typography>
                 </Box>
@@ -524,9 +524,13 @@ const CreateGoodReceipt = () => {
                       type="number"
                       fullWidth
                       value={batchInfo[index]?.quantity || ""}
-                      onChange={(e) =>
-                        handleBatchChange(index, "quantity", e.target.value)
-                      }
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        handleBatchChange(index, "quantity", value);
+                        // Also update quantity_unit with the same value since it's the actual input quantity
+                        handleBatchChange(index, "quantity_unit", value);
+                      }}
+                      helperText="Số lượng nhập thực tế"
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
