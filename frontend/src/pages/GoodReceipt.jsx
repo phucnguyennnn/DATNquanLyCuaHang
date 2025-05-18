@@ -143,7 +143,22 @@ const CreateGoodReceipt = () => {
         }
       );
       console.log("Chi tiết phiếu đặt hàng:", res.data);
-      setSelectedOrder(res.data);
+
+      // Tính lại tổng giá trị từ các item trong res.data
+      const itemsTotal = Array.isArray(res.data.items)
+        ? res.data.items.reduce(
+            (sum, item) =>
+              sum +
+              (Number(item.unitPrice || 0) *
+                (Number(item.quantity || 0) - Number(item.receivedQuantity || 0))),
+            0
+          )
+        : 0;
+
+      setSelectedOrder({
+        ...res.data,
+        totalAmount: itemsTotal,
+      });
 
       setAdditionalItems([]);
 
@@ -155,11 +170,10 @@ const CreateGoodReceipt = () => {
         res.data.items.map((item) => ({
           product: item.product?._id || item.product,
           productName: item.product?.name || item.productName,
-          quantity: 0, // Default input quantity for splitting
-          maxQuantity: item.quantity - item.receivedQuantity, // Remaining quantity available for splitting
+          quantity: (item.quantity - item.receivedQuantity), // default: số lượng nhập = số lượng đặt còn lại
           unit: item.unit,
           unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
+          totalPrice: (item.quantity - item.receivedQuantity) * item.unitPrice,
           manufacture_day: "",
           expiry_day: "",
         }))
@@ -174,9 +188,16 @@ const CreateGoodReceipt = () => {
   const handleBatchChange = (index, field, value) => {
     const updated = [...batchInfo];
     if (field === "quantity") {
-      const maxQuantity = updated[index].maxQuantity;
-      const inputQuantity = Math.min(Number(value), maxQuantity); // Ensure input does not exceed maxQuantity
+      const inputQuantity = Math.max(0, Math.min(Number(value))); 
       updated[index][field] = inputQuantity;
+      // Also update quantity_unit with the same value
+      updated[index].quantity_unit = inputQuantity;
+      // Update totalPrice when quantity changes
+      updated[index].totalPrice = inputQuantity * updated[index].unitPrice;
+    } else if (field === "unitPrice") {
+      updated[index][field] = Number(value);
+      // Update totalPrice when unitPrice changes
+      updated[index].totalPrice = updated[index].quantity * Number(value);
     } else {
       updated[index][field] = value;
     }
@@ -243,11 +264,7 @@ const CreateGoodReceipt = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    try {
-      return format(new Date(dateString), 'dd/MM/yyyy');
-    } catch (error) {
-      return dateString;
-    }
+    return format(new Date(dateString), 'dd/MM/yyyy');
   };
 
   const handleSubmit = async () => {
@@ -321,13 +338,14 @@ const CreateGoodReceipt = () => {
 
           return {
             productId: item.product,
-            quantity: Number(item.quantity) * ratio,
-            unit: item.unit,
+            quantity: Number(item.quantity), // Base quantity
+            unit: item.unit, // Unit name
             unitPrice: item.unitPrice,
             totalPrice: item.unitPrice * Number(item.quantity),
             manufactureDate: item.manufacture_day,
             expiryDate: item.expiry_day,
             productName: item.productName,
+            quantity_unit: Number(item.quantity), // Set quantity_unit as same as quantity (actual input)
           };
         }),
         ...additionalItems.map(item => {
@@ -338,13 +356,14 @@ const CreateGoodReceipt = () => {
 
           return {
             productId: item.product,
-            quantity: Number(item.quantity) * ratio,
+            quantity: Number(item.quantity),
             unit: item.unit,
             unitPrice: Number(item.unitPrice),
             totalPrice: Number(item.unitPrice) * Number(item.quantity),
             manufactureDate: item.manufacture_day,
             expiryDate: item.expiry_day,
             productName: item.productName,
+            quantity_unit: Number(item.quantity), // Set quantity_unit as same as quantity
           };
         })
       ];
@@ -420,44 +439,17 @@ const CreateGoodReceipt = () => {
     }
   };
 
-  const handleSplitOrder = async () => {
-    if (!selectedOrder) {
-      alert("Vui lòng chọn phiếu đặt mua trước khi chia phiếu!");
-      return;
-    }
-
-    const splitQuantities = batchInfo.map((item, index) => {
-      const selectedUnit = selectedOrder.items[index]?.product?.units?.find(
-        (u) => u.name === item.unit
-      );
-      const ratio = selectedUnit?.ratio || 1;
-      return item.quantity * ratio; // Calculate batch quantity based on unit ratio
-    });
-
-    // if (splitQuantities.some((quantity, index) => quantity > batchInfo[index].maxQuantity)) {
-    //   alert("Số lượng chia không được vượt quá số lượng tối đa.");
-    //   return;
-    // }
-
-    try {
-      const response = await axios.post(
-        `http://localhost:8000/api/purchaseOrder/split/${selectedOrder._id}`,
-        { splitQuantities },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      alert("Chia phiếu thành công!");
-      // Update the selected order details after splitting
-      handleSelectOrder(selectedOrder._id);
-    } catch (error) {
-      console.error("Lỗi khi chia phiếu:", error);
-      const errorMessage =
-        error.response?.data?.message || "Không thể chia phiếu. Vui lòng thử lại!";
-      alert(errorMessage);
-    }
+  // Tính tổng giá trị thực tế theo batchInfo và additionalItems
+  const getTotalAmount = () => {
+    const batchTotal = batchInfo.reduce(
+      (sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)),
+      0
+    );
+    const additionalTotal = additionalItems.reduce(
+      (sum, item) => sum + (Number(item.quantity || 0) * Number(item.unitPrice || 0)),
+      0
+    );
+    return batchTotal + additionalTotal;
   };
 
   return (
@@ -518,13 +510,10 @@ const CreateGoodReceipt = () => {
                     Số lượng đặt: {item.quantity || 0}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Số lượng đã nhận: {item.receivedQuantity || 0}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
                     Đơn giá: {item.unitPrice?.toLocaleString() || 0} đ
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Thành tiền: {(item.quantity * item.unitPrice)?.toLocaleString() || 0} đ
+                    Thành tiền: {(batchInfo[index]?.quantity * item.unitPrice)?.toLocaleString() || 0} đ
                   </Typography>
                 </Box>
 
@@ -535,10 +524,13 @@ const CreateGoodReceipt = () => {
                       type="number"
                       fullWidth
                       value={batchInfo[index]?.quantity || ""}
-                      onChange={(e) =>
-                        handleBatchChange(index, "quantity", e.target.value)
-                      }
-                      helperText={`Số lượng tối đa: ${batchInfo[index]?.maxQuantity}`}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        handleBatchChange(index, "quantity", value);
+                        // Also update quantity_unit with the same value since it's the actual input quantity
+                        handleBatchChange(index, "quantity_unit", value);
+                      }}
+                      helperText="Số lượng nhập thực tế"
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
@@ -556,7 +548,7 @@ const CreateGoodReceipt = () => {
                           const expDate = new Date(newDate);
                           expDate.setMonth(expDate.getMonth() + 6);
                           handleBatchChange(
-                            index,
+                            index,  
                             "expiry_day",
                             expDate.toISOString().split('T')[0]
                           );
@@ -782,10 +774,7 @@ const CreateGoodReceipt = () => {
 
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 4 }}>
             <Typography variant="h6">
-              Tổng giá trị: {(
-                selectedOrder.totalAmount + 
-                additionalItems.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0)
-              )?.toLocaleString() || 0} đ
+              Tổng giá trị: {getTotalAmount().toLocaleString()} đ
             </Typography>
             <Button
               variant="contained"
@@ -798,19 +787,6 @@ const CreateGoodReceipt = () => {
               {loading ? "Đang tạo phiếu..." : confirming ? "Đang nhập kho..." : "Tạo phiếu và nhập kho"}
             </Button>
           </Box>
-
-          {selectedOrder && (
-            <Box mt={2}>
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={handleSplitOrder}
-                disabled={loading || confirming}
-              >
-                Nhận 1 phần
-              </Button>
-            </Box>
-          )}
         </Paper>
       )}
 

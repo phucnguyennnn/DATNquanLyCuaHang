@@ -38,6 +38,19 @@ const goodReceiptItemSchema = new mongoose.Schema({
   batch: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Batch'
+  },
+  unit: {
+    type: String,
+    trim: true
+  },
+  quantity_unit: {
+    type: Number
+  },
+  price: {
+    type: Number
+  },
+  totalPrice: {
+    type: Number
   }
 });
 
@@ -72,6 +85,9 @@ const goodReceiptSchema = new mongoose.Schema({
     type: String,
     trim: true,
     maxlength: [500, 'Notes cannot exceed 500 characters']
+  },
+  totalAmount: {
+    type: Number
   }
 }, {
   timestamps: true,

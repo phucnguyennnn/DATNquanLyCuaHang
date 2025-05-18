@@ -11,7 +11,6 @@ router.get('/:id', adminProtect, purchaseOrderController.getPurchaseOrderById);
 router.put('/:id', adminProtect, purchaseOrderController.updatePurchaseOrder);
 router.delete('/:id', adminProtect, purchaseOrderController.deletePurchaseOrder);
 router.post('/:id/resend-email', adminProtect, purchaseOrderController.resendPurchaseOrderEmail);
-router.post("/split/:id", adminProtect, purchaseOrderController.splitPurchaseOrder);
 
 
-module.exports = router;
+module.exports = router;        

@@ -130,10 +130,9 @@ const authController = {
       });
       if (existingUser) {
         return res.status(400).json({
-          error:
-            existingUser.username === username
-              ? "Username đã tồn tại"
-              : "Email đã tồn tại",
+          error: existingUser.username === username
+            ? 'Username đã tồn tại'
+            : 'Email đã tồn tại'
         });
       }
 
@@ -174,6 +173,7 @@ const authController = {
           subject: "Tài khoản nhân viên đã được tạo",
           html: emailContent,
         });
+
       } catch (emailError) {
         console.error("Failed to send email:", emailError);
         const { password: _, ...userInfo } = savedUser._doc;
@@ -185,11 +185,12 @@ const authController = {
 
       const { password: _, ...userInfo } = savedUser._doc;
       res.status(201).json(userInfo);
+
     } catch (error) {
-      console.error("Error in createEmployee:", error);
+      console.error('Error in createEmployee:', error);
       res.status(500).json({
-        error: "Lỗi hệ thống",
-        details: error.message,
+        error: 'Lỗi hệ thống',
+        details: error.message
       });
     }
   },
@@ -277,7 +278,7 @@ const authController = {
   },
   generateAccessToken: (user) => {
     return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: "24h", // Thay đổi từ "15m" thành "24h" (24 giờ)
+      expiresIn: "1d",
     });
   },
 

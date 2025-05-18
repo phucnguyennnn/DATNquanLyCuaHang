@@ -17,9 +17,11 @@ const Settings = () => {
   const { settings, updateSettings } = useSettings();
   const [expiryThreshold, setExpiryThreshold] = useState(settings.expiryThresholdDays.toString());
   const [quantityThreshold, setQuantityThreshold] = useState(settings.lowQuantityThreshold.toString());
+  const [discount7, setDiscount7] = useState(settings.discountPercent7 || "30");
+  const [discount14, setDiscount14] = useState(settings.discountPercent14 || "15");
   const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
 
-  const handleExpiryChange = (e) => {
+  const handleExpiryThresholdChange = (e) => {
     const value = e.target.value.replace(/\D/g, ''); // Only allow digits
     setExpiryThreshold(value);
   };
@@ -29,10 +31,22 @@ const Settings = () => {
     setQuantityThreshold(value);
   };
 
+  const handleDiscount7Change = (e) => {
+    const value = e.target.value.replace(/\D/g, '');
+    setDiscount7(value);
+  };
+
+  const handleDiscount14Change = (e) => {
+    const value = e.target.value.replace(/\D/g, '');
+    setDiscount14(value);
+  };
+
   const handleSave = () => {
     const expiryValue = parseInt(expiryThreshold, 10);
     const quantityValue = parseInt(quantityThreshold, 10);
-    
+    const discount7Value = parseInt(discount7, 10);
+    const discount14Value = parseInt(discount14, 10);
+
     if (isNaN(expiryValue) || expiryValue <= 0) {
       setNotification({
         open: true,
@@ -41,7 +55,6 @@ const Settings = () => {
       });
       return;
     }
-    
     if (isNaN(quantityValue) || quantityValue <= 0) {
       setNotification({
         open: true,
@@ -50,12 +63,30 @@ const Settings = () => {
       });
       return;
     }
-    
+    if (isNaN(discount7Value) || discount7Value < 0 || discount7Value > 100) {
+      setNotification({
+        open: true,
+        message: 'Phần trăm giảm giá 7 ngày không hợp lệ',
+        severity: 'error'
+      });
+      return;
+    }
+    if (isNaN(discount14Value) || discount14Value < 0 || discount14Value > 100) {
+      setNotification({
+        open: true,
+        message: 'Phần trăm giảm giá 14 ngày không hợp lệ',
+        severity: 'error'
+      });
+      return;
+    }
+
     updateSettings({
       expiryThresholdDays: expiryValue,
-      lowQuantityThreshold: quantityValue
+      lowQuantityThreshold: quantityValue,
+      discountPercent7: discount7Value,
+      discountPercent14: discount14Value,
     });
-    
+
     setNotification({
       open: true,
       message: 'Đã lưu cài đặt thành công',
@@ -83,17 +114,44 @@ const Settings = () => {
           <TextField
             label="Ngưỡng cảnh báo sắp hết hạn mặc định"
             value={expiryThreshold}
-            onChange={handleExpiryChange}
+            onChange={handleExpiryThresholdChange}
             fullWidth
             helperText="Số ngày trước khi sản phẩm hết hạn sẽ hiển thị cảnh báo (có thể thiết lập riêng cho từng sản phẩm)"
             InputProps={{
               endAdornment: <InputAdornment position="end">ngày</InputAdornment>,
             }}
           />
+
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField
+              label="Giảm giá (%) khi còn ≤ 7 ngày"
+              value={discount7}
+              onChange={handleDiscount7Change}
+              type="number"
+              InputProps={{
+                endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                inputProps: { min: 0, max: 100 }
+              }}
+              sx={{ flex: 1 }}
+              helperText="Áp dụng cho sản phẩm còn hạn ≤ 7 ngày"
+            />
+            <TextField
+              label="Giảm giá (%) khi còn ≤ 14 ngày"
+              value={discount14}
+              onChange={handleDiscount14Change}
+              type="number"
+              InputProps={{
+                endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                inputProps: { min: 0, max: 100 }
+              }}
+              sx={{ flex: 1 }}
+              helperText="Áp dụng cho sản phẩm còn hạn ≤ 14 ngày"
+            />
+          </Box>
           
           <Alert severity="info" sx={{ mt: -2 }}>
             <Typography variant="body2">
-              Lưu ý: Những sản phẩm đạt đến ngưỡng sắp hết hạn sẽ được tự động giảm giá 30%. Nhân viên có thể bỏ hoặc thêm tùy chọn giảm giá trong khi bán sản phẩm.
+              Lưu ý: Những sản phẩm đạt đến ngưỡng sắp hết hạn sẽ được tự động giảm giá theo phần trăm bạn thiết lập ở trên. Nhân viên có thể bỏ hoặc thêm tùy chọn giảm giá trong khi bán sản phẩm.
             </Typography>
           </Alert>
           

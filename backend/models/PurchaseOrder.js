@@ -72,13 +72,13 @@ const purchaseOrderSchema = new mongoose.Schema(
     orderDate: { type: Date, default: Date.now, required: false },
     expectedDeliveryDate: {
       type: Date,
-      validate: {
-        validator: function (value) {
-          if (!value || !this.orderDate) return true;
-          return value.getTime() > this.orderDate.getTime();
-        },
-        message: "Expected delivery date must be after order date",
-      },
+      // validate: {
+      //   validator: function (value) {
+      //     if (!value || !this.orderDate) return true;
+      //     return value.getTime() >= this.orderDate.getTime();
+      //   },
+      //   message: "Ngày giao hàng dự kiến phải bằng hoặc sau ngày đặt hàng",
+      // },
     },
     notes: { type: String, maxlength: 500 },
     attachments: [{ type: String }],

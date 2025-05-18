@@ -27,6 +27,9 @@ import {
   DialogTitle,
   FormControlLabel,
   TableSortLabel,
+  Autocomplete,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -34,19 +37,45 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import EditIcon from "@mui/icons-material/Edit";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import NoteAddIcon from '@mui/icons-material/NoteAdd';
+import ListAltIcon from '@mui/icons-material/ListAlt';
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import CircularProgress from "@mui/material/CircularProgress";
+import { styled } from '@mui/material/styles';
 
 const UNITS = ["thùng", "bao", "chai", "lọ", "lon", "hộp", "gói", "cái", "kg", "liter","thùng 30", "thùng 24", "thùng 12", "lốc 6", "bao 10", "bao 15", "bao 20", "bao 5", "lốc 12"];
 const STATUSES = [
   { value: "đã gửi NCC", label: "Đã gửi NCC" },
-  { value: "đã nhận 1 phần", label: "Đã nhận một phần" },
   { value: "hoàn thành", label: "Hoàn thành" },
   { value: "đã hủy", label: "Đã hủy" },
   { value: "completed", label: "Hoàn thành" },
 
 
 ];
+
+// Custom styled tabs to match sales page
+const StyledTabs = styled(Tabs)(({ theme }) => ({
+  borderBottom: `1px solid ${theme.palette.divider}`,
+  '& .MuiTabs-indicator': {
+    backgroundColor: theme.palette.primary.main,
+    height: 3,
+  },
+}));
+
+const StyledTab = styled(Tab)(({ theme }) => ({
+  textTransform: 'none',
+  fontWeight: theme.typography.fontWeightRegular,
+  fontSize: theme.typography.pxToRem(16),
+  marginRight: theme.spacing(1),
+  '&.Mui-selected': {
+    color: theme.palette.primary.main,
+    fontWeight: theme.typography.fontWeightMedium,
+  },
+  '&.Mui-focusVisible': {
+    backgroundColor: 'rgba(100, 95, 228, 0.32)',
+  },
+}));
 
 const PurchaseOrderManagement = () => {
   const [suppliers, setSuppliers] = useState([]);
@@ -63,6 +92,7 @@ const PurchaseOrderManagement = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [editOrderItems, setEditOrderItems] = useState([]);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState(new Date().toISOString().split("T")[0]);
+  const [deliveryDateError, setDeliveryDateError] = useState("");
   const [notes, setNotes] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("Tại cửa hàng");
   const [paymentMethod, setPaymentMethod] = useState("Thanh toán khi nhận hàng");
@@ -74,6 +104,8 @@ const PurchaseOrderManagement = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("orderDate");
   const [sortOrder, setSortOrder] = useState("desc");
+  const [loading, setLoading] = useState(false);
+  const [tabValue, setTabValue] = useState(0);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -180,19 +212,62 @@ const PurchaseOrderManagement = () => {
   };
 
   const handlePreviewOrder = () => {
+    if (!selectedSupplier || orderItems.length === 0) {
+      if (!selectedSupplier) {
+        alert("Vui lòng chọn nhà cung cấp");
+      } else if (orderItems.length === 0) {
+        alert("Vui lòng thêm sản phẩm vào đơn hàng");
+      }
+      return;
+    }
+    
+    if (!validateDeliveryDate(expectedDeliveryDate)) {
+      return;
+    }
+    
+    setShowPreview(true);
+  };
+
+  const validateDeliveryDate = (date) => {
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
-    const deliveryDate = new Date(expectedDeliveryDate);
-    if (!selectedSupplier || orderItems.length === 0 || deliveryDate <= currentDate) return;
-    setShowPreview(true);
+    const deliveryDate = new Date(date);
+    
+    if (deliveryDate < currentDate) {
+      setDeliveryDateError("Ngày giao hàng dự kiến phải bằng hoặc sau ngày hiện tại");
+      return false;
+    }
+    
+    setDeliveryDateError("");
+    return true;
+  };
+
+  const handleDeliveryDateChange = (e) => {
+    const newDate = e.target.value;
+    setExpectedDeliveryDate(newDate);
+    validateDeliveryDate(newDate);
   };
 
   const handleSubmit = async () => {
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
     const deliveryDate = new Date(expectedDeliveryDate);
-    if (!selectedSupplier || orderItems.length === 0 || deliveryDate <= currentDate) return;
+    
+    if (!selectedSupplier || orderItems.length === 0) {
+      if (!selectedSupplier) {
+        alert("Vui lòng chọn nhà cung cấp");
+      } else if (orderItems.length === 0) {
+        alert("Vui lòng thêm sản phẩm vào đơn hàng");
+      }
+      return;
+    }
+    
+    if (!validateDeliveryDate(expectedDeliveryDate)) {
+      return;
+    }
+    
     try {
+      setLoading(true);
       const payload = {
         supplier: selectedSupplier,
         supplierName: suppliers.find(s => s._id === selectedSupplier)?.name || "",
@@ -225,6 +300,8 @@ const PurchaseOrderManagement = () => {
     } catch (error) {
       console.error(error);
       alert(error.response?.data?.error || "Lỗi khi tạo phiếu đặt hàng!");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -339,8 +416,8 @@ const PurchaseOrderManagement = () => {
   };
 
   const formatPrice = (value) => {
-    if (!value) return "";
-    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    if (value === undefined || value === null) return "";
+    return value.toLocaleString("vi-VN") + " đ";
   };
 
   const handleUnitPriceChange = (value) => {
@@ -348,258 +425,438 @@ const PurchaseOrderManagement = () => {
     setUnitPrice(Number(numericValue));
   };
 
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
+  };
+
   return (
     <Box sx={{ 
-      maxWidth: 1200, 
+      maxWidth: 1400, 
       mx: "auto", 
-      p: 4, 
+        // p: 3,
       height: 'calc(100vh - 64px)', 
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
     }}>
-      <Typography variant="h4" mb={4} fontWeight="bold">
-        Quản lý phiếu đặt mua hàng
-      </Typography>
+      {/* <Typography variant="h4" mb={3} fontWeight="bold" textAlign="center" color="primary.main">
+        Quản lý phiếu đặt hàng
+      </Typography> */}
+
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}>
+        <StyledTabs 
+          value={tabValue} 
+          onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
+          aria-label="purchase order tabs"
+        >
+          <StyledTab 
+            icon={<NoteAddIcon />} 
+            iconPosition="start" 
+            label="Tạo phiếu đặt hàng" 
+          />
+          <StyledTab 
+            icon={<ListAltIcon />} 
+            iconPosition="start" 
+            label="Danh sách phiếu đặt hàng" 
+          />
+        </StyledTabs>
+      </Box>
 
       <Box sx={{ flex: 1, overflow: 'auto' }}>
-        <Typography variant="h5" mb={2}>
-          Tạo phiếu đặt hàng
-        </Typography>
-        
-        <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            Thông tin nhà cung cấp
-          </Typography>
-          <FormControl fullWidth>
-            <InputLabel>Chọn nhà cung cấp</InputLabel>
-            <Select
-              value={selectedSupplier}
-              label="Chọn nhà cung cấp"
-              onChange={(e) => setSelectedSupplier(e.target.value)}
-            >
-              {suppliers.map((sup) => (
-                <MenuItem key={sup._id} value={sup._id}>
-                  {sup.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Paper>
-
-        <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            Thông tin sản phẩm
-          </Typography>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={5}>
-              <FormControl fullWidth>
-                <InputLabel>Sản phẩm</InputLabel>
-                <Select
-                  value={selectedProduct}
-                  label="Sản phẩm"
-                  onChange={(e) => setSelectedProduct(e.target.value)}
-                >
-                  {products.map((p) => (
-                    <MenuItem key={p._id} value={p._id}>
-                      {p.name} - ({p.units[0]?.name || "N/A"})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+        {/* Tab 1: Create Purchase Order */}
+        {tabValue === 0 && (
+          <>
+            <Typography variant="h5" mb={2}>
+              Tạo phiếu đặt hàng
+            </Typography>
             
-            <Grid item xs={6} sm={3} md={2}>
-              <TextField
-                label="Số lượng"
-                type="number"
-                fullWidth
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-                inputProps={{ min: 1 }}
-              />
-            </Grid>
-            
-            <Grid item xs={6} sm={3} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Đơn vị</InputLabel>
-                <Select
-                  value={unit}
-                  label="Đơn vị"
-                  onChange={(e) => setUnit(e.target.value)}
-                >
-                  {products.find(p => p._id === selectedProduct)?.units.map(u => (
-                    <MenuItem key={u.name} value={u.name}>{u.name}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={8} sm={4} md={2}>
-              <TextField
-                label="Giá nhập"
-                type="text"
-                fullWidth
-                value={formatPrice(unitPrice)}
-                onChange={(e) => handleUnitPriceChange(e.target.value)}
-                inputProps={{ inputMode: "numeric" }}
-              />
-            </Grid>
-            
-            <Grid item xs={4} sm={2} md={1}>
-              <Button
-                variant="contained"
-                onClick={handleAddItem}
-                sx={{ height: "100%", width: "100%" }}
-              >
-                <AddIcon />
-              </Button>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            Thông tin giao hàng
-          </Typography>
-
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
-              <TextField
-                label="Địa chỉ giao hàng"
-                fullWidth
-                value={deliveryAddress}
-                onChange={(e) => setDeliveryAddress(e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                label="Ghi chú"
-                fullWidth
-                multiline
-                rows={2}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                label="Ngày giao hàng dự kiến"
-                type="date"
-                fullWidth
-                value={expectedDeliveryDate}
-                onChange={(e) => setExpectedDeliveryDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                label="Phương thức thanh toán"
-                fullWidth
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-              />
-            </Grid>
-            
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Trạng thái phiếu</InputLabel>
-                <Select
-                  value={orderStatus}
-                  label="Trạng thái phiếu"
-                  onChange={(e) => setOrderStatus(e.target.value)}
-                >
-                  {STATUSES.map(status => (
-                    <MenuItem key={status.value} value={status.value}>
-                      {status.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        {orderItems.length > 0 && !showPreview && (
-          <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
               <Typography variant="h6" gutterBottom>
-                Danh sách sản phẩm đã chọn
+                Thông tin nhà cung cấp
               </Typography>
-              <Button 
-                variant="outlined" 
-                color="primary" 
-                onClick={handlePreviewOrder}
-                startIcon={<VisibilityIcon />}
-              >
-                Xem trước phiếu
-              </Button>
-            </Box>
+              <FormControl fullWidth>
+                <Autocomplete
+                  options={suppliers}
+                  getOptionLabel={(option) => option.name || ""}
+                  value={suppliers.find(sup => sup._id === selectedSupplier) || null}
+                  onChange={(event, newValue) => {
+                    setSelectedSupplier(newValue ? newValue._id : "");
+                  }}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Chọn nhà cung cấp" />
+                  )}
+                />
+              </FormControl>
+            </Paper>
+
+            <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+              <Typography variant="h6" gutterBottom>
+                Thông tin sản phẩm
+              </Typography>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={5}>
+                  <Autocomplete
+                    options={products}
+                    getOptionLabel={(option) => `${option.name} - (${option.units[0]?.name || "N/A"})`}
+                    value={products.find(p => p._id === selectedProduct) || null}
+                    onChange={(event, newValue) => {
+                      setSelectedProduct(newValue ? newValue._id : "");
+                    }}
+                    renderInput={(params) => (
+                      <TextField {...params} label="Sản phẩm" />
+                    )}
+                  />
+                </Grid>
+                
+                <Grid item xs={6} sm={3} md={2}>
+                  <TextField
+                    label="Số lượng"
+                    type="number"
+                    fullWidth
+                    value={quantity}
+                    onChange={(e) => setQuantity(Number(e.target.value))}
+                    inputProps={{ min: 1 }}
+                  />
+                </Grid>
+                
+                <Grid item xs={6} sm={3} md={2}>
+                  <FormControl fullWidth>
+                    <InputLabel>Đơn vị</InputLabel>
+                    <Select
+                      value={unit}
+                      label="Đơn vị"
+                      onChange={(e) => setUnit(e.target.value)}
+                    >
+                      {products.find(p => p._id === selectedProduct)?.units.map(u => (
+                        <MenuItem key={u.name} value={u.name}>{u.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                
+                <Grid item xs={8} sm={4} md={2}>
+                  <TextField
+                    label="Giá nhập (VNĐ)"
+                    type="text"
+                    fullWidth
+                    value={unitPrice === 0 ? "" : unitPrice.toLocaleString("vi-VN")}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      setUnitPrice(value ? parseInt(value, 10) : 0);
+                    }}
+                    InputProps={{
+                      endAdornment: <Typography variant="caption" color="text.secondary">VNĐ</Typography>,
+                    }}
+                  />
+                </Grid>
+                
+                <Grid item xs={4} sm={2} md={1}>
+                  <Button
+                    variant="contained"
+                    onClick={handleAddItem}
+                    sx={{ height: "100%", width: "100%" }}
+                  >
+                    <AddIcon />
+                  </Button>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+              <Typography variant="h6" gutterBottom>
+                Thông tin giao hàng
+              </Typography>
+
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <TextField
+                    label="Địa chỉ giao hàng"
+                    fullWidth
+                    value={deliveryAddress}
+                    onChange={(e) => setDeliveryAddress(e.target.value)}
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <TextField
+                    label="Ghi chú"
+                    fullWidth
+                    multiline
+                    rows={2}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                </Grid>
+
+                <Grid item xs={6}>
+                  <TextField
+                    label="Ngày giao hàng dự kiến"
+                    type="date"
+                    fullWidth
+                    value={expectedDeliveryDate}
+                    onChange={handleDeliveryDateChange}
+                    InputLabelProps={{ shrink: true }}
+                    error={!!deliveryDateError}
+                    helperText={deliveryDateError}
+                  />
+                </Grid>
+
+                <Grid item xs={6}>
+                  <TextField
+                    label="Phương thức thanh toán"
+                    fullWidth
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                  />
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <FormControl fullWidth>
+                    <InputLabel>Trạng thái phiếu</InputLabel>
+                    <Select
+                      value={orderStatus}
+                      label="Trạng thái phiếu"
+                      onChange={(e) => setOrderStatus(e.target.value)}
+                    >
+                      {STATUSES.map(status => (
+                        <MenuItem key={status.value} value={status.value}>
+                          {status.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {orderItems.length > 0 && !showPreview && (
+              <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Danh sách sản phẩm đã chọn
+                  </Typography>
+                  <Button 
+                    variant="outlined" 
+                    color="primary" 
+                    onClick={handlePreviewOrder}
+                    startIcon={<VisibilityIcon />}
+                  >
+                    Xem trước phiếu
+                  </Button>
+                </Box>
+                
+                <Box sx={{ overflowX: "auto" }}>
+                  <TableContainer>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell width="50px">STT</TableCell>
+                          <TableCell>Tên sản phẩm</TableCell>
+                          <TableCell>Đơn vị</TableCell>
+                          <TableCell>Số lượng</TableCell>
+                          <TableCell>Giá nhập</TableCell>
+                          <TableCell>Thành tiền</TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {orderItems.map((item, index) => (
+                          <TableRow key={index}>
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell>{item.name}</TableCell>
+                            <TableCell>{item.unit}</TableCell>
+                           
+                            <TableCell>
+                              <IconButton onClick={() => updateQuantity(item.product, -1)}>
+                                <RemoveIcon fontSize="small" />
+                              </IconButton>
+                              {item.quantity}
+                              <IconButton onClick={() => updateQuantity(item.product, 1)}>
+                                <AddCircleOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                            <TableCell>{formatPrice(item.unitPrice)}</TableCell>
+                            <TableCell>{formatPrice(item.totalPrice)}</TableCell>
+                            <TableCell>
+                              <IconButton onClick={() => handleRemoveItem(item.product)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+                <Box mt={2}>
+                  <Typography variant="h6">
+                    Tổng tiền: {formatPrice(totalPrice)}
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={sendEmail}
+                        onChange={(e) => setSendEmail(e.target.checked)}
+                      />
+                    }
+                    label="Gửi email cho nhà cung cấp"
+                  />
+                  <Button 
+                    variant="contained" 
+                    onClick={handleSubmit} 
+                    sx={{ mt: 2 }}
+                    disabled={loading}
+                    startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
+                  >
+                    {loading ? "Đang tạo phiếu..." : "Tạo phiếu đặt hàng"}
+                  </Button>
+                </Box>
+              </Paper>
+            )}
+          </>
+        )}
+
+        {/* Tab 2: Purchase Order List */}
+        {tabValue === 1 && (
+          <>
+            <Typography variant="h5" mb={2}>
+              Danh sách phiếu đặt hàng
+            </Typography>
             
-            <Box sx={{ overflowX: "auto" }}>
+            <Paper elevation={3} sx={{ p: 2, mb: 2 }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    label="Tìm kiếm phiếu đặt hàng"
+                    variant="outlined"
+                    fullWidth
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Lọc theo trạng thái</InputLabel>
+                    <Select
+                      value={statusFilter}
+                      label="Lọc theo trạng thái"
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      <MenuItem value="all">Tất cả</MenuItem>
+                      {STATUSES.map(status => (
+                        <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            <Paper elevation={3} sx={{ p: 3 }}>
               <TableContainer>
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableCell width="50px">STT</TableCell>
-                      <TableCell>Tên sản phẩm</TableCell>
-                      <TableCell>Đơn vị</TableCell>
-                      <TableCell>Số lượng</TableCell>
-                      <TableCell>Giá nhập</TableCell>
-                      <TableCell>Thành tiền</TableCell>
-                      <TableCell></TableCell>
+                      <TableCell sx={{ maxWidth: 90, width: 90, minWidth: 60 }}>
+                        <TableSortLabel
+                          active={sortBy === "_id"}
+                          direction={sortOrder}
+                          onClick={() => handleSort("_id")}
+                        >
+                          Mã phiếu
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortBy === "supplier"}
+                          direction={sortOrder}
+                          onClick={() => handleSort("supplier")}
+                        >
+                          Nhà cung cấp
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortBy === "orderDate"}
+                          direction={sortOrder}
+                          onClick={() => handleSort("orderDate")}
+                        >
+                          Ngày đặt hàng
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>Người lập đơn</TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortBy === "expectedDeliveryDate"}
+                          direction={sortOrder}
+                          onClick={() => handleSort("expectedDeliveryDate")}
+                        >
+                          Ngày giao dự kiến
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 120, maxWidth: 150, width: 130 }}>
+                        <TableSortLabel
+                          active={sortBy === "totalAmount"}
+                          direction={sortOrder}
+                          onClick={() => handleSort("totalAmount")}
+                        >
+                          Tổng tiền
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        <TableSortLabel
+                          active={sortBy === "status"}
+                          direction={sortOrder}
+                          onClick={() => handleSort("status")}
+                        >
+                          Trạng thái
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell>
+                        Hành động
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {orderItems.map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{index + 1}</TableCell>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell>{item.unit}</TableCell>
-                       
+                    {getFilteredAndSortedOrders().map((order) => (
+                      <TableRow key={order._id}>
+                        <TableCell>{order._id}</TableCell>
+                        <TableCell>{order.supplier.name}</TableCell>
+                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{order.createdByName || "Không xác định"}</TableCell>
+                        <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
                         <TableCell>
-                          <IconButton onClick={() => updateQuantity(item.product, -1)}>
-                            <RemoveIcon fontSize="small" />
-                          </IconButton>
-                          {item.quantity}
-                          <IconButton onClick={() => updateQuantity(item.product, 1)}>
-                            <AddCircleOutlineIcon fontSize="small" />
-                          </IconButton>
+                          {formatPrice(order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0))}
                         </TableCell>
-                        <TableCell>{item.unitPrice.toLocaleString()} đ</TableCell>
-                        <TableCell>{item.totalPrice.toLocaleString()} đ</TableCell>
                         <TableCell>
-                          <IconButton onClick={() => handleRemoveItem(item.product)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
+                          {STATUSES.find(status => status.value === order.status)?.label || order.status}
+                        </TableCell>
+                        <TableCell>
+                          {["hoàn thành", "completed"].includes(order.status) ? (
+                            <IconButton onClick={() => handleEdit(order)}>
+                              <VisibilityIcon />
+                            </IconButton>
+                          ) : (
+                            <>
+                              <IconButton onClick={() => handleEdit(order)}>
+                                <EditIcon />
+                              </IconButton>
+                              <IconButton onClick={() => handleDelete(order._id)}>
+                                <DeleteIcon />
+                              </IconButton>
+                              <Button onClick={() => handleResendEmail(order)}>Gửi lại Email</Button>
+                            </>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableContainer>
-            </Box>
-            <Box mt={2}>
-              <Typography variant="h6">
-                Tổng tiền: {totalPrice.toLocaleString()} đ
-              </Typography>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={sendEmail}
-                    onChange={(e) => setSendEmail(e.target.checked)}
-                  />
-                }
-                label="Gửi email cho nhà cung cấp"
-              />
-              <Button variant="contained" onClick={handleSubmit} sx={{ mt: 2 }}>
-                Tạo phiếu đặt hàng
-              </Button>
-            </Box>
-          </Paper>
+            </Paper>
+          </>
         )}
 
         <Dialog
@@ -713,7 +970,7 @@ const PurchaseOrderManagement = () => {
                               inputProps={{ inputMode: "numeric" }}
                             />
                           </TableCell>
-                          <TableCell>{(item.quantity * item.unitPrice).toLocaleString()} đ</TableCell>
+                          <TableCell>{formatPrice(item.quantity * item.unitPrice)}</TableCell>
                           <TableCell>
                             <IconButton 
                               color="error" 
@@ -732,7 +989,7 @@ const PurchaseOrderManagement = () => {
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6">
-                  Tổng tiền: {totalPrice.toLocaleString()} đ
+                  Tổng tiền: {formatPrice(totalPrice)}
                 </Typography>
                 <FormControlLabel
                   control={
@@ -758,178 +1015,33 @@ const PurchaseOrderManagement = () => {
           </DialogActions>
         </Dialog>
 
-        <Typography variant="h5" mb={2}>
-          Danh sách phiếu đặt hàng
-        </Typography>
-        
-        <Paper elevation={3} sx={{ p: 2, mb: 2 }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={4}>
-              <TextField
-                label="Tìm kiếm phiếu đặt hàng"
-                variant="outlined"
-                fullWidth
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <FormControl fullWidth>
-                <InputLabel>Lọc theo trạng thái</InputLabel>
-                <Select
-                  value={statusFilter}
-                  label="Lọc theo trạng thái"
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <MenuItem value="all">Tất cả</MenuItem>
-                  {STATUSES.map(status => (
-                    <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        <Paper elevation={3} sx={{ p: 3 }}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>
-                    <TableSortLabel
-                      active={sortBy === "_id"}
-                      direction={sortOrder}
-                      onClick={() => handleSort("_id")}
-                    >
-                      Mã phiếu
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell>
-                    <TableSortLabel
-                      active={sortBy === "supplier"}
-                      direction={sortOrder}
-                      onClick={() => handleSort("supplier")}
-                    >
-                      Nhà cung cấp
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell>
-                    <TableSortLabel
-                      active={sortBy === "orderDate"}
-                      direction={sortOrder}
-                      onClick={() => handleSort("orderDate")}
-                    >
-                      Ngày đặt hàng
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell>Người lập đơn</TableCell>
-                  <TableCell>
-                    <TableSortLabel
-                      active={sortBy === "expectedDeliveryDate"}
-                      direction={sortOrder}
-                      onClick={() => handleSort("expectedDeliveryDate")}
-                    >
-                      Ngày giao dự kiến
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell>
-                    <TableSortLabel
-                      active={sortBy === "totalAmount"}
-                      direction={sortOrder}
-                      onClick={() => handleSort("totalAmount")}
-                    >
-                      Tổng tiền
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell>
-                    <TableSortLabel
-                      active={sortBy === "status"}
-                      direction={sortOrder}
-                      onClick={() => handleSort("status")}
-                    >
-                      Trạng thái
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell>
-                    Hành động
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {getFilteredAndSortedOrders().map((order) => (
-                  <TableRow key={order._id}>
-                    <TableCell>{order._id}</TableCell>
-                    <TableCell>{order.supplier.name}</TableCell>
-                    <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
-                    <TableCell>{order.createdByName || "Không xác định"}</TableCell>
-                    <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      {order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()} đ
-                    </TableCell>
-                    <TableCell>
-                      {STATUSES.find(status => status.value === order.status)?.label || order.status}
-                    </TableCell>
-                    <TableCell>
-                      {["hoàn thành", "completed"].includes(order.status) ? (
-                        <IconButton onClick={() => handleEdit(order)}>
-                          <VisibilityIcon />
-                        </IconButton>
-                      ) : (
-                        <>
-                          <IconButton onClick={() => handleEdit(order)}>
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton onClick={() => handleDelete(order._id)}>
-                            <DeleteIcon />
-                          </IconButton>
-                          <Button onClick={() => handleResendEmail(order)}>Gửi lại Email</Button>
-                        </>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-
-        <Dialog 
-          open={openDialog} 
-          onClose={() => setOpenDialog(false)}
-          fullWidth
-          maxWidth="md"
-          scroll="paper"
-        >
+        <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="md" scroll="paper">
           <DialogTitle>Chỉnh sửa phiếu đặt hàng</DialogTitle>
           <DialogContent dividers sx={{ maxHeight: '70vh', overflowY: 'auto' }}>
             {editOrder && (
               <Stack spacing={2} mt={2}>
-                <FormControl fullWidth>
-                  <InputLabel>Nhà cung cấp</InputLabel>
-                  <Select
-                    value={editOrder.supplier?._id || ""}
-                    label="Nhà cung cấp"
-                    onChange={(e) => setEditOrder({ 
+                <Autocomplete
+                  options={suppliers}
+                  getOptionLabel={(option) => option.name || ""}
+                  value={suppliers.find(sup => sup._id === (editOrder.supplier?._id || "")) || null}
+                  onChange={(event, newValue) => {
+                    setEditOrder({ 
                       ...editOrder, 
-                      supplier: { ...editOrder.supplier, _id: e.target.value }
-                    })}
-                  >
-                    {suppliers.map((sup) => (
-                      <MenuItem key={sup._id} value={sup._id}>
-                        {sup.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                      supplier: { ...editOrder.supplier, _id: newValue ? newValue._id : "" }
+                    });
+                  }}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Nhà cung cấp" />
+                  )}
+                />
 
                 <TableContainer>
                   <Table>
                     <TableHead>
                       <TableRow>
                         <TableCell>Tên sản phẩm</TableCell>
-                        <TableCell>Đơn vị</TableCell>
-                        <TableCell>Số lượng</TableCell>
+                        <TableCell sx={{ width: '180px' }}>Đơn vị</TableCell>
+                        <TableCell sx={{ width: '100px' }}>Số lượng</TableCell>
                         <TableCell>Đơn giá</TableCell>
                         <TableCell>Thành tiền</TableCell>
                       </TableRow>
@@ -939,18 +1051,16 @@ const PurchaseOrderManagement = () => {
                         <TableRow key={index}>
                           <TableCell>{item.product?.name}</TableCell>
                           <TableCell>
-                            <Select
+                            <Autocomplete
+                              options={UNITS}
                               value={item.unit}
-                              onChange={(e) => 
-                                handleEditOrderItemChange(index, "unit", e.target.value)
+                              onChange={(event, newValue) => 
+                                handleEditOrderItemChange(index, "unit", newValue)
                               }
-                            >
-                              {UNITS.map(unit => (
-                                <MenuItem key={unit} value={unit}>
-                                  {unit}
-                                </MenuItem>
-                              ))}
-                            </Select>
+                              renderInput={(params) => (
+                                <TextField {...params} label="Đơn vị" size="small" />
+                              )}
+                            />
                           </TableCell>
                           <TableCell>
                             <TextField
@@ -972,7 +1082,7 @@ const PurchaseOrderManagement = () => {
                               inputProps={{ inputMode: "numeric" }}
                             />
                           </TableCell>
-                          <TableCell>{(item.quantity * item.unitPrice).toLocaleString()} đ</TableCell>
+                          <TableCell>{formatPrice(item.quantity * item.unitPrice)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -983,7 +1093,17 @@ const PurchaseOrderManagement = () => {
                   label="Ngày giao hàng dự kiến"
                   type="date"
                   value={editOrder.expectedDeliveryDate}
-                  onChange={(e) => setEditOrder({ ...editOrder, expectedDeliveryDate: e.target.value })}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    setEditOrder({ ...editOrder, expectedDeliveryDate: newDate });
+                    
+                    // Validate the date when editing
+                    const currentDate = new Date();
+                    currentDate.setHours(0, 0, 0, 0);
+                    const deliveryDate = new Date(newDate);
+                    
+
+                  }}
                   fullWidth
                 />
 
