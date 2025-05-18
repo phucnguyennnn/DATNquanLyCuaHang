@@ -1040,8 +1040,8 @@ const PurchaseOrderManagement = () => {
                     <TableHead>
                       <TableRow>
                         <TableCell>Tên sản phẩm</TableCell>
-                        <TableCell>Đơn vị</TableCell>
-                        <TableCell>Số lượng</TableCell>
+                        <TableCell sx={{ width: '180px' }}>Đơn vị</TableCell>
+                        <TableCell sx={{ width: '100px' }}>Số lượng</TableCell>
                         <TableCell>Đơn giá</TableCell>
                         <TableCell>Thành tiền</TableCell>
                       </TableRow>
@@ -1102,17 +1102,9 @@ const PurchaseOrderManagement = () => {
                     currentDate.setHours(0, 0, 0, 0);
                     const deliveryDate = new Date(newDate);
                     
-                    if (deliveryDate < currentDate) {
-                      // We can't directly use the state here, so we just show an error
-                      e.target.setCustomValidity("Ngày giao hàng dự kiến phải bằng hoặc sau ngày hiện tại");
-                    } else {
-                      e.target.setCustomValidity("");
-                    }
+
                   }}
                   fullWidth
-                  error={new Date(editOrder.expectedDeliveryDate) < new Date(new Date().setHours(0, 0, 0, 0))}
-                  helperText={new Date(editOrder.expectedDeliveryDate) < new Date(new Date().setHours(0, 0, 0, 0)) ? 
-                    "Ngày giao hàng dự kiến phải bằng hoặc sau ngày hiện tại" : ""}
                 />
 
                 <TextField

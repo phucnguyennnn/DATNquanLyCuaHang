@@ -209,7 +209,7 @@ const InventoryHistory = () => {
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={3}>
+            <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
                 <InputLabel>Nhà cung cấp</InputLabel>
                 <Select
@@ -223,23 +223,6 @@ const InventoryHistory = () => {
                       {supplier.name}
                     </MenuItem>
                   ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} sm={3}>
-              <FormControl fullWidth>
-                <InputLabel>Trạng thái</InputLabel>
-                <Select
-                  value={statusFilter}
-                  label="Trạng thái"
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <MenuItem value="all">Tất cả</MenuItem>
-                  <MenuItem value="draft">Nháp</MenuItem>
-                  <MenuItem value="received">Đã nhận</MenuItem>
-                  <MenuItem value="partially_received">Nhận một phần</MenuItem>
-                  <MenuItem value="cancelled">Đã hủy</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -298,9 +281,8 @@ const InventoryHistory = () => {
                     <TableCell>Ngày nhận</TableCell>
                     <TableCell>Nhà cung cấp</TableCell>
                     <TableCell>Số sản phẩm</TableCell>
-                    <TableCell>Trạng thái</TableCell>
                     <TableCell>Tổng tiền</TableCell>
-                    <TableCell align="right">Hành động</TableCell>
+                    <TableCell align="center">Hành động</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -313,22 +295,25 @@ const InventoryHistory = () => {
                         </TableCell>
                         <TableCell>{formatDate(receipt.receiptDate)}</TableCell>
                         <TableCell>{receipt.supplier?.name || 'N/A'}</TableCell>
-                        <TableCell>{receipt.items?.length || 0}</TableCell>
-                        <TableCell>{getStatusLabel(receipt.status)}</TableCell>
+                        <TableCell align="center">{receipt.items?.length || 0}</TableCell>
                         <TableCell>
-                          {receipt.totalAmount 
-                            ? receipt.totalAmount.toLocaleString() + ' đ'
-                            : receipt.items?.reduce((total, item) => 
-                                total + (item.totalPrice || (item.price * item.quantity) || 0), 0).toLocaleString() + ' đ'
-                          }
+                          <Typography fontWeight="bold">
+                            {receipt.totalAmount 
+                              ? receipt.totalAmount.toLocaleString() + ' đ'
+                              : receipt.items?.reduce((total, item) => 
+                                  total + (item.totalPrice || (item.price * item.quantity) || 0), 0).toLocaleString() + ' đ'
+                            }
+                          </Typography>
                         </TableCell>
                         <TableCell align="right">
-                          <IconButton
+                          <Button
+                            variant="outlined"
                             color="primary"
+                            startIcon={<VisibilityIcon />}
                             onClick={() => handleViewDetails(receipt)}
                           >
-                            <VisibilityIcon />
-                          </IconButton>
+                            Xem phiếu
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -420,15 +405,15 @@ const InventoryHistory = () => {
                           {selectedReceipt.items?.map((item, index) => (
                             <TableRow key={index}>
                               <TableCell>{index + 1}</TableCell>
-                              <TableCell>
+                              <TableCell sx={{ maxWidth: 150, textOverflow: 'ellipsis' }}>
                                 {item.product?.name || item.productName || 'N/A'}
                               </TableCell>
-                              <TableCell align="right">{item.quantity}</TableCell>
+                              <TableCell align="center">{item.quantity_unit}</TableCell>
                               <TableCell>{item.unit || 'N/A'}</TableCell>
-                              <TableCell align="right">
+                              <TableCell align="center">
                                 {item.price ? item.price.toLocaleString() + ' đ' : 'N/A'}
                               </TableCell>
-                              <TableCell align="right">
+                              <TableCell align="center">
                                 {item.totalPrice ? item.totalPrice.toLocaleString() + ' đ' : 
                                  (item.price && item.quantity) ? (item.price * item.quantity).toLocaleString() + ' đ' : 'N/A'}
                               </TableCell>
