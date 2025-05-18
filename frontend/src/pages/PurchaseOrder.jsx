@@ -37,11 +37,11 @@ import EditIcon from "@mui/icons-material/Edit";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import CircularProgress from "@mui/material/CircularProgress";
 
 const UNITS = ["thùng", "bao", "chai", "lọ", "lon", "hộp", "gói", "cái", "kg", "liter","thùng 30", "thùng 24", "thùng 12", "lốc 6", "bao 10", "bao 15", "bao 20", "bao 5", "lốc 12"];
 const STATUSES = [
   { value: "đã gửi NCC", label: "Đã gửi NCC" },
-  { value: "đã nhận 1 phần", label: "Đã nhận một phần" },
   { value: "hoàn thành", label: "Hoàn thành" },
   { value: "đã hủy", label: "Đã hủy" },
   { value: "completed", label: "Hoàn thành" },
@@ -75,6 +75,7 @@ const PurchaseOrderManagement = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("orderDate");
   const [sortOrder, setSortOrder] = useState("desc");
+  const [loading, setLoading] = useState(false);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -194,6 +195,7 @@ const PurchaseOrderManagement = () => {
     const deliveryDate = new Date(expectedDeliveryDate);
     if (!selectedSupplier || orderItems.length === 0 || deliveryDate <= currentDate) return;
     try {
+      setLoading(true);
       const payload = {
         supplier: selectedSupplier,
         supplierName: suppliers.find(s => s._id === selectedSupplier)?.name || "",
@@ -226,6 +228,8 @@ const PurchaseOrderManagement = () => {
     } catch (error) {
       console.error(error);
       alert(error.response?.data?.error || "Lỗi khi tạo phiếu đặt hàng!");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -340,8 +344,8 @@ const PurchaseOrderManagement = () => {
   };
 
   const formatPrice = (value) => {
-    if (!value) return "";
-    return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    if (value === undefined || value === null) return "";
+    return value.toLocaleString("vi-VN") + " đ";
   };
 
   const handleUnitPriceChange = (value) => {
@@ -566,8 +570,8 @@ const PurchaseOrderManagement = () => {
                             <AddCircleOutlineIcon fontSize="small" />
                           </IconButton>
                         </TableCell>
-                        <TableCell>{item.unitPrice.toLocaleString()} đ</TableCell>
-                        <TableCell>{item.totalPrice.toLocaleString()} đ</TableCell>
+                        <TableCell>{formatPrice(item.unitPrice)}</TableCell>
+                        <TableCell>{formatPrice(item.totalPrice)}</TableCell>
                         <TableCell>
                           <IconButton onClick={() => handleRemoveItem(item.product)}>
                             <DeleteIcon fontSize="small" />
@@ -581,7 +585,7 @@ const PurchaseOrderManagement = () => {
             </Box>
             <Box mt={2}>
               <Typography variant="h6">
-                Tổng tiền: {totalPrice.toLocaleString()} đ
+                Tổng tiền: {formatPrice(totalPrice)}
               </Typography>
               <FormControlLabel
                 control={
@@ -592,8 +596,14 @@ const PurchaseOrderManagement = () => {
                 }
                 label="Gửi email cho nhà cung cấp"
               />
-              <Button variant="contained" onClick={handleSubmit} sx={{ mt: 2 }}>
-                Tạo phiếu đặt hàng
+              <Button 
+                variant="contained" 
+                onClick={handleSubmit} 
+                sx={{ mt: 2 }}
+                disabled={loading}
+                startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
+              >
+                {loading ? "Đang tạo phiếu..." : "Tạo phiếu đặt hàng"}
               </Button>
             </Box>
           </Paper>
@@ -710,7 +720,7 @@ const PurchaseOrderManagement = () => {
                               inputProps={{ inputMode: "numeric" }}
                             />
                           </TableCell>
-                          <TableCell>{(item.quantity * item.unitPrice).toLocaleString()} đ</TableCell>
+                          <TableCell>{formatPrice(item.quantity * item.unitPrice)}</TableCell>
                           <TableCell>
                             <IconButton 
                               color="error" 
@@ -729,7 +739,7 @@ const PurchaseOrderManagement = () => {
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6">
-                  Tổng tiền: {totalPrice.toLocaleString()} đ
+                  Tổng tiền: {formatPrice(totalPrice)}
                 </Typography>
                 <FormControlLabel
                   control={
@@ -793,7 +803,7 @@ const PurchaseOrderManagement = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>
+                  <TableCell sx={{ maxWidth: 90, width: 90, minWidth: 60 }}>
                     <TableSortLabel
                       active={sortBy === "_id"}
                       direction={sortOrder}
@@ -830,7 +840,7 @@ const PurchaseOrderManagement = () => {
                       Ngày giao dự kiến
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 120, maxWidth: 150, width: 130 }}>
                     <TableSortLabel
                       active={sortBy === "totalAmount"}
                       direction={sortOrder}
@@ -862,7 +872,7 @@ const PurchaseOrderManagement = () => {
                     <TableCell>{order.createdByName || "Không xác định"}</TableCell>
                     <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      {order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toLocaleString()} đ
+                      {formatPrice(order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0))}
                     </TableCell>
                     <TableCell>
                       {STATUSES.find(status => status.value === order.status)?.label || order.status}
@@ -964,7 +974,7 @@ const PurchaseOrderManagement = () => {
                               inputProps={{ inputMode: "numeric" }}
                             />
                           </TableCell>
-                          <TableCell>{(item.quantity * item.unitPrice).toLocaleString()} đ</TableCell>
+                          <TableCell>{formatPrice(item.quantity * item.unitPrice)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
