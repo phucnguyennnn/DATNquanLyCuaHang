@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   TextField,
   Button,
@@ -46,11 +46,15 @@ function ManagerOrder() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const authToken = localStorage.getItem("authToken");
-
-  const [filterTimeRange, setFilterTimeRange] = useState("");
-  const [filterDate, setFilterDate] = useState(null);
+  const [filterTimeRange, setFilterTimeRange] = useState("day");
+  const [filterDate, setFilterDate] = useState(new Date());
   const [filterStartDate, setFilterStartDate] = useState(null);
   const [filterEndDate, setFilterEndDate] = useState(null);
+  const [sortConfig, setSortConfig] = useState({
+    key: null,
+    direction: "asc",
+  });
+  const [weekPickerDate, setWeekPickerDate] = useState(new Date());
 
   useEffect(() => {
     fetchOrders();
@@ -68,7 +72,7 @@ function ManagerOrder() {
     try {
       const params = new URLSearchParams();
       if (searchQuery) {
-        params.append("$or", searchQuery); // Gửi từ khóa dưới dạng tham số $or
+        params.append("$or", searchQuery);
       }
       if (filterPaymentStatus) {
         params.append("paymentStatus", filterPaymentStatus);
@@ -81,9 +85,9 @@ function ManagerOrder() {
         endOfDay.setHours(23, 59, 59, 999);
         params.append("startDate", startOfDay.toISOString());
         params.append("endDate", endOfDay.toISOString());
-      } else if (filterTimeRange === "week" && filterDate) {
-        const startOfCurrentWeek = startOfWeek(filterDate, { locale: vi });
-        const endOfCurrentWeek = endOfWeek(filterDate, { locale: vi });
+      } else if (filterTimeRange === "week" && weekPickerDate) {
+        const startOfCurrentWeek = startOfWeek(weekPickerDate, { locale: vi });
+        const endOfCurrentWeek = endOfWeek(weekPickerDate, { locale: vi });
         startOfCurrentWeek.setHours(0, 0, 0, 0);
         endOfCurrentWeek.setHours(23, 59, 59, 999);
         params.append("startDate", startOfCurrentWeek.toISOString());
@@ -139,214 +143,257 @@ function ManagerOrder() {
     setIsDetailsOpen(false);
     setSelectedOrder(null);
   };
+
   const handlePrintOrder = (order) => {
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
-    <html>
-      <head>
-        <title>Hóa đơn #${order.orderNumber}</title>
-        <style>
-          body { font-family: 'Arial', sans-serif; font-size: 12px; line-height: 1.3; }
-          .receipt { width: 380px; margin: 0 auto; padding: 20px; border-bottom: 1px dashed #000; }
-          .header { text-align: center; margin-bottom: 15px; }
-          .header h2 { font-size: 1.6em; margin-bottom: 5px; }
-          .header p { margin: 2px 0; font-size: 0.9em; }
-          .info-section { margin-bottom: 10px; }
-          .info-title { font-weight: bold; margin-bottom: 5px; }
-          .info { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 0.95em; }
-          .items { width: 100%; border-collapse: collapse; margin-top: 10px; }
-          .items th, .items td { padding: 8px 5px; text-align: left; border-bottom: 1px dashed #eee; }
-          .items th { font-weight: bold; font-size: 1em; }
-          .items td { font-size: 0.95em; }
-          .total-row { display: flex; justify-content: space-between; margin-top: 8px; font-size: 1em; padding-top: 5px; border-top: 1px solid #ccc; }
-          .total-row strong { font-weight: bold; }
-          .footer { text-align: center; margin-top: 15px; font-size: 0.9em; font-style: italic; }
-          .product-info { display: flex; flex-direction: column; }
-          .product-name { font-weight: bold; }
-          .discount { font-size: 0.8em; color: #777; }
-          .amount { text-align: right; }
-        </style>
-      </head>
-      <body>
-        <div class="receipt">
-          <div class="header">
-            <h2>CỬA HÀNG BÁN LẺ ABC</h2>
-            <p>Địa chỉ: 123 Đường XYZ, Quận ..., TP.HCM</p>
-            <p>Điện thoại: 09xxxxxxxxxx</p>
-            <p>MST: 0123456789</p>
-          </div>
-
-          <div class="info-section">
-            <div class="info-title">Thông tin đơn hàng:</div>
-            <div class="info"><span>Mã đơn hàng:</span> <span>${
-              order.orderNumber
-            }</span></div>
-            <div class="info"><span>Ngày:</span> <span>${format(
-              new Date(order.createdAt),
-              "dd/MM/yyyy HH:mm",
-              { locale: vi }
-            )}</span></div>
-            <div class="info"><span>Nhân viên:</span> <span>${
-              order.employeeId?.fullName || "Không xác định"
-            }</span></div>
-          </div>
-
-          <div class="info-section">
-            <div class="info-title">Thông tin khách hàng:</div>
-            <div class="info"><span>Khách hàng:</span> <span>${
-              order.customerId?.fullName || "Khách hàng vãng lai"
-            }</span></div>
+      <html>
+        <head>
+          <title>Hóa đơn #${order.orderNumber}</title>
+          <style>
+            body { font-family: 'Arial', sans-serif; font-size: 12px; line-height: 1.3; }
+            .receipt { width: 380px; margin: 0 auto; padding: 20px; border-bottom: 1px dashed #000; }
+            .header { text-align: center; margin-bottom: 15px; }
+            .header h2 { font-size: 1.6em; margin-bottom: 5px; }
+            .header p { margin: 2px 0; font-size: 0.9em; }
+            .info-section { margin-bottom: 10px; }
+            .info-title { font-weight: bold; margin-bottom: 5px; }
+            .info { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 0.95em; }
+            .items { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .items th, .items td { padding: 8px 5px; text-align: left; border-bottom: 1px dashed #eee; }
+            .items th { font-weight: bold; font-size: 1em; }
+            .items td { font-size: 0.95em; }
+            .total-row { display: flex; justify-content: space-between; margin-top: 8px; font-size: 1em; padding-top: 5px; border-top: 1px solid #ccc; }
+            .total-row strong { font-weight: bold; }
+            .footer { text-align: center; margin-top: 15px; font-size: 0.9em; font-style: italic; }
+            .product-info { display: flex; flex-direction: column; }
+            .product-name { font-weight: bold; }
+            .discount { font-size: 0.8em; color: #777; }
+            .amount { text-align: right; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt">
+            <div class="header">
+              <h2>CỬA HÀNG BÁN LẺ ABC</h2>
+              <p>Địa chỉ: 123 Đường XYZ, Quận ..., TP.HCM</p>
+              <p>Điện thoại: 09xxxxxxxxxx</p>
+              <p>MST: 0123456789</p>
+            </div>
+            <div class="info-section">
+              <div class="info-title">Thông tin đơn hàng:</div>
+              <div class="info"><span>Mã đơn hàng:</span> <span>${
+                order.orderNumber
+              }</span></div>
+              <div class="info"><span>Ngày:</span> <span>${format(
+                new Date(order.createdAt),
+                "dd/MM/yyyy HH:mm",
+                { locale: vi }
+              )}</span></div>
+              <div class="info"><span>Nhân viên:</span> <span>${
+                order.employeeId?.fullName || "Không xác định"
+              }</span></div>
+            </div>
+            <div class="info-section">
+              <div class="info-title">Thông tin khách hàng:</div>
+              <div class="info"><span>Khách hàng:</span> <span>${
+                order.customerId?.fullName || "Khách hàng vãng lai"
+              }</span></div>
+              ${
+                order.customerId?.phone
+                  ? `<div class="info"><span>Điện thoại:</span> <span>${order.customerId.phone}</span></div>`
+                  : ""
+              }
+              ${
+                order.customerId?.address
+                  ? `<div class="info"><span>Địa chỉ:</span> <span>${order.customerId.address}</span></div>`
+                  : ""
+              }
+            </div>
+            <table class="items">
+              <thead>
+                <tr>
+                  <th>Sản phẩm</th>
+                  <th style="text-align: right;">SL</th>
+                  <th>ĐVT</th>
+                  <th style="text-align: right;">Đơn giá</th>
+                  <th style="text-align: right;">Giảm</th>
+                  <th style="text-align: right;">Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${order.products
+                  .map((item) => {
+                    const discountPercent =
+                      item.originalUnitPrice > 0
+                        ? Math.round(
+                            ((item.originalUnitPrice - item.unitPrice) /
+                              item.originalUnitPrice) *
+                              100
+                          )
+                        : 0;
+                    const discountAmount =
+                      item.originalUnitPrice - item.unitPrice;
+                    return `
+                      <tr>
+                        <td><div class="product-info"><div class="product-name">${
+                          item.productId?.name || "Đang tải..."
+                        }</div></div></td>
+                        <td class="amount">${item.quantity}</td>
+                        <td>${item.selectedUnitName}</td>
+                        <td class="amount">${item.originalUnitPrice?.toLocaleString(
+                          "vi-VN"
+                        )} VNĐ</td>
+                        <td class="amount">${discountPercent}% ${
+                      discountAmount > 0
+                        ? `(${discountAmount.toLocaleString("vi-VN")} VNĐ)`
+                        : ""
+                    }</td>
+                        <td class="amount">${item.itemTotal?.toLocaleString(
+                          "vi-VN"
+                        )} VNĐ</td>
+                      </tr>
+                    `;
+                  })
+                  .join("")}
+                <tr><td colspan="6"><hr/></td></tr>
+                ${
+                  order.discountAmount > 0
+                    ? `<tr class="total-row"><td colspan="5">Giảm giá (tổng):</td><td class="amount">- ${order.discountAmount.toLocaleString(
+                        "vi-VN"
+                      )} VNĐ</td></tr>`
+                    : ""
+                }
+                ${
+                  order.taxRate > 0
+                    ? `<tr class="total-row"><td colspan="5">Thuế (${
+                        order.taxRate * 100
+                      }%):</td><td class="amount">${order.taxAmount?.toLocaleString(
+                        "vi-VN"
+                      )} VNĐ</td></tr>`
+                    : ""
+                }
+                <tr class="total-row">
+                  <td colspan="5"><strong>Tổng cộng:</strong></td>
+                  <td class="amount"><strong>${order.finalAmount?.toLocaleString(
+                    "vi-VN"
+                  )} VNĐ</strong></td>
+                </tr>
+                ${
+                  order.depositAmount > 0
+                    ? `<tr class="total-row"><td colspan="5">Đặt cọc:</td><td class="amount">${order.depositAmount.toLocaleString(
+                        "vi-VN"
+                      )} VNĐ</td></tr>`
+                    : ""
+                }
+                ${
+                  (order.amountPaid !== undefined &&
+                    order.paymentStatus !== "pending") ||
+                  order.depositAmount > 0
+                    ? `
+                      <tr class="total-row"><td colspan="5"><strong>${
+                        order.amountPaid - order.finalAmount >= 0
+                          ? "Tiền thừa:"
+                          : "Còn lại:"
+                      }</strong></td>
+                      <td class="amount"><strong>${(
+                        order.amountPaid - order.finalAmount
+                      ).toLocaleString("vi-VN")} VNĐ</strong></td></tr>`
+                    : ""
+                }
+              </tbody>
+            </table>
+            <div class="info-section">
+              <div class="info-title">Thông tin thanh toán:</div>
+              <div class="info"><span>Phương thức:</span> <span>${
+                order.paymentMethod === "cash"
+                  ? "Tiền mặt"
+                  : order.paymentMethod === "transfer"
+                  ? "Chuyển khoản"
+                  : order.paymentMethod || "Không xác định"
+              }</span></div>
+              <div class="info"><span>Trạng thái:</span> <span>${renderPaymentStatus(
+                order.paymentStatus
+              )}</span></div>
+            </div>
             ${
-              order.customerId?.phone
-                ? `<div class="info"><span>Điện thoại:</span> <span>${order.customerId.phone}</span></div>`
+              order.notes
+                ? `<div class="info-section"><div class="info-title">Ghi chú:</div><p>${order.notes}</p></div>`
                 : ""
             }
-            ${
-              order.customerId?.address
-                ? `<div class="info"><span>Địa chỉ:</span> <span>${order.customerId.address}</span></div>`
-                : ""
-            }
+            <div class="footer">
+              <p>Cảm ơn quý khách đã mua hàng!</p>
+              <p>Hẹn gặp lại quý khách!</p>
+              <p>(Đây là hóa đơn bán lẻ)</p>
+            </div>
           </div>
-
-          <table class="items">
-            <thead>
-              <tr>
-                <th>Sản phẩm</th>
-                <th style="text-align: right;">SL</th>
-                <th>ĐVT</th>
-                <th style="text-align: right;">Đơn giá</th>
-                <th style="text-align: right;">Giảm</th>
-                <th style="text-align: right;">Thành tiền</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${order.products
-                .map((item) => {
-                  const discountPercent =
-                    item.originalUnitPrice > 0
-                      ? Math.round(
-                          ((item.originalUnitPrice - item.unitPrice) /
-                            item.originalUnitPrice) *
-                            100
-                        )
-                      : 0;
-                  const discountAmount =
-                    item.originalUnitPrice - item.unitPrice;
-                  return `
-                    <tr>
-                      <td><div class="product-info"><div class="product-name">${
-                        item.productId?.name || "Đang tải..."
-                      }</div></div></td>
-                      <td class="amount">${item.quantity}</td>
-                      <td>${item.selectedUnitName}</td>
-                      <td class="amount">${item.originalUnitPrice?.toLocaleString(
-                        "vi-VN"
-                      )} VNĐ</td>
-                      <td class="amount">${discountPercent}% ${
-                    discountAmount > 0
-                      ? `(${discountAmount.toLocaleString("vi-VN")} VNĐ)`
-                      : ""
-                  }</td>
-                      <td class="amount">${item.itemTotal?.toLocaleString(
-                        "vi-VN"
-                      )} VNĐ</td>
-                    </tr>
-                  `;
-                })
-                .join("")}
-              <tr><td colspan="6"><hr/></td></tr>
-              ${
-                order.discountAmount > 0
-                  ? `<tr class="total-row"><td colspan="5">Giảm giá (tổng):</td><td class="amount">- ${order.discountAmount.toLocaleString(
-                      "vi-VN"
-                    )} VNĐ</td></tr>`
-                  : ""
-              }
-              ${
-                order.taxRate > 0
-                  ? `<tr class="total-row"><td colspan="5">Thuế (${
-                      order.taxRate * 100
-                    }%):</td><td class="amount">${order.taxAmount?.toLocaleString(
-                      "vi-VN"
-                    )} VNĐ</td></tr>`
-                  : ""
-              }
-              <tr class="total-row">
-                <td colspan="5"><strong>Tổng cộng:</strong></td>
-                <td class="amount"><strong>${order.finalAmount?.toLocaleString(
-                  "vi-VN"
-                )} VNĐ</strong></td>
-              </tr>
-              ${
-                order.depositAmount > 0
-                  ? `<tr class="total-row"><td colspan="5">Đặt cọc:</td><td class="amount">${order.depositAmount.toLocaleString(
-                      "vi-VN"
-                    )} VNĐ</td></tr>`
-                  : ""
-              }
-              ${
-                order.amountPaid !== undefined &&
-                order.paymentStatus !== "pending"
-                  ? `<tr class="total-row"><td colspan="5">Tiền khách đưa:</td><td class="amount">${order.amountPaid?.toLocaleString(
-                      "vi-VN"
-                    )} VNĐ</td></tr>`
-                  : ""
-              }
-              ${
-                (order.depositAmount > 0 &&
-                  order.amountPaid !== undefined &&
-                  order.paymentStatus !== "pending") ||
-                (order.amountPaid !== undefined &&
-                  order.paymentStatus === "paid") ||
-                order.depositAmount > 0
-                  ? `<tr class="total-row"><td colspan="5"><strong>${
-                      order.amountPaid - order.finalAmount >= 0
-                        ? "Tiền thừa:"
-                        : "Còn lại:"
-                    }</strong></td><td class="amount"><strong>${(
-                      order.amountPaid - order.finalAmount
-                    ).toLocaleString("vi-VN")} VNĐ</strong></td></tr>`
-                  : ""
-              }
-            </tbody>
-          </table>
-
-          <div class="info-section">
-            <div class="info-title">Thông tin thanh toán:</div>
-            <div class="info"><span>Phương thức:</span> <span>${
-              order.paymentMethod === "cash" ? "Tiền mặt" :
-              order.paymentMethod === "transfer" ? "Chuyển khoản" :
-              order.paymentMethod || "Không xác định"
-            }</span></div>
-            <div class="info"><span>Trạng thái:</span> <span>${renderPaymentStatus(
-              order.paymentStatus
-            )}</span></div>
-          </div>
-
-          ${
-            order.notes
-              ? `<div class="info-section"><div class="info-title">Ghi chú:</div><p>${order.notes}</p></div>`
-              : ""
-          }
-
-          <div class="footer">
-            <p>Cảm ơn quý khách đã mua hàng!</p>
-            <p>Hẹn gặp lại quý khách!</p>
-            <p>(Đây là hóa đơn bán lẻ)</p>
-          </div>
-        </div>
-      </body>
-    </html>
-  `);
+        </body>
+      </html>
+    `);
     printWindow.document.close();
     printWindow.print();
   };
+
   const handleFilterTimeRangeChange = (event) => {
     setFilterTimeRange(event.target.value);
     setFilterDate(null);
     setFilterStartDate(null);
     setFilterEndDate(null);
+    setWeekPickerDate(new Date()); // Reset week picker date
   };
+
+  const handleWeekChange = (newDate) => {
+    setWeekPickerDate(newDate);
+  };
+
+  const handleSort = (key) => {
+    let direction = "asc";
+    if (sortConfig.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const renderSortIcon = (key) => {
+    if (sortConfig.key !== key) return null;
+    return sortConfig.direction === "asc" ? "↑" : "↓";
+  };
+
+  const getSortValue = (order, key) => {
+    switch (key) {
+      case "orderNumber":
+        return order.orderNumber;
+      case "customerName":
+        return order.customerId?.fullName?.toLowerCase() || "";
+      case "createdAt":
+        return new Date(order.createdAt).getTime();
+      case "employeeName":
+        return order.employeeId?.fullName?.toLowerCase() || "";
+      case "finalAmount":
+        return order.finalAmount || 0;
+      case "paymentStatus":
+        return order.paymentStatus;
+      default:
+        return "";
+    }
+  };
+
+  const sortedOrders = useMemo(() => {
+    if (!sortConfig.key) return orders;
+
+    return [...orders].sort((a, b) => {
+      const valueA = getSortValue(a, sortConfig.key);
+      const valueB = getSortValue(b, sortConfig.key);
+
+      if (valueA < valueB) {
+        return sortConfig.direction === "asc" ? -1 : 1;
+      }
+      if (valueA > valueB) {
+        return sortConfig.direction === "asc" ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [orders, sortConfig]);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} locale={vi}>
@@ -356,9 +403,9 @@ function ManagerOrder() {
             label="Tìm kiếm theo mã đơn, tên KH/NV"
             value={searchQuery}
             onChange={handleSearchChange}
-            sx={{ flexGrow: 1 }}
+            sx={{ flex: 1 }}
           />
-          <FormControl sx={{ minWidth: 150 }}>
+          <FormControl sx={{ minWidth: 180 }}>
             <InputLabel id="payment-status-filter-label">
               TT Thanh toán
             </InputLabel>
@@ -398,46 +445,43 @@ function ManagerOrder() {
               label="Chọn ngày"
               value={filterDate}
               onChange={(newValue) => setFilterDate(newValue)}
-              renderInput={(params) => <TextField {...params} />}
+              sx={{ flex: 0.5 }}
             />
           )}
+
           {filterTimeRange === "week" && (
             <DatePicker
               label="Chọn tuần"
-              value={filterDate}
-              onChange={(newValue) => setFilterDate(newValue)}
-              renderInput={(params) => <TextField {...params} />}
+              value={weekPickerDate}
+              onChange={handleWeekChange}
               views={["year", "month", "week"]}
+              sx={{ flex: 0.5 }}
             />
           )}
+
           {filterTimeRange === "month" && (
             <DatePicker
               label="Chọn tháng"
               value={filterDate}
               onChange={(newValue) => setFilterDate(newValue)}
-              renderInput={(params) => <TextField {...params} />}
               views={["year", "month"]}
+              sx={{ flex: 0.5 }}
             />
           )}
+
           {filterTimeRange === "custom" && (
             <>
               <DatePicker
                 label="Từ ngày"
                 value={filterStartDate}
                 onChange={(newValue) => setFilterStartDate(newValue)}
-                renderInput={(params) => (
-                  <TextField {...params} sx={{ width: 150 }} />
-                )}
-                sx={{ width: 150 }}
+                sx={{ flex: 0.5 }}
               />
               <DatePicker
                 label="Đến ngày"
                 value={filterEndDate}
                 onChange={(newValue) => setFilterEndDate(newValue)}
-                renderInput={(params) => (
-                  <TextField {...params} sx={{ width: 150 }} />
-                )}
-                sx={{ width: 150 }}
+                sx={{ flex: 0.5 }}
               />
             </>
           )}
@@ -450,17 +494,47 @@ function ManagerOrder() {
           <Table sx={{ minWidth: 650 }} aria-label="Danh sách đơn hàng">
             <TableHead>
               <TableRow>
-                <TableCell>Mã đơn hàng</TableCell>
-                <TableCell>Khách hàng</TableCell>
-                <TableCell>Ngày tạo</TableCell>
-                <TableCell>Nhân viên tạo đơn hàng</TableCell>
-                <TableCell>Thành tiền</TableCell>
-                <TableCell sx={{ width: "150px" }}>TT Thanh toán</TableCell>
+                <TableCell
+                  onClick={() => handleSort("orderNumber")}
+                  style={{ cursor: "pointer" }}
+                >
+                  Mã đơn hàng {renderSortIcon("orderNumber")}
+                </TableCell>
+                <TableCell
+                  onClick={() => handleSort("customerName")}
+                  style={{ cursor: "pointer" }}
+                >
+                  Khách hàng {renderSortIcon("customerName")}
+                </TableCell>
+                <TableCell
+                  onClick={() => handleSort("createdAt")}
+                  style={{ cursor: "pointer" }}
+                >
+                  Ngày tạo {renderSortIcon("createdAt")}
+                </TableCell>
+                <TableCell
+                  onClick={() => handleSort("employeeName")}
+                  style={{ cursor: "pointer" }}
+                >
+                  Nhân viên tạo đơn hàng {renderSortIcon("employeeName")}
+                </TableCell>
+                <TableCell
+                  onClick={() => handleSort("finalAmount")}
+                  style={{ cursor: "pointer" }}
+                >
+                  Thành tiền {renderSortIcon("finalAmount")}
+                </TableCell>
+                <TableCell
+                  onClick={() => handleSort("paymentStatus")}
+                  style={{ cursor: "pointer", width: "150px" }}
+                >
+                  TT Thanh toán {renderSortIcon("paymentStatus")}
+                </TableCell>
                 <TableCell align="right">Hành động</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {orders.map((order) => (
+              {sortedOrders.map((order) => (
                 <TableRow
                   key={order._id}
                   sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
@@ -606,7 +680,8 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
           TT Thanh toán: {renderPaymentStatus(order.paymentStatus)}
         </Typography>
         <Typography>
-          Phương thức thanh toán: {order.paymentMethod === "cash"
+          Phương thức thanh toán:{" "}
+          {order.paymentMethod === "cash"
             ? "Tiền mặt"
             : order.paymentMethod === "transfer"
             ? "Chuyển khoản"

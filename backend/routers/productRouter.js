@@ -16,5 +16,5 @@ router.get('/all/products', productController.getAll);
 router.patch('/:id', upload.array('images', 5), productController.updateProduct);
 router.delete('/:id', productController.deleteProduct);
 router.get('/:id/batches', productController.getProductBatches);
-
+router.get('/batch/:batchCode', productController.getByBatchCode);
 module.exports = router;
