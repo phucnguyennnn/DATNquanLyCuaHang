@@ -2,29 +2,17 @@ const express = require("express");
 const router = express.Router();
 const orderController = require("../controllers/orderController");
 const { protect, restrictTo } = require("../middlewares/authMiddleware");
+
 // Apply protect middleware to all routes in this router
 router.use(protect);
 // Apply restrictTo middleware to all routes in this router, allowing only 'admin' and 'employee'
-router.use(restrictTo("admin", "employee"));
+// Route để tạo đơn hàng
+router.post("/", orderController.createOrder);
 
-router.post("/", (req, res) => {
-  req.body.orderType = req.body.orderType || "instore";
-  orderController.createOrder(req, res);
-});
-
+// Route để lấy danh sách tất cả các đơn hàng
 router.get("/", orderController.getAllOrders);
+
+// Route để lấy thông tin chi tiết của một đơn hàng theo ID
 router.get("/:orderId", orderController.getOrderById);
-router.put("/:orderId", orderController.updateOrder); // Route cập nhật đơn hàng
-router.post("/cart", orderController.createOrderFromCart); // Route tạo đơn hàng từ giỏ hàng
-router.post(
-  "/:orderId/payment/online",
-  orderController.processOnlinePaymentSuccess
-); //đổi tên route
-router.post("/:orderId/payment/cash", orderController.processCashPayment); //đổi tên route
-router.post("/:orderId/change", orderController.calculateChange); // Route tính tiền thừa
-router.put("/:orderId/cancel", orderController.cancelOrder);
-router.post("/:orderId/hold", orderController.holdOrder);
-router.post("/:orderId/resume", orderController.resumeOrder);
-router.post("/:orderId/deposit", orderController.recordDeposit);
 
 module.exports = router;

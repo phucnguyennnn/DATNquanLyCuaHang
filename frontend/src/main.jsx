@@ -22,9 +22,9 @@ const AppWrapper = () => {
 
   return (
     <SettingsProvider>
-      <CartProvider>
+      
         <AppRouter key={key} />
-      </CartProvider>
+    
     </SettingsProvider>
   );
 };
