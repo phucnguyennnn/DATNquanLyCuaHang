@@ -99,7 +99,6 @@ const CreateOrder = () => {
           ...res.data.data.product,
           warehouse: res.data.data.batch.remaining_quantity,
           shelf: res.data.data.batch.quantity_on_shelf,
-          // Thêm thông tin batch vào sản phẩm
           searchedBatch: res.data.data.batch,
         };
         setFilteredProducts([productWithStock]);
@@ -119,14 +118,11 @@ const CreateOrder = () => {
     try {
       let availableBatches = [];
 
-      // Kiểm tra nếu sản phẩm có batch từ tìm kiếm
       if (product.searchedBatch) {
-        // Chỉ lấy batch đã tìm kiếm nếu còn hàng
         if (product.searchedBatch.quantity_on_shelf > 0) {
           availableBatches = [product.searchedBatch];
         }
       } else {
-        // Xử lý bình thường nếu không phải tìm kiếm batch
         const res = await axios.get(
           `http://localhost:8000/api/batches/product/${product.id}`,
           { headers: { Authorization: `Bearer ${token}` } }
@@ -150,7 +146,7 @@ const CreateOrder = () => {
       batch.quantity_on_shelf / (selectedUnit?.ratio || 1)
     );
 
-    const newValue = Math.min(Math.max(0, parseInt(value || 0)), maxQty);
+    const newValue = Math.min(Math.max(1, parseInt(value || 1)), maxQty);
     setSelectedBatches((prev) => ({
       ...prev,
       [batchId]: newValue,
@@ -158,7 +154,7 @@ const CreateOrder = () => {
     setHasUserSelectedBatch(true);
   };
 
- const autoSelectBatches = () => {
+  const autoSelectBatches = () => {
     if (!selectedProduct || !selectedUnit) return [];
 
     const requiredBaseQty = 1 * selectedUnit.ratio;
@@ -182,12 +178,11 @@ const CreateOrder = () => {
         unitPrice: unitPriceBase * selectedUnit.ratio,
         unitName: selectedUnit.name,
       };
-      console.log("Lô tự động chọn:", JSON.stringify(selectedBatchInfo, null, 2));
       return [selectedBatchInfo];
     }
     return [];
   };
-const handleAddToOrder = () => {
+  const handleAddToOrder = () => {
     if (!selectedProduct || !selectedUnit) return;
 
     let selected;
@@ -209,14 +204,12 @@ const handleAddToOrder = () => {
             ? baseUnit.salePrice * (1 - discount.discountValue / 100)
             : baseUnit.salePrice;
 
-          const newItem = { // Log thông tin batch trước khi đưa vào order item
+          return {
             ...b,
             quantity: selectedBatches[b._id] * (selectedUnit?.ratio || 1),
             unitPrice: unitPriceBase * selectedUnit.ratio,
             unitName: selectedUnit.name,
           };
-          console.log("Batch được thêm:", JSON.stringify(newItem, null, 2));
-          return newItem;
         });
     }
 
@@ -246,10 +239,10 @@ const handleAddToOrder = () => {
         updatedOrderItems[existingItemIndex].total = updatedOrderItems[
           existingItemIndex
         ].batches.reduce(
-          (sum, b) => sum + b.unitPrice * (b.quantity / selectedUnit.ratio),
+          (sum, b) =>
+            sum + b.unitPrice * (b.quantity / item.selectedUnit.ratio),
           0
         );
-        console.log("Đã cập nhật item:", JSON.stringify(updatedOrderItems[existingItemIndex], null, 2));
       } else {
         const newItem = {
           product: selectedProduct,
@@ -258,7 +251,6 @@ const handleAddToOrder = () => {
           total: batch.unitPrice * (batch.quantity / selectedUnit.ratio),
         };
         updatedOrderItems.push(newItem);
-        console.log("Thêm item mới:", JSON.stringify(newItem, null, 2));
       }
     });
 
@@ -271,7 +263,7 @@ const handleAddToOrder = () => {
   const handleRemoveItem = (index) => {
     setOrderItems((items) => items.filter((_, i) => i !== index));
   };
- const handleUpdateQuantity = (itemIndex, batchIndex, newValue) => {
+  const handleUpdateQuantity = (itemIndex, batchIndex, newValue) => {
     const updatedItems = [...orderItems];
     const item = updatedItems[itemIndex];
     const batch = item.batches[batchIndex];
@@ -280,17 +272,15 @@ const handleAddToOrder = () => {
       batch.quantity_on_shelf / item.selectedUnit.ratio
     );
 
-    let newQty = parseInt(newValue || 0);
-    if (isNaN(newQty)) newQty = 0;
-    newQty = Math.max(0, Math.min(newQty, maxQty));
+    let newQty = parseInt(newValue || 1);
+    if (isNaN(newQty)) newQty = 1;
+    newQty = Math.max(1, Math.min(newQty, maxQty));
 
     batch.quantity = newQty * item.selectedUnit.ratio;
     item.total = item.batches.reduce(
       (sum, b) => sum + b.unitPrice * (b.quantity / item.selectedUnit.ratio),
       0
     );
-
-    console.log("Cập nhật số lượng item:", JSON.stringify(updatedItems[itemIndex], null, 2));
 
     setOrderItems(updatedItems);
   };
@@ -335,8 +325,6 @@ const handleAddToOrder = () => {
       customerId: selectedCustomer?.id || null,
       orderType: "instore",
     };
-
-    console.log("Dữ liệu gửi đi:", JSON.stringify(orderData, null, 2)); // In ra dữ liệu trước khi gửi
 
     try {
       const res = await axios.post(
@@ -489,7 +477,7 @@ const handleAddToOrder = () => {
                           const currentQty =
                             batch.quantity / item.selectedUnit.ratio;
                           const maxQty = Math.floor(
-                            batch.remaining_quantity / item.selectedUnit.ratio
+                            batch.quantity_on_shelf / item.selectedUnit.ratio
                           );
                           const truncateString = (str, maxLength = 10) => {
                             return str.length > maxLength
@@ -766,11 +754,11 @@ const handleAddToOrder = () => {
                         <TableCell>
                           <TextField
                             type="number"
-                            value={selectedBatches[batch._id] || 0}
+                            value={selectedBatches[batch._id] || 1}
                             onChange={(e) =>
                               handleBatchQtyChange(batch._id, e.target.value)
                             }
-                            inputProps={{ min: 0 }}
+                            inputProps={{ min: 1 }}
                           />
                         </TableCell>
                       </TableRow>

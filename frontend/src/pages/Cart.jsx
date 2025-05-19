@@ -1,297 +1,321 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 import {
   Container,
-  Typography,
-  Box,
   Grid,
-  Card,
-  CardMedia,
-  CardContent,
+  Typography,
+  List,
+  ListItem,
+  ListItemAvatar,
+  Avatar,
+  ListItemText,
   IconButton,
   TextField,
-  Divider,
-  Paper,
   Button,
+  Paper,
+  Box,
+  Divider,
   CircularProgress,
-  Stack,
-  Alert
-} from '@mui/material';
-import { Delete as DeleteIcon, ShoppingCart as ShoppingCartIcon, Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import { useCart } from '../contexts/CartContext';
+} from "@mui/material";
+import DeleteIcon from "@mui/icons-material/Delete";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
+import ShoppingCartCheckoutIcon from "@mui/icons-material/ShoppingCartCheckout";
 
 const CartPage = () => {
-  const { cartItems, updateCartItem, removeFromCart, clearCart } = useCart();
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const [cart, setCart] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const authToken = localStorage.getItem("authToken");
 
-  const handleQuantityChange = (productId, newQuantity) => {
-    if (newQuantity < 1) return;
-    updateCartItem(productId, newQuantity);
-  };
+  useEffect(() => {
+    fetchCart();
+  }, []);
 
-  const handleRemoveItem = (productId) => {
-    removeFromCart(productId);
-  };
-
-  const handleCheckout = () => {
-    setLoading(true);
-    // Xử lý thanh toán
-    setTimeout(() => {
+  const fetchCart = async () => {
+    try {
+      const { data } = await axios.get("http://localhost:8000/api/cart", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setCart(data);
+    } catch (error) {
+      console.error("Lỗi khi lấy giỏ hàng:", error);
+    } finally {
       setLoading(false);
-      alert('Chức năng thanh toán đang được phát triển!');
-    }, 1000);
-  };
-
-  const handleContinueShopping = () => {
-    navigate('/products_page');
-  };
-
-  const calculateTotal = () => {
-    return cartItems.reduce((total, item) => {
-      // Sử dụng giá đã giảm giá nếu có
-      const price = getItemPrice(item.product);
-      return total + (price * item.quantity);
-    }, 0);
-  };
-
-  const getItemPrice = (product) => {
-    // Kiểm tra nếu có discount
-    if (product.discount && product.discount.type) {
-      const now = new Date();
-      if (
-        product.discount.startDate &&
-        new Date(product.discount.startDate) > now
-      ) return product.price;
-      
-      if (product.discount.endDate && 
-          new Date(product.discount.endDate) < now
-      ) return product.price;
-      
-      // Tính giá sau khi giảm giá
-      return product.discount.type === "percentage"
-        ? product.price * (1 - product.discount.value / 100)
-        : Math.max(0, product.price - product.discount.value);
     }
-    return product.price;
   };
 
-  const formatCurrency = (amount) => {
-    return amount.toLocaleString('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    });
+  const updateCartToServer = async (itemsToSend) => {
+    setUpdating(true);
+    try {
+      await axios.post("http://localhost:8000/api/cart/add", itemsToSend, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      await fetchCart();
+    } catch (error) {
+      console.error("Lỗi khi cập nhật giỏ hàng:", error);
+      alert("Có lỗi xảy ra khi cập nhật giỏ hàng");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleQuantityChange = async (itemIndex, newQuantity) => {
+    if (newQuantity < 1) return;
+    try {
+      setUpdating(true);
+      const updatedItem = cart.items[itemIndex];
+      await axios.put(
+        `http://localhost:8000/api/cart/update/${updatedItem.product._id}`,
+        {
+          quantity: newQuantity,
+          selectedUnitName: updatedItem.selectedUnitName
+        },
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      await fetchCart();
+    } catch (error) {
+      console.error("Lỗi cập nhật số lượng:", error);
+      alert("Có lỗi xảy ra khi cập nhật số lượng");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleRemoveItem = async (productId, selectedUnitName) => {
+    if (window.confirm("Bạn có chắc chắn muốn xóa sản phẩm này khỏi giỏ hàng?")) {
+      try {
+        await axios.delete(
+          `http://localhost:8000/api/cart/remove/${productId}`,
+          {
+            headers: { Authorization: `Bearer ${authToken}` },
+            data: { selectedUnitName },
+          }
+        );
+        await fetchCart();
+      } catch (error) {
+        console.error("Lỗi khi xóa sản phẩm:", error);
+        alert("Có lỗi xảy ra khi xóa sản phẩm khỏi giỏ hàng.");
+      }
+    }
+  };
+
+  const handleClearCart = async () => {
+    if (window.confirm("Bạn có chắc chắn muốn xóa toàn bộ giỏ hàng?")) {
+      try {
+        await axios.delete("http://localhost:8000/api/cart", {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        setCart(null);
+      } catch (error) {
+        console.error("Lỗi khi xóa giỏ hàng:", error);
+      }
+    }
+  };
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+    }).format(value);
   };
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh' }}>
+      <Container
+        maxWidth="lg"
+        sx={{ display: "flex", justifyContent: "center", pt: 4 }}
+      >
         <CircularProgress />
       </Container>
     );
   }
 
-  if (cartItems.length === 0) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center', minHeight: '80vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <ShoppingCartIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2, mx: 'auto' }} />
-        <Typography variant="h5" gutterBottom>
-          Giỏ hàng của bạn đang trống
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Bạn chưa thêm sản phẩm nào vào giỏ hàng.
-        </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleContinueShopping}
-          sx={{ maxWidth: 300, mx: 'auto' }}
-        >
-          Tiếp tục mua sắm
-        </Button>
-      </Container>
-    );
-  }
-
   return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            mb: 2 
-          }}
-        >
-          <Typography variant="h4" component="h1" gutterBottom>
-            Giỏ hàng của bạn
-          </Typography>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Typography
+        variant="h4"
+        gutterBottom
+        sx={{ fontWeight: "bold", display: "flex", alignItems: "center" }}
+      >
+        <ShoppingCartCheckoutIcon sx={{ mr: 1, fontSize: "2rem" }} />
+        Giỏ hàng của bạn
+      </Typography>
 
-          <Button
-            variant="outlined"
-            onClick={handleContinueShopping}
-          >
+      {!cart?.items?.length ? (
+        <Paper sx={{ p: 3, textAlign: "center" }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Giỏ hàng của bạn đang trống
+          </Typography>
+          <Button variant="contained" href="/products_page">
             Tiếp tục mua sắm
           </Button>
-        </Box>
-        
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={8}>
-            <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="subtitle1">
-                  {cartItems.length} sản phẩm trong giỏ hàng
-                </Typography>
-                <Button color="error" startIcon={<DeleteIcon />} onClick={() => clearCart()}>
-                  Xóa tất cả
-                </Button>
-              </Box>
-            </Paper>
-            
-            <Box 
-              sx={{ 
-              maxHeight: '70vh', 
+        </Paper>
+      ) : (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={8} sx={{ height: '70vh', overflow: 'hidden' }}>
+            <List sx={{
+              bgcolor: "background.paper",
+              height: '100%',
               overflowY: 'auto',
-              pr: 1,
-              '&::-webkit-scrollbar': {
-                width: '8px',
-              },
-              '&::-webkit-scrollbar-track': {
-                backgroundColor: '#f1f1f1',
-              },
-              '&::-webkit-scrollbar-thumb': {
-                backgroundColor: '#888',
+              pr: 2,
+              '&::-webkit-scrollbar': { width: '6px' },
+              '&::-webkit-scrollbar-track': { background: '#f1f1f1' },
+              '&::-webkit-scrollbar-thumb': { 
+                background: '#888',
                 borderRadius: '4px',
               },
-              '&::-webkit-scrollbar-thumb:hover': {
-                backgroundColor: '#555',
-              },
-            }}
-          >
-            {cartItems.map((item) => (
-              <Card key={item.product._id} sx={{ mb: 2, overflow: 'visible' }}>
-                <Grid container alignItems="center" spacing={1}>
-                  <Grid item xs={3} sm={2}>
-                    <CardMedia
-                      component="img"
-                      image={item.product.images?.[0] || 'https://placehold.co/300x200?text=No+Image'}
-                      alt={item.product.name}
-                      sx={{ height: 100, objectFit: 'contain', p: 1 }}
-                    />
-                  </Grid>
-                  <Grid item xs={9} sm={10}>
-                    <CardContent sx={{ py: 1, px: 2, '&:last-child': { pb: 1 } }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="subtitle1" component="h3" noWrap sx={{ maxWidth: { xs: '150px', sm: '300px' } }}>
+            }}>
+              {cart.items.map((item, index) => (
+                <Paper key={item._id} sx={{ mb: 2, p: 2 }}>
+                  <ListItem sx={{ position: "relative" }}>
+                    {updating && (
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          bgcolor: "rgba(255,255,255,0.7)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <CircularProgress size={24} />
+                      </Box>
+                    )}
+
+                    <ListItemAvatar>
+                      <Avatar
+                        src={item.product.images[0]}
+                        alt={item.product.name}
+                        sx={{ width: 80, height: 80, mr: 2, borderRadius: 2 }}
+                        variant="rounded"
+                      />
+                    </ListItemAvatar>
+
+                    <ListItemText
+                      primary={
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
                           {item.product.name}
                         </Typography>
+                      }
+                      secondary={
+                        <>
+                          <Typography variant="body2" color="text.secondary">
+                            Đơn vị: {item.selectedUnitName}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Đơn giá: {formatCurrency(item.unitPrice)}
+                          </Typography>
+                        </>
+                      }
+                    />
+
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Box sx={{ display: "flex", alignItems: "center" }}>
                         <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => handleRemoveItem(item.product._id)}
+                          onClick={() => handleQuantityChange(index, item.quantity - 1)}
+                          disabled={updating}
                         >
-                          <DeleteIcon fontSize="small" />
+                          <RemoveIcon />
+                        </IconButton>
+
+                        <TextField
+                          value={item.quantity}
+                          size="small"
+                          sx={{ width: 60 }}
+                          inputProps={{
+                            min: 1,
+                            type: "number",
+                            style: { textAlign: "center" },
+                          }}
+                          onChange={(e) =>
+                            handleQuantityChange(index, parseInt(e.target.value) || 1)
+                          }
+                          disabled={updating}
+                        />
+
+                        <IconButton
+                          onClick={() => handleQuantityChange(index, item.quantity + 1)}
+                          disabled={updating}
+                        >
+                          <AddIcon />
                         </IconButton>
                       </Box>
-                      
-                      <Typography variant="body2" color="text.secondary">
-                        Đơn vị: {item.product.selectedUnit}
+
+                      <Typography
+                        variant="h6"
+                        sx={{ minWidth: 120, textAlign: "right" }}
+                      >
+                        {formatCurrency(item.quantity * item.unitPrice)}
                       </Typography>
-                      
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1 }}>
-                        <Box>
-                          {item.product.discount && (
-                            <Typography variant="caption" color="error" sx={{ textDecoration: 'line-through', display: 'block' }}>
-                              {formatCurrency(item.product.price)}
-                            </Typography>
-                          )}
-                          <Typography variant="body1" color="primary" fontWeight="bold">
-                            {formatCurrency(getItemPrice(item.product))}
-                          </Typography>
-                        </Box>
-                        
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleQuantityChange(item.product._id, item.quantity - 1)}
-                            disabled={item.quantity <= 1}
-                          >
-                            <RemoveIcon fontSize="small" />
-                          </IconButton>
-                          <TextField
-                            type="number"
-                            size="small"
-                            value={item.quantity}
-                            onChange={(e) => handleQuantityChange(item.product._id, parseInt(e.target.value) || 1)}
-                            inputProps={{ min: 1, style: { textAlign: 'center', padding: '4px' } }}
-                            sx={{ width: 40, mx: 1 }}
-                          />
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleQuantityChange(item.product._id, item.quantity + 1)}
-                          >
-                            <AddIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      </Stack>
-                      
-                      <Typography variant="body2" align="right" sx={{ mt: 1 }}>
-                        Thành tiền: <b>{formatCurrency(getItemPrice(item.product) * item.quantity)}</b>
-                      </Typography>
-                    </CardContent>
-                  </Grid>
-                </Grid>
-              </Card>
-            ))}
-          </Box>
-          
-          
-        </Grid>
-        
-        <Grid item xs={12} md={4}>
-          <Paper elevation={3} sx={{ p: 3, position: 'sticky', top: 20 }}>
-            <Typography variant="h6" gutterBottom>
-              Tóm tắt đơn hàng
-            </Typography>
-            <Divider sx={{ my: 2 }} />
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography>Tạm tính ({cartItems.reduce((sum, item) => sum + item.quantity, 0)} sản phẩm)</Typography>
-              <Typography>
-                {formatCurrency(calculateTotal())}
+
+                      <IconButton
+                        onClick={() =>
+                          handleRemoveItem(item.product._id, item.selectedUnitName)
+                        }
+                        color="error"
+                        disabled={updating}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                  </ListItem>
+                </Paper>
+              ))}
+            </List>
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, position: "sticky", top: 16 }}>
+              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                Đơn hàng
               </Typography>
-            </Box>
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Typography>Phí vận chuyển</Typography>
-              <Typography>Miễn phí</Typography>
-            </Box>
-            
-            <Divider sx={{ my: 2 }} />
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-              <Typography variant="h6">Tổng cộng</Typography>
-              <Typography variant="h6" color="primary">
-                {formatCurrency(calculateTotal())}
-              </Typography>
-            </Box>
-            
-            <Button
-              fullWidth
-              variant="contained"
-              size="large"
-              color="primary"
-              onClick={handleCheckout}
-            >
-              Tiến hành thanh toán
-            </Button>
-            
-            <Alert severity="info" sx={{ mt: 3 }}>
-              Đơn hàng sẽ được xử lý và vận chuyển trong vòng 24h
-            </Alert>
-          </Paper>
+              <Divider sx={{ my: 2 }} />
+
+              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+                <Typography variant="body1">Tạm tính:</Typography>
+                <Typography variant="body1">
+                  {formatCurrency(cart?.total || 0)}
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="body1">Thành tiền:</Typography>
+                <Typography variant="h6" color="primary" sx={{ fontWeight: 600 }}>
+                  {formatCurrency(cart?.total || 0)}
+                </Typography>
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+
+              <Button
+                fullWidth
+                variant="contained"
+                size="large"
+                sx={{ mb: 2 }}
+                href="/checkout"
+                disabled={updating || !cart?.items?.length}
+              >
+                Đặt hàng 
+              </Button>
+
+              <Button
+                fullWidth
+                variant="outlined"
+                color="error"
+                onClick={handleClearCart}
+                disabled={updating || !cart?.items?.length}
+              >
+                Xóa giỏ hàng
+              </Button>
+            </Paper>
+          </Grid>
         </Grid>
-      </Grid>
+      )}
     </Container>
   );
 };

@@ -57,14 +57,15 @@ const cartSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
-
-// Virtual for calculated total
 cartSchema.virtual("total").get(function () {
   return this.items.reduce((total, item) => {
-    return total + item.quantity * (item.product?.price || 0);
+    const unit = item.product?.units?.find(
+      (u) => u.name === item.selectedUnitName
+    );
+    const price = unit ? unit.salePrice : 0;
+    return total + item.quantity * price;
   }, 0);
 });
-
 // Ensure product exists and is active when adding to cart
 cartSchema.pre("save", async function (next) {
   const Product = mongoose.model("Product");

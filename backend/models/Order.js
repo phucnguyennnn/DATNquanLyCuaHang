@@ -140,6 +140,6 @@ const orderSchema = new mongoose.Schema({
 orderSchema.index({ customerId: 1 });
 orderSchema.index({ date: -1 });
 orderSchema.index({ paymentStatus: 1 });
-orderSchema.index({ status: 1 });
+
 
 module.exports = mongoose.model("Order", orderSchema);

@@ -34,7 +34,6 @@ import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import { useNavigate } from "react-router-dom";
-import { useCart } from "../contexts/CartContext";
 
 const ProductListPage = () => {
   const [categories, setCategories] = useState([]);
@@ -49,13 +48,14 @@ const ProductListPage = () => {
   const [openProductDialog, setOpenProductDialog] = useState(false);
   const [selectedProductDetails, setSelectedProductDetails] = useState(null);
   const navigate = useNavigate();
-  const { cartItems, addToCart } = useCart();
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [currentProduct, setCurrentProduct] = useState(null);
   const [remainingQuantity, setRemainingQuantity] = useState(0);
+  const authToken = localStorage.getItem("authToken");
+  const [cartItemCount, setCartItemCount] = useState(0); // State để theo dõi số lượng loại sản phẩm trong giỏ hàng
 
   const fetchProductsWithBatches = async () => {
     try {
@@ -83,7 +83,7 @@ const ProductListPage = () => {
     } catch (error) {
       console.error("Error fetching products with batches by category:", error);
     } finally {
-      setLoading(false); // Đảm bảo trạng thái loading được cập nhật
+      setLoading(false);
     }
   };
 
@@ -100,7 +100,7 @@ const ProductListPage = () => {
 
   const handleCategoryClick = (category) => {
     setSelectedCategory(category);
-    setLoading(true); // Hiển thị trạng thái loading khi chuyển đổi danh mục
+    setLoading(true);
     if (category) {
       fetchProductsWithBatchesByCategory(category._id);
     } else {
@@ -145,6 +145,51 @@ const ProductListPage = () => {
     setRemainingQuantity(calculateTotalRemainingQuantity(product));
   };
 
+  const fetchCartInfo = async () => {
+    try {
+      const response = await axios.get("http://localhost:8000/api/cart", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (response.data && response.data.items) {
+        setCartItemCount(response.data.items.length); // Đếm số lượng *loại* sản phẩm
+      } else {
+        setCartItemCount(0);
+      }
+    } catch (error) {
+      console.error("Lỗi khi lấy thông tin giỏ hàng:", error);
+      setCartItemCount(0);
+    }
+  };
+
+  const handleAddToCartToApi = async (product, quantity, selectedUnitName) => {
+    try {
+      const response = await axios.post(
+        "http://localhost:8000/api/cart/add",
+        [
+          {
+            productId: product._id,
+            quantity: quantity,
+            selectedUnitName: selectedUnitName,
+          },
+        ],
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
+      );
+      if (response.data.message) {
+        setSnackbarMessage(response.data.message);
+        setSnackbarOpen(true);
+        handleCloseQuantityPopover();
+        fetchCartInfo(); // Cập nhật số lượng giỏ hàng
+      }
+      console.log("Đã thêm vào giỏ hàng:", response.data);
+    } catch (error) {
+      console.error("Lỗi khi thêm vào giỏ hàng:", error);
+      setSnackbarMessage("Có lỗi khi thêm sản phẩm vào giỏ hàng.");
+      setSnackbarOpen(true);
+    }
+  };
+
   const handleAddToCart = () => {
     if (!currentProduct) return;
 
@@ -165,24 +210,7 @@ const ProductListPage = () => {
       return;
     }
 
-    try {
-      const productForCart = {
-        ...currentProduct,
-        price: baseUnit.salePrice,
-        selectedUnit: baseUnit.name,
-      };
-
-      addToCart(productForCart, selectedQuantity);
-      setSnackbarMessage(
-        `Đã thêm ${selectedQuantity} ${currentProduct.name} vào giỏ hàng`
-      );
-      setSnackbarOpen(true);
-      handleCloseQuantityPopover();
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-      setSnackbarMessage("Không thể thêm sản phẩm vào giỏ hàng");
-      setSnackbarOpen(true);
-    }
+    handleAddToCartToApi(currentProduct, selectedQuantity, baseUnit.name);
   };
 
   const handleCloseQuantityPopover = () => {
@@ -221,6 +249,7 @@ const ProductListPage = () => {
   useEffect(() => {
     fetchCategories();
     fetchProductsWithBatches();
+    fetchCartInfo(); // Gọi hàm này khi component mount
   }, []);
 
   const getBaseUnitPrice = (product) => {
@@ -383,7 +412,10 @@ const ProductListPage = () => {
           />
           <Box>
             <IconButton color="primary" onClick={handleGoToCart}>
-              <Badge badgeContent={cartItems.length} color="error">
+              <Badge
+                badgeContent={cartItemCount > 0 ? cartItemCount : null}
+                color="error"
+              >
                 <ShoppingCartIcon />
               </Badge>
             </IconButton>
@@ -492,7 +524,7 @@ const ProductListPage = () => {
             sx={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "space-spaceBetween",
             }}
           >
             <ButtonGroup>
@@ -615,7 +647,21 @@ const ProductListPage = () => {
               <Button
                 onClick={(e) => {
                   handleCloseProductDialog();
-                  handleAddToCartClick(e, selectedProductDetails);
+                  const baseUnit = selectedProductDetails.units.find(
+                    (unit) => unit.ratio === 1
+                  );
+                  if (baseUnit) {
+                    handleAddToCartToApi(
+                      selectedProductDetails,
+                      1, // Mặc định số lượng là 1 khi thêm từ dialog
+                      baseUnit.name
+                    );
+                  } else {
+                    setSnackbarMessage(
+                      "Không thể thêm sản phẩm: không tìm thấy đơn vị cơ bản"
+                    );
+                    setSnackbarOpen(true);
+                  }
                 }}
                 color="primary"
                 variant="contained"
