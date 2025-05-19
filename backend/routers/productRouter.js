@@ -9,7 +9,7 @@ router.get("/", productController.getAllProducts);
 router.get("/:id", productController.getProductById);
 router.get("/batch/products-with-batches", productController.getProductsWithBatches); 
 // Admin protected routes
-router.use(protect, restrictTo("admin"));
+router.use(protect, restrictTo("admin","employee"));
 // Thêm route mới
 router.post("/", upload.array("images", 5), productController.createProduct);
 router.get("/all/products", productController.getAll);

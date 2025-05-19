@@ -10,9 +10,120 @@ import {
   CardContent,
   Button,
   useTheme,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import Navbar from "../components/Navbar";
 import { useNavigate } from "react-router-dom";
+
+const formatVND = (amount) => {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+  }).format(amount);
+};
+
+const ProductCard = ({ product }) => {
+  const navigate = useNavigate();
+  const [selectedUnit, setSelectedUnit] = useState(
+    product.units[0]?.name || ""
+  );
+  const [currentPrice, setCurrentPrice] = useState(
+    product.units[0]?.salePrice || 0
+  );
+
+  const handleChangeUnit = (event) => {
+    const unitName = event.target.value;
+    setSelectedUnit(unitName);
+    const selectedUnitPrice =
+      product.units.find((unit) => unit.name === unitName)?.salePrice || 0;
+    setCurrentPrice(selectedUnitPrice);
+  };
+
+  return (
+    <Card sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <CardMedia
+        component="img"
+        height="140"
+        image={product.images?.[0]?.url || "https://via.placeholder.com/150"}
+        alt={product.name}
+      />
+      <CardContent sx={{ flexGrow: 1 }}>
+        <Typography gutterBottom variant="h6" component="div">
+          {product.name}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {product.description}
+        </Typography>
+        {product.units && product.units.length > 1 && (
+          <FormControl fullWidth margin="normal" size="small">
+            <InputLabel id={`unit-select-label-${product.id}`}>
+              Đơn vị
+            </InputLabel>
+            <Select
+              labelId={`unit-select-label-${product.id}`}
+              id={`unit-select-${product.id}`}
+              value={selectedUnit}
+              onChange={handleChangeUnit}
+            >
+              {product.units.map((unit) => (
+                <MenuItem key={unit.name} value={unit.name}>
+                  {unit.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
+        <Typography variant="h6">{formatVND(currentPrice)}</Typography>
+        {product.batches && product.batches.length > 0 && (
+          <Typography variant="caption" color="text.secondary">
+            {product.batches.length} lô hàng
+          </Typography>
+        )}
+      </CardContent>
+      <Box sx={{ p: 2 }}>
+        <Button
+          size="small"
+          color="primary"
+          onClick={() => navigate(`/product/${product.id}`)}
+        >
+          Xem chi tiết
+        </Button>
+      </Box>
+    </Card>
+  );
+};
+
+const CategoryCard = ({ category }) => (
+  <Grid item xs={6} sm={4} md={3} key={category.id}>
+    <Card
+      sx={{
+        borderRadius: useTheme().shape.borderRadius,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+      }}
+    >
+      <CardContent
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100%",
+          textAlign: "center",
+          p: 2,
+        }}
+      >
+        <Typography variant="subtitle1" component="div">
+          {category.name}
+        </Typography>
+      </CardContent>
+    </Card>
+  </Grid>
+);
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -141,41 +252,7 @@ const HomePage = () => {
             <Grid container spacing={3}>
               {products.map((product) => (
                 <Grid item xs={12} sm={6} md={4} lg={3} key={product.id}>
-                  <Card
-                    sx={{
-                      height: "100%",
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    <CardMedia
-                      component="img"
-                      height="140"
-                      image={
-                        product.images && product.images[0]?.url
-                          ? product.images[0].url
-                          : "https://via.placeholder.com/150"
-                      }
-                      alt={product.name}
-                    />
-                    <CardContent sx={{ flexGrow: 1 }}>
-                      <Typography gutterBottom variant="h6" component="div">
-                        {product.name}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {product.description}
-                      </Typography>
-                      <Typography variant="h6">${product.price}</Typography>
-                    </CardContent>
-                    <Box sx={{ p: 2 }}>
-                      <Button size="small" color="primary">
-                        Xem chi tiết
-                      </Button>
-                      <Button size="small" color="secondary" sx={{ ml: 1 }}>
-                        Thêm vào giỏ hàng
-                      </Button>
-                    </Box>
-                  </Card>
+                  <ProductCard product={product} />
                 </Grid>
               ))}
             </Grid>
@@ -188,37 +265,7 @@ const HomePage = () => {
             <Grid container spacing={3}>
               {categories.map((category) => (
                 <Grid item xs={6} sm={4} md={3} key={category.id}>
-                  <Card
-                    sx={{
-                      position: "relative",
-                      borderRadius: theme.shape.borderRadius,
-                      overflow: "hidden",
-                    }}
-                  >
-                    <CardMedia
-                      component="img"
-                      height="140"
-                      image="https://source.unsplash.com/random?category" // Sử dụng ảnh placeholder vì API không có image
-                      alt={category.name}
-                      sx={{ opacity: 0.7 }}
-                    />
-                    <CardContent
-                      sx={{
-                        position: "absolute",
-                        bottom: 0,
-                        left: 0,
-                        width: "100%",
-                        backgroundColor: "rgba(0, 0, 0, 0.6)",
-                        color: "white",
-                        p: 2,
-                        textAlign: "center",
-                      }}
-                    >
-                      <Typography variant="subtitle1" component="div">
-                        {category.name}
-                      </Typography>
-                    </CardContent>
-                  </Card>
+                  <CategoryCard category={category} />
                 </Grid>
               ))}
             </Grid>

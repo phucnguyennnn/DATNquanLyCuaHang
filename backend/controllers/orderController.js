@@ -1,3 +1,4 @@
+// controllers/orderController.js
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const Batch = require("../models/Batch");
@@ -42,14 +43,20 @@ exports.createPreorderFromCart = async (req, res, cartId) => {
           );
         }
         const baseUnit = product.units.find((u) => u.ratio === 1);
-        if (!baseUnit || typeof baseUnit.ratio !== 'number' || baseUnit.ratio <= 0) {
-          throw new Error(`Sản phẩm ${product.name} không có đơn vị cơ bản hợp lệ.`);
+        if (
+          !baseUnit ||
+          typeof baseUnit.ratio !== "number" ||
+          baseUnit.ratio <= 0
+        ) {
+          throw new Error(
+            `Sản phẩm ${product.name} không có đơn vị cơ bản hợp lệ.`
+          );
         }
 
         const selectedUnit = product.units.find(
           (u) => u.name === cartItem.selectedUnitName
         );
-        if (!selectedUnit || typeof selectedUnit.salePrice !== 'number') {
+        if (!selectedUnit || typeof selectedUnit.salePrice !== "number") {
           throw new Error(
             `Không tìm thấy đơn vị ${cartItem.selectedUnitName} hoặc giá bán cho sản phẩm ${product.name}.`
           );
@@ -67,7 +74,9 @@ exports.createPreorderFromCart = async (req, res, cartId) => {
         }));
 
         // Tính toán itemTotal dựa trên giá của đơn vị đã chọn
-        const itemTotal = parseFloat((selectedUnit.salePrice * cartItem.quantity).toFixed(2));
+        const itemTotal = parseFloat(
+          (selectedUnit.salePrice * cartItem.quantity).toFixed(2)
+        );
 
         return {
           productId: product._id,
@@ -82,7 +91,9 @@ exports.createPreorderFromCart = async (req, res, cartId) => {
     );
 
     const totalAmount = orderProducts.reduce(
-      (sum, item) => (typeof sum === 'number' ? sum : 0) + (typeof item.itemTotal === 'number' ? item.itemTotal : 0),
+      (sum, item) =>
+        (typeof sum === "number" ? sum : 0) +
+        (typeof item.itemTotal === "number" ? item.itemTotal : 0),
       0
     );
 
@@ -105,9 +116,13 @@ exports.createPreorderFromCart = async (req, res, cartId) => {
     for (const productInfo of order.products) {
       const product = await Product.findById(productInfo.productId);
       const baseUnit = product.units.find((u) => u.ratio === 1);
-      if (baseUnit && typeof baseUnit.ratio === 'number' && baseUnit.ratio > 0) {
+      if (
+        baseUnit &&
+        typeof baseUnit.ratio === "number" &&
+        baseUnit.ratio > 0
+      ) {
         for (const batchInfo of productInfo.batchesUsed) {
-          if (typeof batchInfo.quantity === 'number') {
+          if (typeof batchInfo.quantity === "number") {
             await Batch.findByIdAndUpdate(batchInfo.batchId, {
               $inc: {
                 reserved_quantity: batchInfo.quantity / baseUnit.ratio, // Cập nhật số lượng đã đặt trước
@@ -437,5 +452,241 @@ exports.getAllOrders = async (req, res) => {
       message: "Lỗi khi lấy danh sách đơn hàng",
       error: error.message,
     });
+  }
+};
+
+exports.updatePreorder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { products: updatedProducts, ...rest } = req.body;
+
+    const order = await Order.findById(orderId);
+    if (!order || order.orderType !== "preorder") {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy phiếu đặt trước." });
+    }
+
+    // Lưu trữ thông tin sản phẩm và batch hiện tại để rollback nếu cần
+    const originalProducts = JSON.parse(JSON.stringify(order.products));
+
+    // Cập nhật các trường chung của đơn hàng (ví dụ: ghi chú)
+    for (const key in rest) {
+      if (order[key] !== undefined) {
+        order[key] = rest[key];
+      }
+    }
+
+    if (updatedProducts && Array.isArray(updatedProducts)) {
+      order.products = []; // Xóa sản phẩm cũ
+
+      for (const updatedItem of updatedProducts) {
+        const { productId, quantity, selectedUnitName, batchesUsed } =
+          updatedItem;
+        const product = await Product.findById(productId);
+        if (!product) {
+          throw new Error(`Không tìm thấy sản phẩm với ID: ${productId}`);
+        }
+
+        const selectedUnit = product.units.find(
+          (u) => u.name === selectedUnitName
+        );
+        if (!selectedUnit) {
+          throw new Error(
+            `Không tìm thấy đơn vị ${selectedUnitName} cho sản phẩm ${product.name}.`
+          );
+        }
+
+        const baseUnit = product.units.find((u) => u.ratio === 1);
+        if (!baseUnit) {
+          throw new Error(`Sản phẩm ${product.name} không có đơn vị cơ bản.`);
+        }
+
+        const requiredBaseQty = quantity * baseUnit.ratio;
+        let newBatchesUsed = [];
+
+        if (
+          batchesUsed &&
+          Array.isArray(batchesUsed) &&
+          batchesUsed.length > 0
+        ) {
+          // Sử dụng batches được cung cấp từ request
+          for (const batchInfo of batchesUsed) {
+            const batch = await Batch.findById(batchInfo.batchId);
+            if (!batch) {
+              throw new Error(
+                `Không tìm thấy batch với ID: ${batchInfo.batchId}`
+              );
+            }
+            newBatchesUsed.push({
+              batchId: batch._id,
+              quantity: batchInfo.quantity,
+            });
+          }
+        } else {
+          // Tự động chọn batches nếu không có thông tin batch trong request
+          newBatchesUsed = await this.selectGoodBatchesForPreorder(
+            productId,
+            requiredBaseQty
+          );
+        }
+
+        // Tính toán lại itemTotal
+        const itemTotal = parseFloat(
+          (selectedUnit.salePrice * quantity).toFixed(2)
+        );
+
+        order.products.push({
+          productId: product._id,
+          quantity: quantity,
+          selectedUnitName: selectedUnit.name,
+          unitPrice: selectedUnit.salePrice,
+          originalUnitPrice: selectedUnit.salePrice,
+          batchesUsed: newBatchesUsed.map((b) => ({
+            batchId: b.batchId,
+            quantity: b.quantity,
+          })),
+          itemTotal: itemTotal,
+        });
+      }
+
+      // Tính toán lại totalAmount và finalAmount
+      order.totalAmount = parseFloat(
+        order.products.reduce((sum, item) => sum + item.itemTotal, 0).toFixed(2)
+      );
+      order.finalAmount =
+        order.totalAmount - order.discountAmount + order.taxAmount;
+    }
+
+    // Cập nhật lại số lượng đã đặt trước trong các batch (cần xử lý logic phức tạp hơn)
+    // Logic này cần đảm bảo tính nhất quán khi thay đổi sản phẩm hoặc batch
+    // Gợi ý:
+    // 1. Lấy danh sách batch ID và số lượng đã dùng trước khi cập nhật.
+    // 2. Lấy danh sách batch ID và số lượng mới sau khi cập nhật.
+    // 3. So sánh và điều chỉnh trường `reserved_quantity` trong model `Batch` cho phù hợp.
+    //    - Nếu một batch bị loại bỏ, giảm `reserved_quantity`.
+    //    - Nếu một batch mới được thêm, tăng `reserved_quantity`.
+    //    - Nếu số lượng trong batch thay đổi, điều chỉnh `reserved_quantity` tương ứng.
+
+    // Ví dụ (cần triển khai đầy đủ):
+    await this.updateReservedQuantities(originalProducts, order.products);
+
+    await order.save();
+    res.status(200).json(order);
+  } catch (error) {
+    console.error("Lỗi khi cập nhật phiếu đặt trước:", error);
+    res.status(400).json({ message: error.message, error });
+  }
+};
+
+// Hàm phụ trợ để cập nhật số lượng đã đặt trước trong batch (cần triển khai chi tiết)
+exports.updateReservedQuantities = async (oldProducts, newProducts) => {
+  // Logic so sánh và cập nhật reserved_quantity
+  const oldBatchQuantities = {};
+  oldProducts.forEach((product) => {
+    product.batchesUsed.forEach((batchInfo) => {
+      oldBatchQuantities[batchInfo.batchId] =
+        (oldBatchQuantities[batchInfo.batchId] || 0) + batchInfo.quantity;
+    });
+  });
+
+  const newBatchQuantities = {};
+  newProducts.forEach((product) => {
+    product.batchesUsed.forEach((batchInfo) => {
+      newBatchQuantities[batchInfo.batchId] =
+        (newBatchQuantities[batchInfo.batchId] || 0) + batchInfo.quantity;
+    });
+  });
+
+  const allBatchIds = new Set([
+    ...Object.keys(oldBatchQuantities),
+    ...Object.keys(newBatchQuantities),
+  ]);
+
+  for (const batchId of allBatchIds) {
+    const oldQty = oldBatchQuantities[batchId] || 0;
+    const newQty = newBatchQuantities[batchId] || 0;
+    const diff = newQty - oldQty;
+
+    if (diff !== 0) {
+      const product = await Product.findOne({ "units.0.ratio": 1 }); // Lấy một sản phẩm bất kỳ có đơn vị cơ bản
+      if (product) {
+        const baseUnitRatio =
+          product.units.find((u) => u.ratio === 1)?.ratio || 1;
+        await Batch.findByIdAndUpdate(batchId, {
+          $inc: { reserved_quantity: diff / baseUnitRatio },
+        });
+      } else {
+        console.warn(
+          `Không tìm thấy sản phẩm có đơn vị cơ bản để cập nhật reserved_quantity cho batch ${batchId}`
+        );
+      }
+    }
+  }
+};
+
+exports.completePreorderPayment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { amountPaid } = req.body;
+
+    if (typeof amountPaid !== "number" || amountPaid <= 0) {
+      return res
+        .status(400)
+        .json({ message: "Số tiền khách đưa không hợp lệ." });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order || order.orderType !== "preorder") {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy phiếu đặt trước." });
+    }
+
+    if (order.paymentStatus === "paid") {
+      return res
+        .status(400)
+        .json({ message: "Phiếu đặt trước này đã được thanh toán." });
+    }
+
+    order.paymentStatus = "paid";
+    order.amountPaid = parseFloat(amountPaid.toFixed(2));
+
+    // Tính toán tiền thừa (nếu có)
+    const changeAmount = parseFloat(
+      (amountPaid - order.finalAmount).toFixed(2)
+    );
+    order.changeAmount = changeAmount >= 0 ? changeAmount : 0;
+
+    // Cập nhật số lượng tồn kho trong các batch
+    for (const productInfo of order.products) {
+      const product = await Product.findById(productInfo.productId);
+      const baseUnit = product.units.find((u) => u.ratio === 1);
+      if (
+        baseUnit &&
+        typeof baseUnit.ratio === "number" &&
+        baseUnit.ratio > 0
+      ) {
+        for (const batchInfo of productInfo.batchesUsed) {
+          if (typeof batchInfo.quantity === "number") {
+            await Batch.findByIdAndUpdate(batchInfo.batchId, {
+              $inc: {
+                quantity_on_shelf: -(batchInfo.quantity / baseUnit.ratio),
+                sold_quantity: batchInfo.quantity / baseUnit.ratio,
+                reserved_quantity: -(batchInfo.quantity / baseUnit.ratio), // Giảm số lượng đã đặt trước
+              },
+            });
+          }
+        }
+      }
+    }
+
+    await order.save();
+    res
+      .status(200)
+      .json({ message: "Thanh toán thành công.", order, changeAmount });
+  } catch (error) {
+    console.error("Lỗi khi hoàn thành thanh toán:", error);
+    res.status(400).json({ message: error.message, error });
   }
 };
