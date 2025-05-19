@@ -7,7 +7,7 @@ const { isValidObjectId } = require("mongoose");
 // Helper function to parse JSON fields
 const parseJsonField = (field) => {
   if (!field) return undefined;
-  if (typeof field === 'string') {
+  if (typeof field === "string") {
     try {
       return JSON.parse(field);
     } catch (error) {
@@ -29,7 +29,6 @@ exports.createProduct = async (req, res) => {
       name,
       category,
       description,
-      barcode,
       units,
       minStockLevel,
       reorderLevel,
@@ -37,8 +36,6 @@ exports.createProduct = async (req, res) => {
       dimensions,
       taxRate,
       tags,
-      expiryThresholdDays, // thêm
-      lowQuantityThreshold // thêm
     } = req.body;
 
     // Validate required fields
@@ -47,7 +44,7 @@ exports.createProduct = async (req, res) => {
       if (!value) {
         return res.status(400).json({
           success: false,
-          message: `${field} is a required field.`
+          message: `${field} is a required field.`,
         });
       }
     }
@@ -55,7 +52,7 @@ exports.createProduct = async (req, res) => {
     if (!isValidObjectId(category)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid category ID format."
+        message: "Invalid category ID format.",
       });
     }
 
@@ -64,18 +61,18 @@ exports.createProduct = async (req, res) => {
     if (!categoryExists) {
       return res.status(404).json({
         success: false,
-        message: "Category not found."
+        message: "Category not found.",
       });
     }
 
     let supplierInfo = [];
     if (suppliers && Array.isArray(suppliers)) {
       for (const [index, supplier] of suppliers.entries()) {
-        if (!supplier || typeof supplier !== 'object') {
+        if (!supplier || typeof supplier !== "object") {
           return res.status(400).json({
             success: false,
             message: `Invalid supplier format at position ${index + 1}`,
-            invalidEntry: supplier
+            invalidEntry: supplier,
           });
         }
 
@@ -83,7 +80,7 @@ exports.createProduct = async (req, res) => {
           return res.status(400).json({
             success: false,
             message: `Supplier ID is required at position ${index + 1}`,
-            invalidEntry: supplier
+            invalidEntry: supplier,
           });
         }
 
@@ -91,22 +88,24 @@ exports.createProduct = async (req, res) => {
           return res.status(400).json({
             success: false,
             message: `Invalid supplier ID format at position ${index + 1}`,
-            invalidEntry: supplier
+            invalidEntry: supplier,
           });
         }
 
-        const supplierExists = await Supplier.exists({ _id: supplier.supplier });
+        const supplierExists = await Supplier.exists({
+          _id: supplier.supplier,
+        });
         if (!supplierExists) {
           return res.status(404).json({
             success: false,
             message: `Supplier not found: ${supplier.supplier}`,
-            invalidEntry: supplier
+            invalidEntry: supplier,
           });
         }
 
         supplierInfo.push({
           supplier: supplier.supplier,
-          isPrimary: Boolean(supplier.isPrimary)
+          isPrimary: Boolean(supplier.isPrimary),
         });
       }
     }
@@ -115,7 +114,7 @@ exports.createProduct = async (req, res) => {
     if (expiryDiscountRules && !Array.isArray(expiryDiscountRules)) {
       return res.status(400).json({
         success: false,
-        message: "expiryDiscountRules must be an array"
+        message: "expiryDiscountRules must be an array",
       });
     }
 
@@ -146,7 +145,6 @@ exports.createProduct = async (req, res) => {
       name,
       category,
       description,
-      barcode,
       units,
       minStockLevel,
       reorderLevel,
@@ -157,10 +155,7 @@ exports.createProduct = async (req, res) => {
       expiryDiscountRules,
       discount,
       suppliers: supplierInfo,
-      images: req.files?.map(file => file.path) || [],
-      // --- Thêm 2 trường mới nếu có ---
-      ...(expiryThresholdDaysValue !== undefined ? { expiryThresholdDays: expiryThresholdDaysValue } : {}),
-      ...(lowQuantityThresholdValue !== undefined ? { lowQuantityThreshold: lowQuantityThresholdValue } : {})
+      images: req.files?.map((file) => file.path) || [],
     });
 
     await newProduct.save();
@@ -168,7 +163,7 @@ exports.createProduct = async (req, res) => {
     // Update suppliers with this product reference
     if (supplierInfo.length > 0) {
       await Supplier.updateMany(
-        { _id: { $in: supplierInfo.map(s => s.supplier) } },
+        { _id: { $in: supplierInfo.map((s) => s.supplier) } },
         { $addToSet: { products: newProduct._id } }
       );
     }
@@ -176,13 +171,12 @@ exports.createProduct = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Product created successfully.",
-      data: newProduct
+      data: newProduct,
     });
-
   } catch (error) {
     console.error("Create product error:", error);
 
-    if (error.name === 'ValidationError') {
+    if (error.name === "ValidationError") {
       const errors = {};
       for (const field in error.errors) {
         errors[field] = error.errors[field].message;
@@ -190,7 +184,7 @@ exports.createProduct = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Validation failed",
-        errors
+        errors,
       });
     }
 
@@ -198,14 +192,14 @@ exports.createProduct = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Duplicate key error",
-        field: Object.keys(error.keyPattern)[0]
+        field: Object.keys(error.keyPattern)[0],
       });
     }
 
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -215,39 +209,34 @@ exports.getAllProducts = async (req, res) => {
     // const queryObj = { ...req.query, active: true };
     const queryObj = { ...req.query };
 
-    const excludedFields = ['page', 'sort', 'limit', 'fields'];
-    excludedFields.forEach(el => delete queryObj[el]);
-
-    // Lọc theo danh mục nếu có
-    if (req.query.category) {
-      queryObj.category = req.query.category;
-    }
+    const excludedFields = ["page", "sort", "limit", "fields"];
+    excludedFields.forEach((el) => delete queryObj[el]);
 
     let queryStr = JSON.stringify(queryObj);
-    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, match => `$${match}`);
+    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
 
     let query = Product.find(JSON.parse(queryStr))
       .populate({
-        path: 'category',
-        select: 'name description'
+        path: "category",
+        select: "name description",
       })
       .populate({
-        path: 'suppliers.supplier',
-        select: 'name company contact.phone contact.email'
+        path: "suppliers.supplier",
+        select: "name company contact.phone contact.email",
       });
 
     if (req.query.sort) {
-      const sortBy = req.query.sort.split(',').join(' ');
+      const sortBy = req.query.sort.split(",").join(" ");
       query = query.sort(sortBy);
     } else {
-      query = query.sort('-createdAt');
+      query = query.sort("-createdAt");
     }
 
     if (req.query.fields) {
-      const fields = req.query.fields.split(',').join(' ');
+      const fields = req.query.fields.split(",").join(" ");
       query = query.select(fields);
     } else {
-      query = query.select('-__v');
+      query = query.select("-__v");
     }
 
     const page = parseInt(req.query.page) || 1;
@@ -264,15 +253,13 @@ exports.getAllProducts = async (req, res) => {
     return res.status(200).json({
       success: true,
       results: products.length,
-      count,
-      data: products
+      data: products,
     });
-
   } catch (error) {
     console.error("Get all products error:", error);
     return res.status(500).json({
       success: false,
-      message: "Lỗi máy chủ nội bộ." // Internal server error
+      message: "Lỗi máy chủ nội bộ.", // Internal server error
     });
   }
 };
@@ -281,29 +268,28 @@ exports.getAll = async (req, res) => {
   try {
     const products = await Product.find()
       .populate({
-        path: 'category',
-        select: 'name description'
+        path: "category",
+        select: "name description",
       })
       .populate({
-        path: 'suppliers.supplier',
-        select: 'name company contact.phone contact.email'
+        path: "suppliers.supplier",
+        select: "name company contact.phone contact.email",
       })
       .populate({
-        path: 'batches',
-        select: 'manufacture_day expiry_day remaining_quantity status'
+        path: "batches",
+        select: "manufacture_day expiry_day remaining_quantity status",
       });
 
     return res.status(200).json({
       success: true,
       results: products.length,
-      data: products
+      data: products,
     });
-
   } catch (error) {
     console.error("Get all products error:", error);
     return res.status(500).json({
       success: false,
-      message: "Lỗi máy chủ nội bộ." // Internal server error
+      message: "Lỗi máy chủ nội bộ.", // Internal server error
     });
   }
 };
@@ -315,46 +301,47 @@ exports.getProductById = async (req, res) => {
     if (!isValidObjectId(id)) {
       return res.status(400).json({
         success: false,
-        message: "ID sản phẩm không hợp lệ." // Invalid product ID
+        message: "ID sản phẩm không hợp lệ.", // Invalid product ID
       });
     }
 
     const product = await Product.findById(id)
       .populate({
-        path: 'category',
-        select: 'name description parentCategory'
+        path: "category",
+        select: "name description parentCategory",
       })
       .populate({
-        path: 'suppliers.supplier',
-        select: 'name company contact.phone contact.email paymentTerms'
+        path: "suppliers.supplier",
+        select: "name company contact.phone contact.email paymentTerms",
       });
 
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: "Không tìm thấy sản phẩm." // Product not found
+        message: "Không tìm thấy sản phẩm.", // Product not found
       });
     }
 
     // Fetch batches separately since they're not in the Product schema
     const batches = await Batch.find({
       product: id,
-      status: 'active'
-    }).select('manufacture_day expiry_day remaining_quantity status import_price discountInfo');
+      status: "active",
+    }).select(
+      "manufacture_day expiry_day remaining_quantity status import_price discountInfo"
+    );
 
     return res.status(200).json({
       success: true,
       data: {
         ...product.toObject(),
-        batches
-      }
+        batches,
+      },
     });
-
   } catch (error) {
     console.error("Get product error:", error);
     return res.status(500).json({
       success: false,
-      message: "Lỗi máy chủ nội bộ." // Internal server error
+      message: "Lỗi máy chủ nội bộ.", // Internal server error
     });
   }
 };
@@ -367,7 +354,7 @@ exports.updateProduct = async (req, res) => {
     if (!isValidObjectId(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid product ID."
+        message: "Invalid product ID.",
       });
     }
 
@@ -375,18 +362,18 @@ exports.updateProduct = async (req, res) => {
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: "Product not found."
+        message: "Product not found.",
       });
     }
 
     // Parse JSON fields
-    if (typeof updates.expiryDiscountRules === 'string') {
+    if (typeof updates.expiryDiscountRules === "string") {
       updates.expiryDiscountRules = parseJsonField(updates.expiryDiscountRules);
     }
-    if (typeof updates.suppliers === 'string') {
+    if (typeof updates.suppliers === "string") {
       updates.suppliers = parseJsonField(updates.suppliers);
     }
-    if (typeof updates.discount === 'string') {
+    if (typeof updates.discount === "string") {
       updates.discount = parseJsonField(updates.discount);
     }
 
@@ -395,7 +382,7 @@ exports.updateProduct = async (req, res) => {
       if (!isValidObjectId(updates.category)) {
         return res.status(400).json({
           success: false,
-          message: "Invalid category ID."
+          message: "Invalid category ID.",
         });
       }
 
@@ -403,7 +390,7 @@ exports.updateProduct = async (req, res) => {
       if (!categoryExists) {
         return res.status(404).json({
           success: false,
-          message: "Category not found."
+          message: "Category not found.",
         });
       }
     }
@@ -413,20 +400,22 @@ exports.updateProduct = async (req, res) => {
       if (!Array.isArray(updates.suppliers)) {
         return res.status(400).json({
           success: false,
-          message: "Suppliers must be an array"
+          message: "Suppliers must be an array",
         });
       }
 
-      const oldSupplierIds = product.suppliers.map(s => s.supplier.toString());
+      const oldSupplierIds = product.suppliers.map((s) =>
+        s.supplier.toString()
+      );
       const newSupplierIds = [];
       const validSuppliers = [];
 
       for (const [index, supplier] of updates.suppliers.entries()) {
-        if (!supplier || typeof supplier !== 'object') {
+        if (!supplier || typeof supplier !== "object") {
           return res.status(400).json({
             success: false,
             message: `Invalid supplier format at position ${index + 1}`,
-            invalidEntry: supplier
+            invalidEntry: supplier,
           });
         }
 
@@ -434,7 +423,7 @@ exports.updateProduct = async (req, res) => {
           return res.status(400).json({
             success: false,
             message: `Supplier ID is required at position ${index + 1}`,
-            invalidEntry: supplier
+            invalidEntry: supplier,
           });
         }
 
@@ -442,7 +431,7 @@ exports.updateProduct = async (req, res) => {
           return res.status(400).json({
             success: false,
             message: `Invalid supplier ID format at position ${index + 1}`,
-            invalidEntry: supplier
+            invalidEntry: supplier,
           });
         }
 
@@ -451,21 +440,25 @@ exports.updateProduct = async (req, res) => {
           return res.status(404).json({
             success: false,
             message: `Supplier not found: ${supplier.supplier}`,
-            invalidEntry: supplier
+            invalidEntry: supplier,
           });
         }
 
         validSuppliers.push({
           supplier: supplier.supplier,
-          isPrimary: Boolean(supplier.isPrimary)
+          isPrimary: Boolean(supplier.isPrimary),
         });
 
         newSupplierIds.push(supplier.supplier.toString());
       }
 
       // Determine suppliers to add/remove
-      const suppliersToAdd = newSupplierIds.filter(id => !oldSupplierIds.includes(id));
-      const suppliersToRemove = oldSupplierIds.filter(id => !newSupplierIds.includes(id));
+      const suppliersToAdd = newSupplierIds.filter(
+        (id) => !oldSupplierIds.includes(id)
+      );
+      const suppliersToRemove = oldSupplierIds.filter(
+        (id) => !newSupplierIds.includes(id)
+      );
 
       // Update product's suppliers
       product.suppliers = validSuppliers;
@@ -488,7 +481,10 @@ exports.updateProduct = async (req, res) => {
 
     // --- Chuẩn hóa cập nhật expiryThresholdDays và lowQuantityThreshold ---
     if (updates.expiryThresholdDays !== undefined) {
-      if (updates.expiryThresholdDays === "" || updates.expiryThresholdDays === null) {
+      if (
+        updates.expiryThresholdDays === "" ||
+        updates.expiryThresholdDays === null
+      ) {
         product.expiryThresholdDays = undefined;
       } else {
         const value = Number(updates.expiryThresholdDays);
@@ -499,7 +495,10 @@ exports.updateProduct = async (req, res) => {
     }
 
     if (updates.lowQuantityThreshold !== undefined) {
-      if (updates.lowQuantityThreshold === "" || updates.lowQuantityThreshold === null) {
+      if (
+        updates.lowQuantityThreshold === "" ||
+        updates.lowQuantityThreshold === null
+      ) {
         product.lowQuantityThreshold = undefined;
       } else {
         const value = Number(updates.lowQuantityThreshold);
@@ -512,18 +511,30 @@ exports.updateProduct = async (req, res) => {
 
     // Handle images update
     if (req.files && req.files.length > 0) {
-      product.images = [...product.images, ...req.files.map(file => file.path)];
+      product.images = [
+        ...product.images,
+        ...req.files.map((file) => file.path),
+      ];
     }
 
     // Update other fields
     const allowedUpdates = [
-      'name', 'category', 'description',
-      'barcode', 'units', 'minStockLevel', 'reorderLevel',
-      'weight', 'dimensions', 'taxRate', 'tags', 'expiryDiscountRules',
-      'discount', 'active'
+      "name",
+      "category",
+      "description",
+      "units",
+      "minStockLevel",
+      "reorderLevel",
+      "weight",
+      "dimensions",
+      "taxRate",
+      "tags",
+      "expiryDiscountRules",
+      "discount",
+      "active",
     ];
 
-    allowedUpdates.forEach(field => {
+    allowedUpdates.forEach((field) => {
       if (updates[field] !== undefined) {
         product[field] = updates[field];
       }
@@ -534,15 +545,14 @@ exports.updateProduct = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Product updated successfully.",
-      data: product
+      data: product,
     });
-
   } catch (error) {
     console.error("Update product error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error.",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -554,7 +564,7 @@ exports.deleteProduct = async (req, res) => {
     if (!isValidObjectId(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid product ID."
+        message: "Invalid product ID.",
       });
     }
 
@@ -567,27 +577,23 @@ exports.deleteProduct = async (req, res) => {
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: "Product not found."
+        message: "Product not found.",
       });
     }
 
     // Remove product reference from suppliers
-    await Supplier.updateMany(
-      { products: id },
-      { $pull: { products: id } }
-    );
+    await Supplier.updateMany({ products: id }, { $pull: { products: id } });
 
     return res.status(200).json({
       success: true,
       message: "Product deactivated successfully.",
-      data: product
+      data: product,
     });
-
   } catch (error) {
     console.error("Delete product error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error."
+      message: "Internal server error.",
     });
   }
 };
@@ -600,7 +606,7 @@ exports.getProductBatches = async (req, res) => {
     if (!isValidObjectId(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid product ID."
+        message: "Invalid product ID.",
       });
     }
 
@@ -611,22 +617,255 @@ exports.getProductBatches = async (req, res) => {
 
     const batches = await Batch.find(query)
       .populate({
-        path: 'supplier',
-        select: 'name contact.phone'
+        path: "supplier",
+        select: "name contact.phone",
       })
-      .sort('-manufacture_day');
+      .sort("-manufacture_day");
 
     return res.status(200).json({
       success: true,
       results: batches.length,
-      data: batches
+      data: batches,
     });
-
   } catch (error) {
     console.error("Get product batches error:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error."
+      message: "Internal server error.",
     });
   }
+};
+exports.getByBatchCode = async (req, res) => {
+  try {
+    const { batchCode } = req.params; // Tìm lô hàng theo batchCode
+
+    const batch = await Batch.findOne({ batchCode }).populate({
+      path: "product",
+      select: "name category units minStockLevel",
+      populate: {
+        path: "category",
+        select: "name",
+      },
+    });
+
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy lô hàng",
+      });
+    } // Kiểm tra tồn kho và hạn sử dụng
+
+    const isExpired = new Date() > batch.expiry_day;
+    const stockStatus =
+      batch.remaining_quantity <= 0
+        ? "Hết hàng"
+        : batch.remaining_quantity < 10
+        ? "Sắp hết"
+        : "Còn hàng";
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        product: {
+          id: batch.product._id,
+          name: batch.product.name,
+          category: batch.product.category,
+          units: batch.product.units,
+          minStock: batch.product.minStockLevel,
+        },
+        batch: {
+          id: batch._id,
+          code: batch.batchCode,
+          manufactureDate: batch.manufacture_day,
+          expiryDate: batch.expiry_day,
+          remaining: batch.remaining_quantity,
+          status: batch.status,
+          stockStatus,
+          isExpired,
+          ...batch.toObject(), // Lấy tất cả các trường khác của batch
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Batch code scan error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ",
+      error: error.message,
+    });
+  }
+};
+exports.getProductsWithStockDetails = async (req, res) => {
+  try {
+    const productsWithStockDetails = await Product.aggregate([
+      {
+        $lookup: {
+          from: "batches", // Tên của collection Batches
+          localField: "_id",
+          foreignField: "product",
+          as: "batches",
+        },
+      },
+      {
+        $match: {
+          "batches.remaining_quantity": { $gt: 0 },
+          "batches.status": "active", // Chỉ lấy các batch còn hoạt động
+          active: true, // Chỉ lấy các sản phẩm đang hoạt động
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          name: { $first: "$name" },
+          category: { $first: "$category" },
+          description: { $first: "$description" },
+          units: { $first: "$units" },
+          minStockLevel: { $first: "$minStockLevel" },
+          reorderLevel: { $first: "$reorderLevel" },
+          weight: { $first: "$weight" },
+          dimensions: { $first: "$dimensions" },
+          taxRate: { $first: "$taxRate" },
+          tags: { $first: "$tags" },
+          expiryDiscountRules: { $first: "$expiryDiscountRules" },
+          discount: { $first: "$discount" },
+          suppliers: { $first: "$suppliers" },
+          images: { $first: "$images" },
+          inStockBatches: {
+            $push: {
+              _id: "$batches._id",
+              batchCode: "$batches.batchCode",
+              manufacture_day: "$batches.manufacture_day",
+              expiry_day: "$batches.expiry_day",
+              remaining_quantity: "$batches.remaining_quantity",
+              import_price: "$batches.import_price",
+              discountInfo: "$batches.discountInfo",
+              status: "$batches.status",
+              supplier: "$batches.supplier",
+              createdAt: "$batches.createdAt",
+              updatedAt: "$batches.updatedAt",
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          category: 1,
+          description: 1,
+          units: 1,
+          minStockLevel: 1,
+          reorderLevel: 1,
+          weight: 1,
+          dimensions: 1,
+          taxRate: 1,
+          tags: 1,
+          expiryDiscountRules: 1,
+          discount: 1,
+          suppliers: 1,
+          images: 1,
+          inStockBatches: 1,
+        },
+      },
+      {
+        $lookup: {
+          from: "categories", // Tên của collection Categories
+          localField: "category",
+          foreignField: "_id",
+          as: "categoryInfo",
+        },
+      },
+      {
+        $unwind: { path: "$categoryInfo", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: "suppliers", // Tên của collection Suppliers
+          localField: "inStockBatches.supplier",
+          foreignField: "_id",
+          as: "supplierInfo",
+        },
+      },
+      // Gộp thông tin nhà cung cấp (nếu cần)
+      {
+        $addFields: {
+          category: "$categoryInfo",
+          // supplierDetails: "$supplierInfo" // Nếu muốn xem thông tin chi tiết nhà cung cấp cho từng batch
+        },
+      },
+      {
+        $project: {
+          categoryInfo: 0,
+          supplierInfo: 0,
+          // Không cần loại bỏ các trường của batch nữa vì chúng ta muốn giữ lại
+        },
+      },
+    ]);
+
+    // Lọc ra các sản phẩm hết hàng (không có batch nào còn số lượng)
+    const outOfStockProducts = await Product.find({
+      _id: { $nin: productsWithStockDetails.map((p) => p._id) },
+      active: true,
+    }).populate({
+      path: "category",
+      select: "name description",
+    });
+
+    return res.status(200).json({
+      success: true,
+      inStockProducts: {
+        results: productsWithStockDetails.length,
+        data: productsWithStockDetails,
+      },
+      outOfStockProducts: {
+        results: outOfStockProducts.length,
+        data: outOfStockProducts,
+      },
+    });
+  } catch (error) {
+    console.error("Get products with stock details error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ.",
+      error: error.message,
+    });
+  }
+};exports.getProductsWithBatches = async (req, res) => {
+    try {
+        const query = {
+            batches: { $exists: true, $not: { $size: 0 } }
+        };
+
+        // Kiểm tra xem có tham số category trong query không
+        if (req.query.category) {
+            query.category = req.query.category;
+        }
+
+        const productsWithBatches = await Product.find(query)
+            .populate({
+                path: "category",
+                select: "name description",
+            })
+            .populate({
+                path: "suppliers.supplier",
+                select: "name company contact.phone contact.email",
+            })
+            .populate({
+                path: "batches",
+                select: "",
+            });
+
+        return res.status(200).json({
+            success: true,
+            results: productsWithBatches.length,
+            data: productsWithBatches,
+        });
+    } catch (error) {
+        console.error("Get products with batches error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Lỗi máy chủ nội bộ.",
+            error: error.message,
+        });
+    }
 };

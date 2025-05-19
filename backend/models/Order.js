@@ -37,34 +37,98 @@ const orderProductSchema = new mongoose.Schema(
       },
     },
     selectedUnitName: { type: String, required: true },
-    unitPrice: { type: Number, required: true, min: 0 }, // Thêm trường unitPrice
-    originalUnitPrice: { type: Number, required: true, min: 0 }, // Giá gốc
+    unitPrice: {
+      type: Number,
+      required: true,
+      min: 0,
+      validate: {
+        validator: Number.isFinite,
+        message: "{VALUE} không phải số hợp lệ",
+      },
+    },
+    originalUnitPrice: {
+      type: Number,
+      required: true,
+      min: 0,
+      validate: {
+        validator: Number.isFinite,
+        message: "{VALUE} không phải số hợp lệ",
+      },
+    },
     batchesUsed: [batchUsedSchema],
-    itemTotal: { type: Number, required: true, min: 0 },
+    itemTotal: {
+      type: Number,
+      required: true,
+      min: 0,
+      validate: {
+        validator: Number.isFinite,
+        message: "{VALUE} không phải số hợp lệ",
+      },
+    },
   },
   { _id: false }
 );
+
 const orderSchema = new mongoose.Schema({
   date: { type: Date, default: Date.now },
   customerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   employeeId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   products: [orderProductSchema],
-  totalAmount: { type: Number, required: true, min: 0 }, // Tổng tiền trước giảm giá
-  discountAmount: { type: Number, default: 0, min: 0 }, // Tổng số tiền giảm giá cho toàn đơn hàng
-  taxRate: { type: Number, default: 0, min: 0 }, // Tỷ lệ thuế, mặc định là 0
-  taxAmount: { type: Number, default: 0, min: 0 }, // Số tiền thuế, mặc định là 0
-  finalAmount: { type: Number, required: true, min: 0 }, // Tổng tiền khách phải trả
+  totalAmount: {
+    type: Number,
+    required: true,
+    validate: {
+      validator: Number.isFinite,
+      message: "{VALUE} không phải số hợp lệ",
+    },
+  },
+  discountAmount: {
+    type: Number,
+    default: 0,
+    validate: {
+      validator: Number.isFinite,
+      message: "{VALUE} không phải số hợp lệ",
+    },
+  },
+  taxRate: { type: Number, default: 0, min: 0 },
+  taxAmount: {
+    type: Number,
+    default: 0,
+    validate: {
+      validator: Number.isFinite,
+      message: "{VALUE} không phải số hợp lệ",
+    },
+  },
+  finalAmount: {
+    type: Number,
+    required: true,
+    validate: {
+      validator: Number.isFinite,
+      message: "{VALUE} không phải số hợp lệ",
+    },
+  },
   orderNumber: { type: String, unique: true },
   paymentMethod: {
     type: String,
     enum: ["cash", "transfer"],
     default: "cash",
   },
-  //them trương thanh tien
   paymentStatus: {
     type: String,
     enum: ["pending", "paid", "unpaid", "deposit"],
     default: "pending",
+  },
+  orderType: {
+    type: String,
+    enum: ["instore", "preorder"],
+    default: "instore",
+    required: true,
+  },
+  expirationDate: {
+    type: Date,
+    required: function () {
+      return this.orderType === "preorder";
+    },
   },
   depositAmount: { type: Number, default: 0, min: 0 },
   amountPaid: { type: Number, default: 0, min: 0 },
@@ -72,8 +136,8 @@ const orderSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
+
 orderSchema.index({ customerId: 1 });
-orderSchema.index({ staffId: 1 });
 orderSchema.index({ date: -1 });
 orderSchema.index({ paymentStatus: 1 });
 orderSchema.index({ status: 1 });

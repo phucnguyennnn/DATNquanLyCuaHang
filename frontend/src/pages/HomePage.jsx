@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Container,
@@ -17,78 +17,79 @@ import { useNavigate } from "react-router-dom";
 const HomePage = () => {
   const navigate = useNavigate();
   const theme = useTheme();
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
 
   const handleLogout = () => {
     localStorage.removeItem("authToken");
     navigate("/login");
   };
 
-  const featuredProducts = [
-    {
-      id: 1,
-      name: "Sản phẩm Nổi bật 1",
-      image: "https://source.unsplash.com/random?product=1",
-      description: "Mô tả ngắn gọn cho Sản phẩm Nổi bật 1.",
-      price: 99.99,
-    },
-    {
-      id: 2,
-      name: "Sản phẩm Mới 2",
-      image: "https://source.unsplash.com/random?product=2",
-      description: "Mô tả ngắn gọn cho Sản phẩm Mới 2.",
-      price: 149.50,
-    },
-    {
-      id: 3,
-      name: "Sản phẩm Bán chạy 3",
-      image: "https://source.unsplash.com/random?product=3",
-      description: "Mô tả ngắn gọn cho Sản phẩm Bán chạy 3.",
-      price: 79.00,
-    },
-    {
-      id: 4,
-      name: "Ưu đãi Đặc biệt 4",
-      image: "https://source.unsplash.com/random?product=4",
-      description: "Mô tả ngắn gọn cho Ưu đãi Đặc biệt 4.",
-      price: 199.99,
-    },
-    {
-      id: 5,
-      name: "Sản phẩm Thêm 5",
-      image: "https://source.unsplash.com/random?product=5",
-      description: "Mô tả ngắn gọn cho Sản phẩm Thêm 5.",
-      price: 120.00,
-    },
-    {
-      id: 6,
-      name: "Sản phẩm Hot 6",
-      image: "https://source.unsplash.com/random?product=6",
-      description: "Mô tả ngắn gọn cho Sản phẩm Hot 6.",
-      price: 55.75,
-    },
-  ];
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch(
+          "http://localhost:8000/api/products/batch/products-with-batches"
+        );
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setProducts(data.data);
+      } catch (error) {
+        console.error("Lỗi khi gọi API sản phẩm: ", error);
+      }
+    };
 
-  const featuredCategories = [
-    { name: "Điện Thoại", image: "https://source.unsplash.com/random?category=phone" },
-    { name: "Máy Tính", image: "https://source.unsplash.com/random?category=laptop" },
-    { name: "Thời Trang", image: "https://source.unsplash.com/random?category=fashion" },
-    { name: "Phụ Kiện", image: "https://source.unsplash.com/random?category=accessories" },
-  ];
+    fetchProducts();
+  }, []);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("http://localhost:8000/api/categories");
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setCategories(data);
+      } catch (error) {
+        console.error("Lỗi khi gọi API danh mục: ", error);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", flexDirection: "column" }}>
       <CssBaseline />
       <Navbar onLogout={handleLogout} />
-      
-      <Box component="main" sx={{ 
-        flexGrow: 1, 
-        py: 4,
-        overflow: 'auto',
-        height: 'calc(100vh - 64px - 84px)'
-      }}>
+
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          py: 4,
+          overflow: "auto",
+          height: "calc(100vh - 64px - 84px)",
+        }}
+      >
         <Container maxWidth="lg">
-          <Box sx={{ my: 4, borderRadius: theme.shape.borderRadius, overflow: "hidden" }}>
-            <Card sx={{ position: "relative", backgroundColor: theme.palette.primary.light, color: "white" }}>
+          <Box
+            sx={{
+              my: 4,
+              borderRadius: theme.shape.borderRadius,
+              overflow: "hidden",
+            }}
+          >
+            <Card
+              sx={{
+                position: "relative",
+                backgroundColor: theme.palette.primary.light,
+                color: "white",
+              }}
+            >
               <CardMedia
                 component="img"
                 height="300"
@@ -96,7 +97,20 @@ const HomePage = () => {
                 alt="Banner quảng cáo"
                 sx={{ opacity: 0.6 }}
               />
-              <CardContent sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
+              <CardContent
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  textAlign: "center",
+                }}
+              >
                 <Typography variant="h3" gutterBottom>
                   Chào mừng đến với Cửa Hàng Của Chúng Tôi
                 </Typography>
@@ -108,7 +122,11 @@ const HomePage = () => {
                   color="primary"
                   size="large"
                   onClick={() => navigate("/products_page")}
-                  sx={{ mt: 2, backgroundColor: theme.palette.primary.main, "&:hover": { backgroundColor: theme.palette.primary.dark } }}
+                  sx={{
+                    mt: 2,
+                    backgroundColor: theme.palette.primary.main,
+                    "&:hover": { backgroundColor: theme.palette.primary.dark },
+                  }}
                 >
                   Mua Sắm Ngay
                 </Button>
@@ -121,13 +139,23 @@ const HomePage = () => {
               Sản phẩm Nổi bật
             </Typography>
             <Grid container spacing={3}>
-              {featuredProducts.map((product) => (
+              {products.map((product) => (
                 <Grid item xs={12} sm={6} md={4} lg={3} key={product.id}>
-                  <Card sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                  <Card
+                    sx={{
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
                     <CardMedia
                       component="img"
                       height="140"
-                      image={product.image}
+                      image={
+                        product.images && product.images[0]?.url
+                          ? product.images[0].url
+                          : "https://via.placeholder.com/150"
+                      }
                       alt={product.name}
                     />
                     <CardContent sx={{ flexGrow: 1 }}>
@@ -158,17 +186,34 @@ const HomePage = () => {
               Danh mục Nổi bật
             </Typography>
             <Grid container spacing={3}>
-              {featuredCategories.map((category) => (
-                <Grid item xs={6} sm={4} md={3} key={category.name}>
-                  <Card sx={{ position: "relative", borderRadius: theme.shape.borderRadius, overflow: "hidden" }}>
+              {categories.map((category) => (
+                <Grid item xs={6} sm={4} md={3} key={category.id}>
+                  <Card
+                    sx={{
+                      position: "relative",
+                      borderRadius: theme.shape.borderRadius,
+                      overflow: "hidden",
+                    }}
+                  >
                     <CardMedia
                       component="img"
                       height="140"
-                      image={category.image}
+                      image="https://source.unsplash.com/random?category" // Sử dụng ảnh placeholder vì API không có image
                       alt={category.name}
                       sx={{ opacity: 0.7 }}
                     />
-                    <CardContent sx={{ position: "absolute", bottom: 0, left: 0, width: "100%", backgroundColor: "rgba(0, 0, 0, 0.6)", color: "white", p: 2, textAlign: "center" }}>
+                    <CardContent
+                      sx={{
+                        position: "absolute",
+                        bottom: 0,
+                        left: 0,
+                        width: "100%",
+                        backgroundColor: "rgba(0, 0, 0, 0.6)",
+                        color: "white",
+                        p: 2,
+                        textAlign: "center",
+                      }}
+                    >
                       <Typography variant="subtitle1" component="div">
                         {category.name}
                       </Typography>
@@ -179,17 +224,34 @@ const HomePage = () => {
             </Grid>
           </Box>
 
-          <Box sx={{ my: 4, py: 3, backgroundColor: theme.palette.grey[100], borderRadius: theme.shape.borderRadius, p: 3 }}>
+          <Box
+            sx={{
+              my: 4,
+              py: 3,
+              backgroundColor: theme.palette.grey[100],
+              borderRadius: theme.shape.borderRadius,
+              p: 3,
+            }}
+          >
             <Typography variant="h4" gutterBottom>
               Về Chúng Tôi
             </Typography>
             <Typography variant="body1" paragraph>
-              Chúng tôi là một cửa hàng bán lẻ trực tuyến hàng đầu, cung cấp đa dạng các sản phẩm chất lượng cao để đáp ứng mọi nhu cầu của bạn. Với cam kết về dịch vụ khách hàng tuyệt vời và giá cả cạnh tranh, chúng tôi luôn nỗ lực mang đến trải nghiệm mua sắm tốt nhất.
+              Chúng tôi là một cửa hàng bán lẻ trực tuyến hàng đầu, cung cấp đa
+              dạng các sản phẩm chất lượng cao để đáp ứng mọi nhu cầu của bạn.
+              Với cam kết về dịch vụ khách hàng tuyệt vời và giá cả cạnh tranh,
+              chúng tôi luôn nỗ lực mang đến trải nghiệm mua sắm tốt nhất.
             </Typography>
             <Typography variant="body1" paragraph>
-              Khám phá bộ sưu tập sản phẩm phong phú của chúng tôi, từ điện tử, thời trang đến đồ gia dụng và nhiều hơn nữa. Đội ngũ chuyên gia của chúng tôi luôn sẵn sàng hỗ trợ bạn trong quá trình mua sắm.
+              Khám phá bộ sưu tập sản phẩm phong phú của chúng tôi, từ điện tử,
+              thời trang đến đồ gia dụng và nhiều hơn nữa. Đội ngũ chuyên gia
+              của chúng tôi luôn sẵn sàng hỗ trợ bạn trong quá trình mua sắm.
             </Typography>
-            <Button variant="outlined" color="primary" onClick={() => navigate("/about")}>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => navigate("/about")}
+            >
               Tìm Hiểu Thêm
             </Button>
           </Box>

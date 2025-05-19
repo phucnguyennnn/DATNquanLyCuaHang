@@ -17,6 +17,7 @@ exports.createBatch = async (req, res) => {
       sold_quantity, // Thêm trường sold_quantity nếu có
       lost_quantity, // Thêm trường lost_quantity nếu có
       quantity_on_shelf, // Thêm trường quantity_on_shelf nếu có
+      reserved_quantity,
       discountInfo, // Thêm trường discountInfo nếu có
       goodReceipt, // Thêm trường goodReceipt nếu có
     } = req.body;
@@ -49,6 +50,7 @@ exports.createBatch = async (req, res) => {
       sold_quantity: sold_quantity || 0,
       lost_quantity: lost_quantity || 0,
       quantity_on_shelf: quantity_on_shelf || 0,
+      reserved_quantity: reserved_quantity || 0, 
       status,
       supplier: supplier._id,
       product: product._id,
@@ -84,9 +86,7 @@ exports.getAllBatches = async (req, res) => {
 
       // Tìm kiếm theo thông tin sản phẩm
       const products = await Product.find({
-        $or: [
-          { name: { $regex: search, $options: "i" } },
-        ],
+        $or: [{ name: { $regex: search, $options: "i" } }],
       }).select("_id");
 
       if (products.length > 0) {
@@ -159,8 +159,6 @@ exports.getBatchById = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
 exports.transferToShelf = async (req, res) => {
   try {
     const { quantity } = req.body;
@@ -174,23 +172,25 @@ exports.transferToShelf = async (req, res) => {
       return res.status(400).json({ message: "Số lượng phải lớn hơn 0" });
     }
 
-    if (batch.remaining_quantity < quantity) {
+    // Tính số lượng khả dụng (đã trừ lượng đặt trước)
+    const availableQuantity = batch.remaining_quantity - batch.reserved_quantity;
+
+    if (availableQuantity < quantity) {
       return res.status(400).json({
-        message: "Số lượng trong kho không đủ để chuyển",
+        message: `Số lượng khả dụng để chuyển là ${availableQuantity}. Không đủ ${quantity} yêu cầu.`,
       });
     }
 
+    // Cập nhật số lượng
     batch.remaining_quantity -= quantity;
     batch.quantity_on_shelf += quantity;
 
     const updatedBatch = await batch.save({ validateModifiedOnly: true });
-
     res.status(200).json(updatedBatch);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
 exports.transferToWarehouse = async (req, res) => {
   try {
     const { quantity } = req.body;
@@ -213,9 +213,40 @@ exports.transferToWarehouse = async (req, res) => {
     batch.remaining_quantity += quantity;
     batch.quantity_on_shelf -= quantity;
 
-    const updatedBatch = await batch.save({ validateModifiedOnly: true })
+    const updatedBatch = await batch.save({ validateModifiedOnly: true });
     res.status(200).json(updatedBatch);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+exports.getBatchesByProduct = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { status, showAvailable } = req.query;
+
+    // Validate productId
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "ID sản phẩm không hợp lệ" });
+    }
+
+    // Build query conditions
+    const query = {
+      product: productId,
+      ...(status && { status }), // Filter by status if provided
+      ...(showAvailable === "true" && { remaining_quantity: { $gt: 0 } }), // Filter available batches
+    };
+
+    const batches = await Batch.find(query)
+      .populate("product") // Lấy đầy đủ thông tin của sản phẩm
+      .populate("supplier", "name")
+      .sort({ expiry_day: 1 }); // Sắp xếp theo ngày hết hạn tăng dần
+
+    res.status(200).json(batches);
+  } catch (error) {
+    console.error("Lỗi khi lấy lô hàng theo sản phẩm:", error);
+    res.status(500).json({
+      message: "Lỗi server khi tải dữ liệu lô hàng theo sản phẩm",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };

@@ -29,27 +29,44 @@ import SalesPage from "../pages/SalesPage";
 import BatchPage from "../pages/BatchPage";
 import ReturnHistory from "../pages/ReturnHistory";
 import InventoryPage from "../pages/InventoryHistory";
-
+import InOutPage from "../pages/inoutpage";
 
 const useAuth = () => {
-  const [isLoggedIn, setIsLoggedIn] = React.useState(() => !!localStorage.getItem("authToken"));
+  const [isLoggedIn, setIsLoggedIn] = React.useState(
+    () => !!localStorage.getItem("authToken")
+  );
+  const [userRole, setUserRole] = React.useState(() =>
+    localStorage.getItem("userRole")
+  );
 
   React.useEffect(() => {
     const handleStorageChange = () => {
       setIsLoggedIn(!!localStorage.getItem("authToken"));
+      setUserRole(localStorage.getItem("userRole"));
     };
 
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  return isLoggedIn;
+  return { isLoggedIn, userRole };
 };
 
+const ProtectedRoute = ({ allowedRoles, children }) => {
+  const { isLoggedIn, userRole } = useAuth();
+
+  if (!isLoggedIn) {
+    return <Navigate to="/login" />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(userRole)) {
+    return <Navigate to="/unauthorized" />; // You might want to create an Unauthorized page
+  }
+
+  return children;
+};
 
 const AppRouter = () => {
-  const isLoggedIn = useAuth();
-
   return (
     <Router>
       <Routes>
@@ -63,34 +80,111 @@ const AppRouter = () => {
           <Route path="cart_page" element={<CartPage />} />
         </Route>
         <Route path="cart_page" element={<CartPage />} />
-
-
         {/* Protected routes with layout */}
-        <Route
-          path="/"
-          element={isLoggedIn ? <MainLayout /> : <Navigate to="/login" />}
-        >
+        <Route path="/" element={<ProtectedRoute children={<MainLayout />} />}>
+          {/* Routes accessible to all logged-in users */}
           <Route index element={<HomePage />} />
           <Route path="homepage" element={<HomePage />} />
-          <Route path="products_manager" element={<ProductManager />} />
+          <Route path="Sales_page" element={<SalesPage />} />
           <Route path="settings" element={<Settings />} />
           <Route path="profile" element={<Profile />} />
-          <Route path="suppliers" element={<SupplierPage />} />
-          <Route path="users" element={<User />} />
-          <Route path="inventory/purchase-order" element={<PurchaseOrder />} />
-          <Route path="inventory/receipt" element={<GoodReceipt />} />
-          {/* <Route path="inventory/add-shipment" element={<AddToInventoy />} /> */}
-          {/* <Route path="cart_page" element={<CartPage />} /> */}
-          <Route path="categories" element={<CategoryPage />} />
-          {/* <Route path="products_page" element={<ProductsPage />} /> */}
-          <Route path="Sales_page" element={<SalesPage />} />
-          <Route path="Batchs_page" element={<BatchPage/>} />
-          <Route path="return-history" element={<ReturnHistory />} />   
-          <Route path="Inventory-history" element={<InventoryPage />} />
+
+          {/* Routes accessible only to admin */}
+          <Route
+            path="products_manager"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<ProductManager />}
+              />
+            }
+          />
+          <Route
+            path="suppliers"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<SupplierPage />}
+              />
+            }
+          />
+          <Route
+            path="users"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]} children={<User />} />
+            }
+          />
+          <Route
+            path="inventory/purchase-order"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<PurchaseOrder />}
+              />
+            }
+          />
+          <Route
+            path="inventory/receipt"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<GoodReceipt />}
+              />
+            }
+          />
+          <Route
+            path="categories"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<CategoryPage />}
+              />
+            }
+          />
+          <Route
+            path="Batchs_page"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<BatchPage />}
+              />
+            }
+          />
+          <Route
+            path="return-history"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<ReturnHistory />}
+              />
+            }
+          />
+          <Route
+            path="Inventory-history"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<InventoryPage />}
+              />
+            }
+          />
+          <Route
+            path="statistics/inoutpage"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<InOutPage />}
+              />
+            }
+          />
         </Route>
-        
         {/* 404 page */}
         <Route path="*" element={<Page404 />} />
+        <Route
+          path="/unauthorized"
+          element={<div>Trang không tìm thấy</div>}
+        />{" "}
+        {/* Optional Unauthorized page */}
       </Routes>
     </Router>
   );

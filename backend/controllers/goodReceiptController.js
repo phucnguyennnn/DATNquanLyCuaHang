@@ -156,7 +156,7 @@ const goodReceiptController = {
       const receiptId = req.params.id;
       const receipt = await GoodReceipt.findById(receiptId)
         .session(session)
-        .select('status items supplier')
+        .select("status items supplier")
         .lean();
 
       if (!receipt) {
@@ -188,7 +188,7 @@ const goodReceiptController = {
         const savedBatch = await batch.save({ session });
         await Product.updateOne(
           { _id: item.product },
-          { $push: { batches: savedBatch._id } },
+          { $addToSet: { batches: savedBatch._id } },
           { session }
         );
         return savedBatch;
@@ -203,7 +203,6 @@ const goodReceiptController = {
 
       await session.commitTransaction();
       res.json({ batches });
-
     } catch (error) {
       await session.abortTransaction();
       res.status(500).json({ error: error.message });

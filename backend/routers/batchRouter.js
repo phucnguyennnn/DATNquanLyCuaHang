@@ -16,9 +16,11 @@ router.put("/:id", batchController.updateBatch);
 
 // Route để xóa một lô hàng theo ID
 router.delete("/:id", batchController.deleteBatch);
-// 
+//
 router.put("/:id/transfer-to-shelf", batchController.transferToShelf);
 // Route để chuyển sản phẩm từ quầy xuống kho
 router.put("/:id/transfer-to-warehouse", batchController.transferToWarehouse);
 
+// Lấy lô hàng theo sản phẩm
+router.get("/product/:productId", batchController.getBatchesByProduct);
 module.exports = router;

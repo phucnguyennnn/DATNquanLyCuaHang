@@ -1,783 +1,809 @@
+// frontend/src/components/CreateOrder.js
 import React, { useState, useEffect } from "react";
 import {
   Container,
-  Paper,
   TextField,
-  List,
-  Card,
-  CardContent,
-  Typography,
   Button,
-  ListItem,
-  IconButton,
-  FormControl,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  OutlinedInput,
-  Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Chip,
   CircularProgress,
+  Typography,
+  Paper,
+  List,
+  ListItem,
+  ListItemText,
+  IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  FormControl,
+  InputLabel,
   Select,
   MenuItem,
-  Stack,
-  InputLabel,
-  CardActions,
-  ListItemText,
+  Box,
+  Grid,
+  Divider,
+  Autocomplete,
+  FormHelperText,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { styled } from "@mui/material/styles";
+import SearchIcon from "@mui/icons-material/Search";
 import axios from "axios";
+import { format } from "date-fns";
+import { vi } from "date-fns/locale";
 
-const ProductCard = styled(Card)(({ theme }) => ({
-  marginBottom: theme.spacing(1),
-  width: 200,
-  height: 250,
-  display: "flex",
-  flexDirection: "column",
-  transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
-  "&:hover": {
-    transform: "translateY(-2px)",
-    boxShadow: "0px 4px 8px rgba(0, 0, 0, 0.1)",
-  },
-}));
-
-const ProductCardContent = styled(CardContent)({
-  flexGrow: 1,
-  padding: 12,
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "space-between",
-});
-
-function CreateOrder() {
-  const [products, setProducts] = useState([]);
-  const [orderItems, setOrderItems] = useState([]);
+const CreateOrder = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("Tất cả");
+  const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [categories, setCategories] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [batches, setBatches] = useState([]);
+  const [selectedBatches, setSelectedBatches] = useState({});
+  const [orderItems, setOrderItems] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash");
-  const [showPaymentOptions, setShowPaymentOptions] = useState(false);
   const [cashReceived, setCashReceived] = useState("");
-  const [formattedCashReceived, setFormattedCashReceived] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
-  const token = localStorage.getItem("authToken");
+  const [selectedUnit, setSelectedUnit] = useState(null);
+  const [token] = useState(localStorage.getItem("authToken"));
+  const [hasUserSelectedBatch, setHasUserSelectedBatch] = useState(false);
+  const [cashReceivedError, setCashReceivedError] = useState("");
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch(
-          "http://localhost:8000/api/categories/tree",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        const productsRes = await axios.get(
+          "http://localhost:8000/api/products/batch/products-with-batches",
+          { headers: { Authorization: `Bearer ${token}` } }
         );
-        if (!response.ok)
-          throw new Error(`Failed to fetch categories: ${response.status}`);
-        const data = await response.json();
-        setCategories(data);
+        setProducts(productsRes.data.data);
+        setFilteredProducts(productsRes.data.data);
       } catch (error) {
-        console.error("Error fetching categories:", error);
-        setError(error.message);
+        console.error(error);
       }
-    };
 
-    const fetchCustomers = async () => {
       setLoadingCustomers(true);
       try {
-        const response = await axios.get(
+        const customersRes = await axios.get(
           "http://localhost:8000/api/user?role=customer",
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
+          { headers: { Authorization: `Bearer ${token}` } }
         );
-        setCustomers(response.data);
-      } catch (err) {
-        console.error("Error fetching customers:", err);
-      } finally {
-        setLoadingCustomers(false);
-      }
-    };
-
-    if (token) {
-      fetchCategories();
-      fetchCustomers();
-    } else {
-      setError("Bạn chưa đăng nhập");
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch("http://localhost:8000/api/products", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(
-            `Lỗi khi tải sản phẩm: ${response.status} - ${errorData?.message}`
-          );
-        }
-        const data = await response.json();
-        setProducts(data.data);
-        setFilteredProducts(data.data);
+        setCustomers(customersRes.data);
       } catch (error) {
-        console.error("Lỗi tải sản phẩm:", error);
-        setError(error.message);
-      } finally {
-        setLoading(false);
+        console.error(error);
       }
+      setLoadingCustomers(false);
     };
-
-    token
-      ? fetchProducts()
-      : (setError("Bạn chưa đăng nhập"), setLoading(false));
+    fetchData();
   }, [token]);
 
-  const handleSearchChange = (event) => {
-    const term = event.target.value;
-    setSearchTerm(term);
-    filterProducts(term, selectedCategory);
-  };
+  const handleSearch = async (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
 
-  const handleCategoryChange = (event) => {
-    const categoryName = event.target.value;
-    setSelectedCategory(categoryName);
-    filterProducts(searchTerm, categoryName);
-  };
-
-  const filterProducts = (term, categoryName) => {
-    let results = products;
-    if (term) {
-      results = results.filter(
-        (product) =>
-          product.name.toLowerCase().includes(term.toLowerCase()) ||
-          product.barcode?.toLowerCase().includes(term.toLowerCase())
-      );
-    }
-    if (categoryName !== "Tất cả") {
-      results = results.filter(
-        (product) => product.category?.name === categoryName
-      );
-    }
-    setFilteredProducts(results);
-  };
-
-  const handleAddToCart = (product) => {
-    const existingItem = orderItems.find((item) => item._id === product._id);
-    if (existingItem) {
-      setOrderItems(
-        orderItems.map((item) =>
-          item._id === product._id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        )
-      );
+    if (value.startsWith("BATCH-")) {
+      try {
+        const res = await axios.get(
+          `http://localhost:8000/api/products/batch/${value}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const productWithStock = {
+          ...res.data.data.product,
+          warehouse: res.data.data.batch.remaining_quantity,
+          shelf: res.data.data.batch.quantity_on_shelf,
+          // Thêm thông tin batch vào sản phẩm
+          searchedBatch: res.data.data.batch,
+        };
+        setFilteredProducts([productWithStock]);
+      } catch (error) {
+        setFilteredProducts([]);
+      }
     } else {
-      const defaultUnit =
-        product.units?.find((unit) => unit.ratio === 1) || product.units?.[0];
-      defaultUnit &&
-        setOrderItems([
-          ...orderItems,
-          { ...product, quantity: 1, selectedUnit: defaultUnit },
-        ]);
+      const filtered = products.filter((p) =>
+        p.name.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredProducts(filtered);
     }
   };
 
-  const handleChangeQuantity = (itemId, quantity) => {
-    setOrderItems(
-      orderItems.map((item) =>
-        item._id === itemId && quantity > 0 ? { ...item, quantity } : item
-      )
+  const handleProductClick = async (product) => {
+    setLoading(true);
+    try {
+      let availableBatches = [];
+
+      // Kiểm tra nếu sản phẩm có batch từ tìm kiếm
+      if (product.searchedBatch) {
+        // Chỉ lấy batch đã tìm kiếm nếu còn hàng
+        if (product.searchedBatch.quantity_on_shelf > 0) {
+          availableBatches = [product.searchedBatch];
+        }
+      } else {
+        // Xử lý bình thường nếu không phải tìm kiếm batch
+        const res = await axios.get(
+          `http://localhost:8000/api/batches/product/${product.id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        availableBatches = res.data.filter((b) => b.quantity_on_shelf > 0);
+      }
+
+      setBatches(availableBatches);
+      setSelectedProduct(product);
+      setSelectedBatches({});
+      setSelectedUnit(product.units[0]);
+      setHasUserSelectedBatch(false);
+    } catch (error) {
+      console.error(error);
+    }
+    setLoading(false);
+  };
+  const handleBatchQtyChange = (batchId, value) => {
+    const batch = batches.find((b) => b._id === batchId);
+    const maxQty = Math.floor(
+      batch.quantity_on_shelf / (selectedUnit?.ratio || 1)
     );
+
+    const newValue = Math.min(Math.max(0, parseInt(value || 0)), maxQty);
+    setSelectedBatches((prev) => ({
+      ...prev,
+      [batchId]: newValue,
+    }));
+    setHasUserSelectedBatch(true);
   };
 
-  const handleRemoveItem = (itemId) => {
-    setOrderItems(orderItems.filter((item) => item._id !== itemId));
-  };
+ const autoSelectBatches = () => {
+    if (!selectedProduct || !selectedUnit) return [];
 
-  const calculateTotal = () => {
-    return orderItems.reduce((total, item) => {
-      const salePrice =
-        item.selectedUnit?.salePrice || item.units?.[0]?.salePrice || 0;
-      return total + salePrice * item.quantity;
-    }, 0);
-  };
+    const requiredBaseQty = 1 * selectedUnit.ratio;
+    const goodBatches = batches
+      .filter((b) => b.quantity_on_shelf >= requiredBaseQty)
+      .sort((a, b) => new Date(a.expiry_day) - new Date(b.expiry_day));
+    if (goodBatches.length > 0) {
+      const bestBatch = goodBatches[0];
+      const baseUnit = selectedProduct.units.find((u) => u.ratio === 1);
+      const discount = bestBatch.discountInfo || {};
+      const unitPriceBase = discount.isDiscounted
+        ? baseUnit.salePrice * (1 - discount.discountValue / 100)
+        : baseUnit.salePrice;
 
-  const handleCashReceivedChange = (e) => {
-    const value = e.target.value.replace(/[^\d]/g, '');
-    setCashReceived(value);
-    setErrorMessage("");
-    
-    if (value) {
-      setFormattedCashReceived(parseInt(value).toLocaleString('vi-VN'));
+      const selectedBatchInfo = {
+        ...bestBatch,
+        _id: bestBatch._id,
+        batchCode: bestBatch.batchCode,
+        discountInfo: bestBatch.discountInfo,
+        quantity: requiredBaseQty,
+        unitPrice: unitPriceBase * selectedUnit.ratio,
+        unitName: selectedUnit.name,
+      };
+      console.log("Lô tự động chọn:", JSON.stringify(selectedBatchInfo, null, 2));
+      return [selectedBatchInfo];
+    }
+    return [];
+  };
+const handleAddToOrder = () => {
+    if (!selectedProduct || !selectedUnit) return;
+
+    let selected;
+    if (!hasUserSelectedBatch) {
+      selected = autoSelectBatches();
+      if (selected.length === 0) {
+        alert(
+          `Không có lô phù hợp cho sản phẩm ${selectedProduct.name} (${selectedUnit.name})`
+        );
+        return;
+      }
     } else {
-      setFormattedCashReceived("");
+      selected = batches
+        .filter((b) => selectedBatches[b._id] > 0)
+        .map((b) => {
+          const baseUnit = selectedProduct.units.find((u) => u.ratio === 1);
+          const discount = b.discountInfo || {};
+          const unitPriceBase = discount.isDiscounted
+            ? baseUnit.salePrice * (1 - discount.discountValue / 100)
+            : baseUnit.salePrice;
+
+          const newItem = { // Log thông tin batch trước khi đưa vào order item
+            ...b,
+            quantity: selectedBatches[b._id] * (selectedUnit?.ratio || 1),
+            unitPrice: unitPriceBase * selectedUnit.ratio,
+            unitName: selectedUnit.name,
+          };
+          console.log("Batch được thêm:", JSON.stringify(newItem, null, 2));
+          return newItem;
+        });
     }
+
+    const updatedOrderItems = [...orderItems];
+
+    selected.forEach((batch) => {
+      const existingItemIndex = updatedOrderItems.findIndex(
+        (item) =>
+          item.product.id === selectedProduct.id &&
+          item.selectedUnit.name === selectedUnit.name &&
+          item.batches.some((b) => b._id === batch._id)
+      );
+
+      if (existingItemIndex !== -1) {
+        const existingBatchIndex = updatedOrderItems[
+          existingItemIndex
+        ].batches.findIndex((b) => b._id === batch._id);
+
+        if (existingBatchIndex !== -1) {
+          updatedOrderItems[existingItemIndex].batches[
+            existingBatchIndex
+          ].quantity += batch.quantity;
+        } else {
+          updatedOrderItems[existingItemIndex].batches.push(batch);
+        }
+
+        updatedOrderItems[existingItemIndex].total = updatedOrderItems[
+          existingItemIndex
+        ].batches.reduce(
+          (sum, b) => sum + b.unitPrice * (b.quantity / selectedUnit.ratio),
+          0
+        );
+        console.log("Đã cập nhật item:", JSON.stringify(updatedOrderItems[existingItemIndex], null, 2));
+      } else {
+        const newItem = {
+          product: selectedProduct,
+          selectedUnit,
+          batches: [batch],
+          total: batch.unitPrice * (batch.quantity / selectedUnit.ratio),
+        };
+        updatedOrderItems.push(newItem);
+        console.log("Thêm item mới:", JSON.stringify(newItem, null, 2));
+      }
+    });
+
+    setOrderItems(updatedOrderItems);
+    setSelectedProduct(null);
+    setSelectedUnit(null);
+    setSelectedBatches({});
+    setHasUserSelectedBatch(false);
+  };
+  const handleRemoveItem = (index) => {
+    setOrderItems((items) => items.filter((_, i) => i !== index));
+  };
+ const handleUpdateQuantity = (itemIndex, batchIndex, newValue) => {
+    const updatedItems = [...orderItems];
+    const item = updatedItems[itemIndex];
+    const batch = item.batches[batchIndex];
+
+    const maxQty = Math.floor(
+      batch.quantity_on_shelf / item.selectedUnit.ratio
+    );
+
+    let newQty = parseInt(newValue || 0);
+    if (isNaN(newQty)) newQty = 0;
+    newQty = Math.max(0, Math.min(newQty, maxQty));
+
+    batch.quantity = newQty * item.selectedUnit.ratio;
+    item.total = item.batches.reduce(
+      (sum, b) => sum + b.unitPrice * (b.quantity / item.selectedUnit.ratio),
+      0
+    );
+
+    console.log("Cập nhật số lượng item:", JSON.stringify(updatedItems[itemIndex], null, 2));
+
+    setOrderItems(updatedItems);
   };
 
-  const calculateChange = () => {
-    const total = calculateTotal();
-    const received = parseFloat(cashReceived) || 0;
-    return received - total;
-  };
-
-  const handlePayment = async () => {
-    if (orderItems.length === 0) {
-      alert("Vui lòng thêm sản phẩm vào đơn hàng trước khi thanh toán.");
+  const handleSubmitOrder = async () => {
+    if (!cashReceived) {
+      setCashReceivedError("Vui lòng nhập số tiền khách đưa.");
       return;
     }
 
-    if (paymentMethod === "cash" && !cashReceived) {
-      setErrorMessage("Vui lòng nhập số tiền khách đưa.");
+    const paidAmount = parseFloat(cashReceived);
+    if (isNaN(paidAmount) || paidAmount < 0) {
+      setCashReceivedError("Số tiền không hợp lệ.");
       return;
     }
+
+    if (paidAmount < subtotal) {
+      setCashReceivedError("Số tiền khách đưa không đủ.");
+      return;
+    }
+
+    setCashReceivedError("");
 
     const orderData = {
-      customerId: selectedCustomer?._id || null,
       items: orderItems.map((item) => ({
-        product: item._id,
-        quantity: item.quantity,
-        units: item.selectedUnit?.name || item.units?.[0]?.name,
+        product: item.product.id,
+        quantity:
+          item.batches.reduce((sum, b) => sum + b.quantity, 0) /
+          item.selectedUnit.ratio,
+        selectedUnit: {
+          name: item.selectedUnit.name,
+          ratio: item.selectedUnit.ratio,
+        },
+        batchesUsed: item.batches.map((b) => ({
+          batchId: b._id,
+          quantity: b.quantity,
+          unitPrice: b.unitPrice,
+        })),
       })),
-      paymentMethod: paymentMethod,
-      amountPaid:
-        paymentMethod === "cash" ? parseFloat(cashReceived) : undefined,
+      paymentMethod,
+      amountPaid: paidAmount,
+      customerId: selectedCustomer?.id || null,
+      orderType: "instore",
     };
 
-    const token = localStorage.getItem("authToken");
-
-    setLoading(true);
-    setError(null);
+    console.log("Dữ liệu gửi đi:", JSON.stringify(orderData, null, 2)); // In ra dữ liệu trước khi gửi
 
     try {
-      const response = await fetch("http://localhost:8000/api/orders", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(orderData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          `Lỗi tạo đơn hàng: ${response.status} - ${
-            errorData?.message || "Không rõ nguyên nhân"
-          }`
-        );
-      }
-
-      const orderResult = await response.json();
-      alert(
-        `Thanh toán thành công!\nMã đơn hàng: ${
-          orderResult.orderNumber
-        }\nTổng tiền: ${orderResult.finalAmount?.toLocaleString("vi-VN")} VNĐ${
-          paymentMethod === "cash"
-            ? `\nKhách đưa: ${parseFloat(cashReceived).toLocaleString(
-                "vi-VN"
-              )} VNĐ\nTiền thối: ${(
-                (parseFloat(cashReceived) || 0) - (orderResult.finalAmount || 0)
-              ).toLocaleString("vi-VN")} VNĐ`
-            : ""
-        }`
+      const res = await axios.post(
+        "http://localhost:8000/api/orders",
+        orderData,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
-
+      alert(`Đơn hàng ${res.data.orderNumber} tạo thành công!`);
       setOrderItems([]);
-      setShowPaymentOptions(false);
       setCashReceived("");
-      setErrorMessage("");
-      setSelectedCustomer(null);
     } catch (error) {
-      console.error("Lỗi khi tạo đơn hàng:", error);
-      setError(error.message);
-      alert(`Lỗi khi tạo đơn hàng: ${error.message}`);
-    } finally {
-      setLoading(false);
+      console.error(error);
+      alert("Tạo đơn thất bại!");
     }
   };
 
-  const handleUnitChange = (itemId, unitName) => {
-    setOrderItems(
-      orderItems.map((item) => {
-        if (item._id === itemId) {
-          const selectedUnit = item.units.find(
-            (unit) => unit.name === unitName
-          );
-          return { ...item, selectedUnit: selectedUnit || item.units[0] };
-        }
-        return item;
-      })
-    );
-  };
-
-  const handlePaymentMethodChange = (event) => {
-    setPaymentMethod(event.target.value);
-    setErrorMessage("");
-  };
-
-  if (loading) {
-    return (
-      <Container
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-          maxWidth: "100vw !important",
-        }}
-        maxWidth={false}
-        disableGutters
-      >
-        <CircularProgress />
-      </Container>
-    );
-  }
-
-  if (error) {
-    return (
-      <Container sx={{ mt: 4, maxWidth: "100vw !important" }} maxWidth={false} disableGutters>        <Typography color="error">{error}</Typography>
-      </Container>
-    );
-  }
+  const subtotal = orderItems.reduce((sum, item) => sum + item.total, 0);
+  const change = cashReceived ? parseFloat(cashReceived) - subtotal : 0;
 
   return (
     <Container
+      maxWidth="lg"
       sx={{
         mt: 4,
-        height: "100%",
-        maxWidth: "100vw !important",
-        px: 0,
+        height: "calc(100vh - 100px)",
+        display: "flex",
+        flexDirection: "column",
       }}
-      maxWidth={false}
-      disableGutters
     >
-      <Stack direction="row" spacing={3} sx={{ height: "100vh", width: "80vw", m: 0 }}>
-        <Box sx={{ flex: 2, height: "80vh", minWidth: 0 }}>
-          <Paper
+      <Paper
+        sx={{
+          p: 3,
+          mb: 2,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
+          <Autocomplete
+            sx={{ flex: 1 }}
+            options={customers}
+            getOptionLabel={(option) => `${option.fullName} (${option.phone})`}
+            loading={loadingCustomers}
+            value={selectedCustomer}
+            onChange={(_, newValue) => setSelectedCustomer(newValue)}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Chọn khách hàng"
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {loadingCustomers ? <CircularProgress size={20} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
+            )}
+          />
+          <TextField
+            sx={{ flex: 2 }}
+            variant="outlined"
+            label="Tìm kiếm sản phẩm hoặc mã lô"
+            value={searchTerm}
+            onChange={handleSearch}
+            InputProps={{ endAdornment: <SearchIcon /> }}
+          />
+        </Box>
+
+        <Grid container spacing={2} sx={{ flex: 1, overflow: "hidden" }}>
+          <Grid item xs={6} sx={{ height: "100%", overflow: "hidden" }}>
+            <Typography variant="h6">Danh sách sản phẩm</Typography>
+            <Box
+              sx={{
+                height: "calc(100% - 40px)",
+                overflow: "auto",
+                pr: 1,
+              }}
+            >
+              {filteredProducts.map((product) => (
+                <Paper
+                  key={product._id}
+                  sx={{
+                    p: 2,
+                    mb: 1,
+                    cursor: "pointer",
+                    "&:hover": { bgcolor: "action.hover" },
+                  }}
+                  onClick={() => handleProductClick(product)}
+                >
+                  <Typography variant="subtitle1">{product.name}</Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {product.category?.name || product.category}
+                    {product.warehouse !== undefined &&
+                      ` | Kho: ${product.warehouse} | Quầy: ${product.shelf}`}
+                  </Typography>
+                  {product.units?.[0]?.salePrice && (
+                    <Typography variant="body2" color="primary">
+                      {product.units[0].salePrice.toLocaleString()}đ/
+                      {product.units[0].name}
+                    </Typography>
+                  )}
+                </Paper>
+              ))}
+            </Box>
+          </Grid>
+
+          <Grid
+            item
+            xs={6}
             sx={{
-              p: 2,
               height: "100%",
               display: "flex",
               flexDirection: "column",
-              minHeight: 0,
+              overflow: "hidden",
             }}
           >
-            <TextField
-              label="Tìm kiếm sản phẩm"
-              variant="outlined"
-              fullWidth
-              size="small"
-              sx={{ mb: 2 }}
-              value={searchTerm}
-              onChange={handleSearchChange}
-            />
-            <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-              <InputLabel id="category-select-label">Danh mục</InputLabel>
-              <Select
-                labelId="category-select-label"
-                value={selectedCategory}
-                label="Danh mục"
-                onChange={handleCategoryChange}
-              >
-                <MenuItem value="Tất cả">Tất cả</MenuItem>
-                {categories.map((category) => (
-                  <MenuItem key={category._id} value={category.name}>
-                    {category.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <Box
-              sx={{
-                flexGrow: 1,
-                overflowY: "auto",
-                paddingBottom: 2,
-                margin: -2,
-              }}
-            >
-              <Box
-                sx={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 1,
-                  height: "auto",
-                  py: 1,
-                }}
-              >
-                {filteredProducts.map((product) => (
-                  <Box key={product._id} sx={{ padding: 1, width: 200 }}>
-                    <ProductCard>
-                      <Box sx={{ 
-                        height: 120, 
-                        width: '100%', 
-                        overflow: 'hidden',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: 'grey.100'
-                      }}>
-                        {product.images?.length > 0 ? (
-                          <img
-                            src={product.images[0]}
-                            alt={product.name}
-                            style={{
-                              maxWidth: "100%",
-                              maxHeight: "100%",
-                              objectFit: "contain",
-                            }}
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = "https://via.placeholder.com/200x120?text=Không+có+hình";
-                            }}
-                          />
-                        ) : (
-                          <Box
-                            sx={{
-                              width: "100%",
-                              height: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              bgcolor: "grey.200",
-                            }}
-                          >
-                            <Typography variant="caption" color="text.secondary">
-                              Không có hình ảnh
-                            </Typography>
-                          </Box>
-                        )}
-                      </Box>
-                      
-                      <ProductCardContent>
-                        <Typography 
-                          variant="subtitle1" 
-                          sx={{ 
-                            fontWeight: 'bold', 
-                            fontSize: '0.9rem',
-                            mb: 0.5,
-                            height: '2.4em',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                          }}
-                        >
-                          {product.name}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          noWrap
-                          sx={{ display: 'block', mb: 0.5 }}
-                        >
-                          Mã: {product.barcode || "N/A"}
-                        </Typography>
-                        <Box sx={{ mt: 'auto' }}>
-                          {product.units && product.units[0] && (
-                            <Typography 
-                              variant="body2" 
-                              color="primary" 
-                              fontWeight="bold"
-                              sx={{ mb: 0.5 }}
-                            >
-                              {product.units[0].salePrice.toLocaleString("vi-VN")} VNĐ
-                            </Typography>
-                          )}
-                          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem' }}>
-                            {product.units
-                              ?.map((unit) => `${unit.name}`)
-                              .join(", ")}
-                          </Typography>
-                        </Box>
-                      </ProductCardContent>
-                      <CardActions
-                        sx={{ padding: 1, justifyContent: 'center' }}
-                      >
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="primary"
-                          onClick={() => handleAddToCart(product)}
-                          fullWidth
-                        >
-                          Thêm vào đơn
-                        </Button>
-                      </CardActions>
-                    </ProductCard>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          </Paper>
-        </Box>
-
-        <Box
-          sx={{
-            width: 350,
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <Paper
-            sx={{
-              p: 2,
-              display: "flex",
-              flexDirection: "column",
-              minHeight: 0,
-              mb: 2,
-              maxHeight: "50vh",
-              overflowY: "auto",
-            }}
-          >
-            <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-              <InputLabel id="customer-select-label">Khách hàng</InputLabel>
-              <Select
-                labelId="customer-select-label"
-                value={selectedCustomer?._id || ""}
-                label="Khách hàng"
-                onChange={(e) => {
-                  const customerId = e.target.value;
-                  const customer =
-                    customers.find((c) => c._id === customerId) || null;
-                  setSelectedCustomer(customer);
-                }}
-                renderValue={(value) => {
-                  if (!value) return "Khách vãng lai";
-                  const customer = customers.find((c) => c._id === value);
-                  return customer
-                    ? `${customer.fullName} (${customer.phone})`
-                    : "";
-                }}
-              >
-                <MenuItem value="">
-                  <em>Khách vãng lai</em>
-                </MenuItem>
-                {loadingCustomers ? (
-                  <MenuItem disabled>
-                    <CircularProgress size={20} />
-                  </MenuItem>
-                ) : (
-                  customers?.map((customer) => (
-                    <MenuItem key={customer._id} value={customer._id}>
-                      {customer.fullName} - {customer.phone}
-                    </MenuItem>
-                  ))
-                )}
-              </Select>
-            </FormControl>
-
-            <Typography variant="h6" gutterBottom>
+            <Typography variant="h6" sx={{ mb: 1 }}>
               Đơn hàng
             </Typography>
-            <List>
-              {orderItems.map((item) => (
-                <ListItem
-                  key={item._id}
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    mb: 1,
-                  }}
-                >
+
+            <List
+              sx={{
+                flex: 1,
+                overflow: "auto",
+                border: "1px solid rgba(0, 0, 0, 0.12)",
+                borderRadius: 1,
+                mb: 2,
+                pr: 1,
+              }}
+            >
+              {orderItems.map((item, itemIndex) => (
+                <ListItem key={itemIndex} divider>
                   <ListItemText
-                    primary={item.name}
-                    secondary={`Giá: ${(
-                      item.selectedUnit?.salePrice ||
-                      item.units?.[0]?.salePrice ||
-                      0
-                    ).toLocaleString("vi-VN")} VNĐ / ${
-                      item.selectedUnit?.name || item.units?.[0]?.name
-                    }`}
-                    primaryTypographyProps={{ fontSize: "0.9rem" }}
-                    secondaryTypographyProps={{ fontSize: "0.8rem" }}
-                  />
-                  <Box sx={{ display: "flex", alignItems: "center" }}>
-                    <TextField
-                      type="number"
-                      size="small"
-                      value={item.quantity}
-                      onChange={(e) =>
-                        handleChangeQuantity(item._id, parseInt(e.target.value))
-                      }
-                      inputProps={{ min: 1 }}
-                      sx={{ width: 60, mr: 1 }}
-                    />
-                    {item.units && item.units.length > 1 && (
-                      <FormControl size="small" sx={{ mr: 1 }}>
-                        <Select
-                          value={item.selectedUnit?.name || item.units[0]?.name}
-                          onChange={(e) =>
-                            handleUnitChange(item._id, e.target.value)
-                          }
-                          displayEmpty
-                          renderValue={(value) => value || item.units[0]?.name}
-                          sx={{ fontSize: "0.8rem", height: 30 }}
-                        >
-                          {item.units.map((unit) => (
-                            <MenuItem
-                              key={unit.name}
-                              value={unit.name}
-                              sx={{ fontSize: "0.8rem" }}
+                    primary={item.product.name}
+                    secondary={
+                      <>
+                        <Typography variant="body2">
+                          Đơn vị: {item.selectedUnit.name} (1
+                          {item.selectedUnit.name} = {item.selectedUnit.ratio}
+                          {item.product.units.find((u) => u.ratio === 1)?.name})
+                        </Typography>
+                        {item.batches.map((batch, batchIndex) => {
+                          const currentQty =
+                            batch.quantity / item.selectedUnit.ratio;
+                          const maxQty = Math.floor(
+                            batch.remaining_quantity / item.selectedUnit.ratio
+                          );
+                          const truncateString = (str, maxLength = 10) => {
+                            return str.length > maxLength
+                              ? str.substring(0, maxLength - 3) + "..."
+                              : str;
+                          };
+                          return (
+                            <Box
+                              key={batch._id}
+                              sx={{
+                                mt: 1,
+                                display: "flex",
+                                alignItems: "center",
+                              }}
                             >
-                              {unit.name}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    )}
-                    <IconButton
-                      edge="end"
-                      aria-label="delete"
-                      onClick={() => handleRemoveItem(item._id)}
-                      size="small"
-                    >
-                      <DeleteIcon fontSize="inherit" />
-                    </IconButton>
-                  </Box>
+                              <Chip
+                                label={`${truncateString(
+                                  batch.batchCode
+                                )} - ${currentQty.toFixed(0)}${
+                                  item.selectedUnit.name
+                                } × ${batch.unitPrice.toLocaleString()}đ`}
+                                size="small"
+                                sx={{ mr: 1, maxWidth: 150 }}
+                              />
+                              <TextField
+                                type="number"
+                                value={currentQty}
+                                onChange={(e) =>
+                                  handleUpdateQuantity(
+                                    itemIndex,
+                                    batchIndex,
+                                    e.target.value
+                                  )
+                                }
+                                inputProps={{
+                                  min: 0,
+                                  max: maxQty,
+                                  style: {
+                                    textAlign: "center",
+                                    padding: "6px 10px",
+                                  },
+                                }}
+                                sx={{
+                                  width: 80,
+                                  mr: 1,
+                                  "& input[type=number]": {
+                                    MozAppearance: "textfield",
+                                  },
+                                  "& input[type=number]::-webkit-outer-spin-button":
+                                    {
+                                      WebkitAppearance: "none",
+                                      margin: 0,
+                                    },
+                                  "& input[type=number]::-webkit-inner-spin-button":
+                                    {
+                                      WebkitAppearance: "none",
+                                      margin: 0,
+                                    },
+                                }}
+                                error={currentQty > maxQty || currentQty < 0}
+                                helperText={
+                                  (currentQty > maxQty &&
+                                    `Tối đa: ${maxQty}`) ||
+                                  (currentQty < 0 && "Không hợp lệ")
+                                }
+                              />
+                              {batch.discountInfo?.isDiscounted && (
+                                <Typography
+                                  variant="caption"
+                                  color="success.main"
+                                >
+                                  (Giảm {batch.discountInfo.discountValue}%)
+                                </Typography>
+                              )}
+                            </Box>
+                          );
+                        })}
+                      </>
+                    }
+                  />
+                  <Typography sx={{ minWidth: 100, textAlign: "right" }}>
+                    {item.total.toLocaleString()}đ
+                  </Typography>
+                  <IconButton onClick={() => handleRemoveItem(itemIndex)}>
+                    <DeleteIcon color="error" />
+                  </IconButton>
                 </ListItem>
               ))}
-              
             </List>
-              
-            {orderItems.length > 0 && (
-              <Paper 
-                elevation={2} 
-                sx={{ 
-                  mt: 2, 
-                  p: 1.5, 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  bgcolor: 'primary.light',
-                  color: 'primary.contrastText',
-                  borderRadius: 1
-                }}
-              >
-                <Typography variant="subtitle1" fontWeight="bold">
-                  Tổng cộng:
-                </Typography>
-                <Typography variant="h6" fontWeight="bold">
-                  {calculateTotal().toLocaleString("vi-VN")} VNĐ
-                </Typography>
-              </Paper>
-            )}
-            
-            {orderItems.length > 0 && (
-              <Button
-                variant="contained"
-                onClick={() => setShowPaymentOptions(true)}
-                sx={{ mt: 2 }}
-                disabled={loading}
-                fullWidth
-                size="large"
-              >
-                Thanh toán
-              </Button>
-            )}
-          </Paper>
 
-          {showPaymentOptions && (
-            <Paper sx={{ p: 2, mt: 2 }}>
-              <Typography variant="h6" gutterBottom>
-                Chọn phương thức thanh toán
-              </Typography>
-              <FormControl component="fieldset" sx={{ mb: 2 }}>
-                <RadioGroup
-                  aria-label="payment-method"
-                  name="paymentMethod"
-                  value={paymentMethod}
-                  onChange={handlePaymentMethodChange}
-                >
-                  <FormControlLabel
-                    value="cash"
-                    control={<Radio />}
-                    label="Tiền mặt"
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: "background.paper",
+                boxShadow: 1,
+                borderRadius: 1,
+                flexShrink: 0,
+              }}
+            >
+              <Grid container spacing={2}>
+                <Grid item xs={6}>
+                  <TextField
+                    fullWidth
+                    label="Tiền khách đưa"
+                    value={cashReceived}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      setCashReceived(value);
+                      if (!value) {
+                        setCashReceivedError(
+                          "Vui lòng nhập số tiền khách đưa."
+                        );
+                      } else if (parseFloat(value) < subtotal) {
+                        setCashReceivedError("Số tiền khách đưa không đủ.");
+                      } else {
+                        setCashReceivedError("");
+                      }
+                    }}
+                    InputProps={{ endAdornment: "đ" }}
+                    error={!!cashReceivedError}
+                    helperText={cashReceivedError}
+                    required
                   />
-                  {/* Thêm các phương thức thanh toán khác nếu cần */}
-                </RadioGroup>
-              </FormControl>
+                </Grid>
+                <Grid item xs={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Phương thức TT</InputLabel>
+                    <Select
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                    >
+                      <MenuItem value="cash">Tiền mặt</MenuItem>
+                      <MenuItem value="card">Thẻ</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <Box
+                    sx={{ display: "flex", justifyContent: "space-between" }}
+                  >
+                    <Typography variant="h6">Tổng cộng:</Typography>
+                    <Typography variant="h6" color="primary">
+                      {subtotal.toLocaleString()}đ
+                    </Typography>
+                  </Box>
+                  {cashReceived && !cashReceivedError && (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        mt: 1,
+                      }}
+                    >
+                      <Typography>Tiền thừa:</Typography>
+                      <Typography
+                        color={change >= 0 ? "success.main" : "error"}
+                      >
+                        {Math.abs(change).toLocaleString()}đ
+                      </Typography>
+                    </Box>
+                  )}
+                </Grid>
+                <Grid item xs={12}>
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    size="large"
+                    onClick={handleSubmitOrder}
+                    disabled={
+                      orderItems.length === 0 ||
+                      !!cashReceivedError ||
+                      !cashReceived
+                    }
+                  >
+                    Tạo đơn hàng ({orderItems.length})
+                  </Button>
+                </Grid>
+              </Grid>
+            </Box>
+          </Grid>
+        </Grid>
+      </Paper>
 
-              {paymentMethod === "cash" && (
-                <TextField
-                  label="Số tiền khách đưa"
-                  variant="outlined"
-                  fullWidth
-                  size="small"
-                  value={formattedCashReceived}
-                  onChange={handleCashReceivedChange}
-                  sx={{ mb: 1 }}
-                  error={!!errorMessage}
-                  helperText={errorMessage}
-                  InputProps={{
-                    endAdornment: <Typography variant="body2" sx={{ ml: 1, color: 'text.secondary' }}>VNĐ</Typography>,
-                  }}
-                  inputProps={{
-                    inputMode: 'numeric',
-                  }}
-                />
-              )}
+      <Dialog open={!!selectedProduct} fullWidth maxWidth="md">
+        <DialogTitle>
+          Chọn lô hàng - {selectedProduct?.name}
+          <FormControl sx={{ minWidth: 120, ml: 2 }}>
+            <InputLabel>Đơn vị</InputLabel>
+            <Select
+              value={selectedUnit?.name || ""}
+              onChange={(e) => {
+                const unit = selectedProduct.units.find(
+                  (u) => u.name === e.target.value
+                );
+                setSelectedUnit(unit);
+                setSelectedBatches({});
+                setHasUserSelectedBatch(false);
+              }}
+            >
+              {selectedProduct?.units?.map((unit) => (
+                <MenuItem key={unit.name} value={unit.name}>
+                  {unit.name} (1{unit.name} = {unit.ratio}{" "}
+                  {selectedProduct.units.find((u) => u.ratio === 1)?.name})
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogTitle>
+        <DialogContent>
+          {batches.length === 0 ? (
+            <Typography
+              variant="body1"
+              color="textSecondary"
+              sx={{
+                p: 2,
+                textAlign: "center",
+                fontStyle: "italic",
+              }}
+            >
+              Hiện không có lô hàng nào trên quầy
+            </Typography>
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Mã lô</TableCell>
+                    <TableCell>HSD</TableCell>
+                    <TableCell>Giá gốc</TableCell>
+                    <TableCell>Giảm giá</TableCell>
+                    <TableCell>Kho</TableCell>
+                    <TableCell>Quầy</TableCell>
+                    <TableCell>Số lượng</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {batches.map((batch) => {
+                    const baseUnit = selectedProduct?.units?.find(
+                      (u) => u.ratio === 1
+                    );
+                    const discount = batch.discountInfo || {};
+                    const daysRemaining = batch.daysUntilExpiry || 0;
 
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handlePayment}
-                disabled={loading}
-                fullWidth
-                sx={{ mb: 1 }}
-              >
-                {loading ? (
-                  <CircularProgress size={24} color="inherit" />
-                ) : (
-                  "Xác nhận thanh toán"
-                )}
-              </Button>
-              {paymentMethod === "cash" && cashReceived && (
-                <Paper 
-                  elevation={0} 
-                  sx={{ 
-                    mt: 1, 
-                    p: 1, 
-                    bgcolor: 'success.light', 
-                    borderRadius: 1,
-                    display: 'flex',
-                    justifyContent: 'space-between'
-                  }}
-                >
-                  <Typography variant="subtitle2" fontWeight="bold">
-                    Tiền thối:
-                  </Typography>
-                  <Typography variant="subtitle2" fontWeight="bold">
-                    {calculateChange().toLocaleString("vi-VN")} VNĐ
-                  </Typography>
-                </Paper>
-              )}
-            </Paper>
+                    return (
+                      <TableRow key={batch._id}>
+                        <TableCell>{batch.batchCode}</TableCell>
+                        <TableCell>
+                          {format(new Date(batch.expiry_day), "dd/MM/yyyy", {
+                            locale: vi,
+                          })}
+                          <Typography variant="caption" color="textSecondary">
+                            ({daysRemaining} ngày)
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {(
+                            (baseUnit?.salePrice || 0) *
+                            (selectedUnit?.ratio || 1)
+                          ).toLocaleString()}
+                          đ
+                        </TableCell>
+                        <TableCell sx={{ color: "success.main" }}>
+                          {discount.isDiscounted && (
+                            <>
+                              {discount.discountValue}%
+                              <Typography variant="caption">
+                                {discount.discountReason}
+                              </Typography>
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell>{batch.remaining_quantity}</TableCell>
+                        <TableCell>{batch.quantity_on_shelf}</TableCell>
+                        <TableCell>
+                          <TextField
+                            type="number"
+                            value={selectedBatches[batch._id] || 0}
+                            onChange={(e) =>
+                              handleBatchQtyChange(batch._id, e.target.value)
+                            }
+                            inputProps={{ min: 0 }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedProduct(null)}>Hủy</Button>
+          <Button
+            variant="contained"
+            onClick={handleAddToOrder}
+            disabled={!selectedProduct || batches.length === 0}
+          >
+            Thêm vào đơn (
+            {!hasUserSelectedBatch
+              ? 1
+              : Object.values(selectedBatches).reduce((a, b) => a + b, 0)}
+            )
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {loading && (
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+          <CircularProgress />
         </Box>
-      </Stack>
+      )}
     </Container>
   );
-}
-
+};
 
 export default CreateOrder;
