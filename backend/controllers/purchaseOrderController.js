@@ -126,8 +126,8 @@ const purchaseOrderController = {
 
       if (expectedDeliveryDate) {
         const expectedDate = new Date(expectedDeliveryDate);
-        if (expectedDate.getTime() <= order.orderDate.getTime()) {
-          return res.status(400).json({ message: 'Ngày giao hàng dự kiến phải lớn hơn ngày đặt hàng.' });
+        if (expectedDate.getTime() < order.orderDate.getTime()) {
+          return res.status(400).json({ message: 'Ngày giao hàng dự kiến phải lớn hơn hoặc bằng ngày đặt hàng.' });
         }
       }
 

@@ -30,6 +30,7 @@ import {
   Autocomplete,
   Tabs,
   Tab,
+  Chip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -43,11 +44,15 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import { styled } from '@mui/material/styles';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { vi } from 'date-fns/locale';
 
 const UNITS = ["thùng", "bao", "chai", "lọ", "lon", "hộp", "gói", "cái", "kg", "liter","thùng 30", "thùng 24", "thùng 12", "lốc 6", "bao 10", "bao 15", "bao 20", "bao 5", "lốc 12"];
 const STATUSES = [
   { value: "đã gửi NCC", label: "Đã gửi NCC" },
-  { value: "hoàn thành", label: "Hoàn thành" },
+  // { value: "hoàn thành", label: "Hoàn thành" },
   { value: "đã hủy", label: "Đã hủy" },
   { value: "completed", label: "Hoàn thành" },
 
@@ -106,6 +111,15 @@ const PurchaseOrderManagement = () => {
   const [sortOrder, setSortOrder] = useState("desc");
   const [loading, setLoading] = useState(false);
   const [tabValue, setTabValue] = useState(0);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  // Thời gian lọc theo ngày giao dự kiến, mặc định 1 tháng từ ngày hiện tại
+  const [expectedStartDate, setExpectedStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d;
+  });
+  const [expectedEndDate, setExpectedEndDate] = useState(() => new Date());
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -131,7 +145,7 @@ const PurchaseOrderManagement = () => {
   }, [selectedSupplier]);
 
   useEffect(() => {
-    setTotalPrice(orderItems.reduce((sum, item) => sum + item.totalPrice, 0));
+    setTotalPrice(orderItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0));
   }, [orderItems]);
 
   const fetchSuppliers = async () => {
@@ -171,14 +185,14 @@ const PurchaseOrderManagement = () => {
 
   const handleAddItem = () => {
     const product = products.find((p) => p._id === selectedProduct);
-    if (!product || !selectedProduct || quantity <= 0 || !unit || unitPrice <= 0) return;
+    if (!product || !selectedProduct || quantity <= 0 || !unit) return; // Removed unitPrice validation
     const existingIndex = orderItems.findIndex(item => item.product === selectedProduct && item.unit === unit);
     if (existingIndex !== -1) {
       setOrderItems(orderItems.map((item, index) => 
         index === existingIndex ? {
           ...item,
           quantity: item.quantity + Number(quantity),
-          totalPrice: (item.quantity + Number(quantity)) * item.unitPrice,
+          totalPrice: (item.quantity + Number(quantity)) * (item.unitPrice || 0),
         } : item
       ));
     } else {
@@ -187,8 +201,8 @@ const PurchaseOrderManagement = () => {
         name: product.name,
         quantity: Number(quantity),
         unit,
-        unitPrice: Number(unitPrice),
-        totalPrice: Number(quantity) * Number(unitPrice),
+        unitPrice: unitPrice || 0, // Allow zero or empty price
+        totalPrice: Number(quantity) * (unitPrice || 0),
       }]);
     }
     setSelectedProduct("");
@@ -276,8 +290,8 @@ const PurchaseOrderManagement = () => {
           productName: name,
           quantity,
           unit,
-          unitPrice,
-          totalPrice: quantity * unitPrice,
+          unitPrice: unitPrice || 0,
+          totalPrice: quantity * (unitPrice || 0),
           conversionRate: products.find(p => p._id === product)?.units.find(u => u.name === unit)?.ratio || 1,
         })),
         totalAmount: totalPrice,
@@ -306,7 +320,8 @@ const PurchaseOrderManagement = () => {
   };
 
   const handleEdit = (order) => {
-    const isReadOnly = ["hoàn thành", "completed"].includes(order.status);
+    // Add "đã hủy" to the list of read-only statuses
+    const isReadOnly = ["hoàn thành", "completed", "đã hủy"].includes(order.status);
     setEditOrder({
       ...order,
       expectedDeliveryDate: order.expectedDeliveryDate.split("T")[0],
@@ -325,7 +340,13 @@ const PurchaseOrderManagement = () => {
   const handleEditOrderItemChange = (index, field, value) => {
     setEditOrderItems(prev => {
       const updatedItems = [...prev];
-      updatedItems[index] = { ...updatedItems[index], [field]: value };
+      updatedItems[index] = { 
+        ...updatedItems[index], 
+        [field]: value,
+        totalPrice: field === 'quantity' || field === 'unitPrice' 
+          ? (field === 'unitPrice' ? updatedItems[index].quantity * (value || 0) : (value || 0) * (updatedItems[index].unitPrice || 0))
+          : updatedItems[index].totalPrice
+      };
       return updatedItems;
     });
   };
@@ -343,12 +364,12 @@ const PurchaseOrderManagement = () => {
           productName: product.name || "",
           quantity,
           unit,
-          unitPrice,
-          totalPrice: quantity * unitPrice,
+          unitPrice: unitPrice || 0,
+          totalPrice: quantity * (unitPrice || 0),
           conversionRate: products.find(p => p._id === product._id)?.units.find(u => u.name === unit)?.ratio || 1,
         })),
         approvalDate: isNewlyApproved ? new Date().toISOString() : editOrder.approvalDate,
-        totalAmount: editOrderItems.reduce((sum, item) => sum + item.totalPrice, 0),
+        totalAmount: editOrderItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0),
       };
       await axios.put(`http://localhost:8000/api/purchaseOrder/${editOrder._id}`, payload);
       alert("Cập nhật phiếu đặt hàng thành công!");
@@ -361,13 +382,20 @@ const PurchaseOrderManagement = () => {
   };
 
   const handleDelete = async (id) => {
+    setConfirmDeleteId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmDeleteId) return;
     try {
-      await axios.delete(`http://localhost:8000/api/purchaseOrder/${id}`);
+      await axios.delete(`http://localhost:8000/api/purchaseOrder/${confirmDeleteId}`);
       alert("Xóa phiếu đặt hàng thành công!");
       fetchOrders();
     } catch (error) {
       console.error(error);
       alert("Lỗi khi xóa phiếu!");
+    } finally {
+      setConfirmDeleteId(null);
     }
   };
 
@@ -390,7 +418,12 @@ const PurchaseOrderManagement = () => {
           order.createdByName.toLowerCase().includes(searchTerm.toLowerCase())
         );
         const matchesStatus = statusFilter === "all" || order.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        // Lọc theo ngày giao dự kiến
+        const orderDate = new Date(order.expectedDeliveryDate);
+        const matchesDate =
+          (!expectedStartDate || orderDate >= new Date(expectedStartDate.setHours(0,0,0,0))) &&
+          (!expectedEndDate || orderDate <= new Date(expectedEndDate.setHours(23,59,59,999)));
+        return matchesSearch && matchesStatus && matchesDate;
       })
       .sort((a, b) => {
         const modifier = sortOrder === "asc" ? 1 : -1;
@@ -416,7 +449,7 @@ const PurchaseOrderManagement = () => {
   };
 
   const formatPrice = (value) => {
-    if (value === undefined || value === null) return "";
+    if (value === undefined || value === null || value === 0) return "";
     return value.toLocaleString("vi-VN") + " đ";
   };
 
@@ -429,11 +462,25 @@ const PurchaseOrderManagement = () => {
     setTabValue(newValue);
   };
 
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "completed": return "success";
+      case "đã gửi NCC": return "warning";
+      case "đã hủy": return "error";
+      case "hoàn thành": return "success";
+      default: return "default";
+    }
+  };
+  
+  const getStatusText = (status) => {
+    return STATUSES.find(s => s.value === status)?.label || status;
+  };
+
   return (
+    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={vi}>
     <Box sx={{ 
       maxWidth: 1400, 
       mx: "auto", 
-        // p: 3,
       height: 'calc(100vh - 64px)', 
       overflow: 'hidden',
       display: 'flex',
@@ -654,8 +701,8 @@ const PurchaseOrderManagement = () => {
                         <TableRow>
                           <TableCell width="50px">STT</TableCell>
                           <TableCell>Tên sản phẩm</TableCell>
-                          <TableCell>Đơn vị</TableCell>
-                          <TableCell>Số lượng</TableCell>
+                          <TableCell sx={{ width: '100px' }}>Đơn vị</TableCell>
+                          <TableCell sx={{ width: '100px' }}>Số lượng</TableCell>
                           <TableCell>Giá nhập</TableCell>
                           <TableCell>Thành tiền</TableCell>
                           <TableCell></TableCell>
@@ -667,18 +714,66 @@ const PurchaseOrderManagement = () => {
                             <TableCell>{index + 1}</TableCell>
                             <TableCell>{item.name}</TableCell>
                             <TableCell>{item.unit}</TableCell>
-                           
                             <TableCell>
-                              <IconButton onClick={() => updateQuantity(item.product, -1)}>
-                                <RemoveIcon fontSize="small" />
-                              </IconButton>
-                              {item.quantity}
-                              <IconButton onClick={() => updateQuantity(item.product, 1)}>
-                                <AddCircleOutlineIcon fontSize="small" />
-                              </IconButton>
+                              <TextField
+                                type="number"
+                                size="small"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const newQuantity = Math.max(1, parseInt(e.target.value) || 1);
+                                  setOrderItems(prev => 
+                                    prev.map((prevItem, idx) => 
+                                      idx === index 
+                                        ? { 
+                                            ...prevItem, 
+                                            quantity: newQuantity,
+                                            totalPrice: newQuantity * (prevItem.unitPrice || 0)
+                                          } 
+                                        : prevItem
+                                    )
+                                  );
+                                }}
+                                InputProps={{ inputProps: { min: 1 } }}
+                              />
                             </TableCell>
-                            <TableCell>{formatPrice(item.unitPrice)}</TableCell>
-                            <TableCell>{formatPrice(item.totalPrice)}</TableCell>
+                            <TableCell>
+                              <TextField
+                                type="text"
+                                value={
+                                  item.unitPrice === 0 ||
+                                  item.unitPrice === undefined ||
+                                  item.unitPrice === ""
+                                    ? ""
+                                    : item.unitPrice
+                                }
+                                onChange={(e) => {
+                                  // Chỉ cho phép nhập số, cho phép để trống
+                                  const value = e.target.value.replace(/\D/g, "");
+                                  setOrderItems(prev =>
+                                    prev.map((prevItem, idx) =>
+                                      idx === index
+                                        ? {
+                                            ...prevItem,
+                                            unitPrice: value === "" ? "" : Number(value),
+                                            totalPrice: prevItem.quantity * (value === "" ? 0 : Number(value)),
+                                          }
+                                        : prevItem
+                                    )
+                                  );
+                                }}
+                                placeholder="Nhập giá"
+                                size="small"
+                                InputProps={{
+                                  inputMode: "numeric",
+                                  endAdornment: (
+                                    <Typography variant="caption" color="text.secondary">
+                                      đ
+                                    </Typography>
+                                  ),
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>{formatPrice(item.quantity * (item.unitPrice || 0))}</TableCell>
                             <TableCell>
                               <IconButton onClick={() => handleRemoveItem(item.product)}>
                                 <DeleteIcon fontSize="small" />
@@ -750,6 +845,26 @@ const PurchaseOrderManagement = () => {
                       ))}
                     </Select>
                   </FormControl>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <DatePicker
+                      label="Từ ngày dự kiến"
+                      value={expectedStartDate}
+                      onChange={setExpectedStartDate}
+                      format="dd/MM/yyyy"
+                      slotProps={{ textField: { fullWidth: true, size: "small" } }}
+                      maxDate={expectedEndDate}
+                    />
+                    <DatePicker
+                      label="Đến ngày dự kiến"
+                      value={expectedEndDate}
+                      onChange={setExpectedEndDate}
+                      format="dd/MM/yyyy"
+                      slotProps={{ textField: { fullWidth: true, size: "small" } }}
+                      minDate={expectedStartDate}
+                    />
+                  </Box>
                 </Grid>
               </Grid>
             </Paper>
@@ -828,13 +943,19 @@ const PurchaseOrderManagement = () => {
                         <TableCell>{order.createdByName || "Không xác định"}</TableCell>
                         <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
                         <TableCell>
-                          {formatPrice(order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0))}
+                          <Typography fontWeight="bold">
+                            {formatPrice(order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0))}
+                          </Typography>
                         </TableCell>
                         <TableCell>
-                          {STATUSES.find(status => status.value === order.status)?.label || order.status}
+                          <Chip
+                            label={getStatusText(order.status)}
+                            color={getStatusColor(order.status)}
+                            size="small"
+                          />
                         </TableCell>
                         <TableCell>
-                          {["hoàn thành", "completed"].includes(order.status) ? (
+                          {["hoàn thành", "completed", "đã hủy"].includes(order.status) ? (
                             <IconButton onClick={() => handleEdit(order)}>
                               <VisibilityIcon />
                             </IconButton>
@@ -856,6 +977,20 @@ const PurchaseOrderManagement = () => {
                 </Table>
               </TableContainer>
             </Paper>
+            {/* Confirm Delete Dialog */}
+            <Dialog
+              open={!!confirmDeleteId}
+              onClose={() => setConfirmDeleteId(null)}
+            >
+              <DialogTitle>Xác nhận xóa phiếu đặt hàng</DialogTitle>
+              <DialogContent>
+                <Typography>Bạn có chắc chắn muốn xóa phiếu đặt hàng này không?</Typography>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setConfirmDeleteId(null)}>Hủy</Button>
+                <Button onClick={confirmDelete} color="error" variant="contained">Xóa</Button>
+              </DialogActions>
+            </Dialog>
           </>
         )}
 
@@ -904,7 +1039,12 @@ const PurchaseOrderManagement = () => {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body1">
-                      <strong>Trạng thái:</strong> {STATUSES.find(status => status.value === orderStatus)?.label || "Đã duyệt"}
+                      <strong>Trạng thái:</strong>{" "}
+                      <Chip
+                        label={getStatusText(orderStatus)}
+                        color={getStatusColor(orderStatus)}
+                        size="small"
+                      />
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -949,7 +1089,7 @@ const PurchaseOrderManagement = () => {
                                       ? { 
                                           ...prevItem, 
                                           quantity: newQuantity,
-                                          totalPrice: newQuantity * prevItem.unitPrice 
+                                          totalPrice: newQuantity * (prevItem.unitPrice || 0)
                                         } 
                                       : prevItem
                                   )
@@ -961,16 +1101,41 @@ const PurchaseOrderManagement = () => {
                           <TableCell>
                             <TextField
                               type="text"
-                              size="small"
-                              value={formatPrice(item.unitPrice)}
+                              value={
+                                item.unitPrice === 0 ||
+                                item.unitPrice === undefined ||
+                                item.unitPrice === ""
+                                  ? ""
+                                  : item.unitPrice
+                              }
                               onChange={(e) => {
-                                const numericValue = e.target.value.replace(/\./g, ""); // Remove existing thousand separators
-                                handleEditOrderItemChange(index, "unitPrice", Number(numericValue));
+                                // Chỉ cho phép nhập số, cho phép để trống
+                                const value = e.target.value.replace(/\D/g, "");
+                                setOrderItems(prev =>
+                                  prev.map((prevItem, idx) =>
+                                    idx === index
+                                      ? {
+                                            ...prevItem,
+                                            unitPrice: value === "" ? "" : Number(value),
+                                            totalPrice: prevItem.quantity * (value === "" ? 0 : Number(value)),
+                                          }
+                                        : prevItem
+                                    )
+                                  );
                               }}
-                              inputProps={{ inputMode: "numeric" }}
+                              placeholder="Nhập giá"
+                              size="small"
+                              InputProps={{
+                                inputMode: "numeric",
+                                endAdornment: (
+                                  <Typography variant="caption" color="text.secondary">
+                                    đ
+                                  </Typography>
+                                ),
+                              }}
                             />
                           </TableCell>
-                          <TableCell>{formatPrice(item.quantity * item.unitPrice)}</TableCell>
+                          <TableCell>{formatPrice(item.quantity * (item.unitPrice || 0))}</TableCell>
                           <TableCell>
                             <IconButton 
                               color="error" 
@@ -1040,7 +1205,7 @@ const PurchaseOrderManagement = () => {
                     <TableHead>
                       <TableRow>
                         <TableCell>Tên sản phẩm</TableCell>
-                        <TableCell sx={{ width: '180px' }}>Đơn vị</TableCell>
+                        <TableCell sx={{ width: '150px' }}>Đơn vị</TableCell>
                         <TableCell sx={{ width: '100px' }}>Số lượng</TableCell>
                         <TableCell>Đơn giá</TableCell>
                         <TableCell>Thành tiền</TableCell>
@@ -1074,12 +1239,28 @@ const PurchaseOrderManagement = () => {
                           <TableCell>
                             <TextField
                               type="text"
-                              value={formatPrice(item.unitPrice)}
+                              value={
+                                item.unitPrice === 0 ||
+                                item.unitPrice === undefined ||
+                                item.unitPrice === ""
+                                  ? ""
+                                  : item.unitPrice
+                              }
                               onChange={(e) => {
-                                const numericValue = e.target.value.replace(/\./g, ""); // Remove existing thousand separators
-                                handleEditOrderItemChange(index, "unitPrice", Number(numericValue));
+                                // Chỉ cho phép nhập số, cho phép để trống
+                                const value = e.target.value.replace(/\D/g, "");
+                                handleEditOrderItemChange(index, "unitPrice", value === "" ? "" : Number(value));
                               }}
-                              inputProps={{ inputMode: "numeric" }}
+                              placeholder="Nhập giá"
+                              size="small"
+                              InputProps={{
+                                inputMode: "numeric",
+                                endAdornment: (
+                                  <Typography variant="caption" color="text.secondary">
+                                    đ
+                                  </Typography>
+                                ),
+                              }}
                             />
                           </TableCell>
                           <TableCell>{formatPrice(item.quantity * item.unitPrice)}</TableCell>
@@ -1177,6 +1358,7 @@ const PurchaseOrderManagement = () => {
         </Dialog>
       </Box>
     </Box>
+    </LocalizationProvider>
   );
 };
 
