@@ -50,8 +50,15 @@ const InventoryHistory = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
+  
+  // Set default date range to last month
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - 1);
+    return date;
+  });
+  const [endDate, setEndDate] = useState(() => new Date());
+  
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
@@ -187,9 +194,9 @@ const InventoryHistory = () => {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={vi}>
       <Box sx={{ p: 3, maxWidth: 1200, margin: '0 auto' }}>
-        <Typography variant="h5" component="h1" gutterBottom fontWeight="bold">
+        {/* <Typography variant="h5" component="h1" gutterBottom fontWeight="bold">
           Lịch sử nhập kho
-        </Typography>
+        </Typography> */}
         
         <Paper sx={{ mb: 3, p: 2 }}>
           <Grid container spacing={2} alignItems="center">
