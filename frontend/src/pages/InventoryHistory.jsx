@@ -39,6 +39,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import PersonIcon from '@mui/icons-material/Person';
 import StoreIcon from '@mui/icons-material/Store';
+import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
 
 const name = localStorage.getItem("fullName");
 
@@ -51,13 +52,17 @@ const InventoryHistory = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   
-  // Set default date range to last month
+  // Set default date range to first day and last day of current month
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
-    date.setMonth(date.getMonth() - 1);
+    date.setDate(1); // First day of current month
     return date;
   });
-  const [endDate, setEndDate] = useState(() => new Date());
+  const [endDate, setEndDate] = useState(() => {
+    const date = new Date();
+    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0); // Last day of current month
+    return lastDay;
+  });
   
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
@@ -284,7 +289,7 @@ const InventoryHistory = () => {
               <Table stickyHeader aria-label="sticky table">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Mã phiếu</TableCell>
+                    <TableCell sx={{ width: '200px' }}>Mã phiếu</TableCell>
                     <TableCell>Ngày nhận</TableCell>
                     <TableCell>Nhà cung cấp</TableCell>
                     <TableCell>Số sản phẩm</TableCell>
@@ -377,6 +382,12 @@ const InventoryHistory = () => {
                     </Stack>
                   </Grid>
                   <Grid item xs={6}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <ConfirmationNumberIcon color="primary" />
+                      <Typography variant="subtitle1">
+                        <strong>Mã đơn đặt hàng:</strong> {selectedReceipt.purchaseOrder || 'N/A'}
+                      </Typography>
+                    </Stack>
                   </Grid>
                   
                   {selectedReceipt.notes && (
