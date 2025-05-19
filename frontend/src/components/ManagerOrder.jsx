@@ -21,9 +21,10 @@ import {
   DialogActions,
   Typography,
   Stack,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import FilterListIcon from "@mui/icons-material/FilterList";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import PrintIcon from "@mui/icons-material/Print";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
@@ -50,11 +51,13 @@ function ManagerOrder() {
   const [filterDate, setFilterDate] = useState(new Date());
   const [filterStartDate, setFilterStartDate] = useState(null);
   const [filterEndDate, setFilterEndDate] = useState(null);
-  const [sortConfig, setSortConfig] = useState({
-    key: null,
-    direction: "asc",
-  });
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [weekPickerDate, setWeekPickerDate] = useState(new Date());
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success",
+  });
 
   useEffect(() => {
     fetchOrders();
@@ -111,11 +114,14 @@ function ManagerOrder() {
 
       const response = await axios.get(
         `http://localhost:8000/api/orders?${params.toString()}`,
-        { headers: { Authorization: `Bearer ${authToken}` } }
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }
       );
       setOrders(response.data);
     } catch (error) {
       console.error("Lỗi khi tải đơn hàng:", error);
+      showSnackbar("Lỗi khi tải danh sách đơn hàng", "error");
     }
   };
 
@@ -129,211 +135,6 @@ function ManagerOrder() {
   const handleCloseDetails = () => {
     setIsDetailsOpen(false);
     setSelectedOrder(null);
-  };
-
-  const handlePrintOrder = (order) => {
-    const printContent = `
-      <html>
-        <head>
-          <title>Hóa đơn #${order.orderNumber}</title>
-          <style>
-            @media print {
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .no-print { display: none !important; }
-            }
-            body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; padding: 10px; }
-            .receipt { width: 380px; margin: 0 auto; padding: 20px; border-bottom: 1px dashed #000; }
-            .header { text-align: center; margin-bottom: 15px; }
-            .header h2 { font-size: 1.6em; margin-bottom: 5px; }
-            .header p { margin: 2px 0; font-size: 0.9em; }
-            .info-section { margin-bottom: 10px; }
-            .info-title { font-weight: bold; margin-bottom: 5px; }
-            .info { display: flex; justify-content: space-between; margin-bottom: 3px; }
-            .items { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            .items th, .items td { padding: 8px 5px; text-align: left; border-bottom: 1px dashed #eee; }
-            .items th { font-weight: bold; }
-            .total-row { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 5px; border-top: 1px solid #ccc; }
-            .footer { text-align: center; margin-top: 15px; font-style: italic; }
-            .amount { text-align: right; }
-          </style>
-        </head>
-        <body>
-          <div class="receipt">
-            <div class="header">
-              <h2>CỬA HÀNG BÁN LẺ ABC</h2>
-              <p>Địa chỉ: 123 Đường XYZ, Quận ..., TP.HCM</p>
-              <p>Điện thoại: 09xxxxxxxxxx</p>
-              <p>MST: 0123456789</p>
-            </div>
-            <div class="info-section">
-              <div class="info-title">Thông tin đơn hàng:</div>
-              <div class="info"><span>Mã đơn hàng:</span> <span>${
-                order.orderNumber
-              }</span></div>
-              <div class="info"><span>Ngày:</span> <span>${format(
-                new Date(order.createdAt),
-                "dd/MM/yyyy HH:mm"
-              )}</span></div>
-              <div class="info"><span>Nhân viên:</span> <span>${
-                order.employeeId?.fullName || "Không xác định"
-              }</span></div>
-            </div>
-            <div class="info-section">
-              <div class="info-title">Thông tin khách hàng:</div>
-              <div class="info"><span>Khách hàng:</span> <span>${
-                order.customerId?.fullName || "Khách hàng vãng lai"
-              }</span></div>
-              ${
-                order.customerId?.phone
-                  ? `<div class="info"><span>Điện thoại:</span> <span>${order.customerId.phone}</span></div>`
-                  : ""
-              }
-              ${
-                order.customerId?.address
-                  ? `<div class="info"><span>Địa chỉ:</span> <span>${order.customerId.address}</span></div>`
-                  : ""
-              }
-            </div>
-            <table class="items">
-              <thead>
-                <tr>
-                  <th>Sản phẩm</th>
-                  <th style="text-align: right;">SL</th>
-                  <th>ĐVT</th>
-                  <th style="text-align: right;">Đơn giá</th>
-                  <th style="text-align: right;">Giảm</th>
-                  <th style="text-align: right;">Thành tiền</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${order.products
-                  .map((item) => {
-                    const originalPrice = item.originalUnitPrice || 0;
-                    const unitPrice = item.unitPrice || 0;
-                    const discountPercent =
-                      originalPrice > 0
-                        ? Math.round(
-                            ((originalPrice - unitPrice) / originalPrice) * 100
-                          )
-                        : 0;
-                    return `
-                    <tr>
-                      <td>${item.productId?.name || "Đang tải..."}</td>
-                      <td class="amount">${item.quantity}</td>
-                      <td>${item.selectedUnitName}</td>
-                      <td class="amount">${originalPrice.toLocaleString(
-                        "vi-VN"
-                      )} VNĐ</td>
-                      <td class="amount">${discountPercent}%</td>
-                      <td class="amount">${(item.itemTotal || 0).toLocaleString(
-                        "vi-VN"
-                      )} VNĐ</td>
-                    </tr>
-                  `;
-                  })
-                  .join("")}
-                <tr><td colspan="6"><hr/></td></tr>
-                ${
-                  order.discountAmount > 0
-                    ? `
-                  <tr class="total-row">
-                    <td colspan="5">Giảm giá (tổng):</td>
-                    <td class="amount">- ${order.discountAmount.toLocaleString(
-                      "vi-VN"
-                    )} VNĐ</td>
-                  </tr>`
-                    : ""
-                }
-                ${
-                  order.taxRate > 0
-                    ? `
-                  <tr class="total-row">
-                    <td colspan="5">Thuế (${order.taxRate * 100}%):</td>
-                    <td class="amount">${order.taxAmount?.toLocaleString(
-                      "vi-VN"
-                    )} VNĐ</td>
-                  </tr>`
-                    : ""
-                }
-                <tr class="total-row">
-                  <td colspan="5"><strong>Tổng cộng:</strong></td>
-                  <td class="amount"><strong>${order.finalAmount?.toLocaleString(
-                    "vi-VN"
-                  )} VNĐ</strong></td>
-                </tr>
-                ${
-                  order.depositAmount > 0
-                    ? `
-                  <tr class="total-row">
-                    <td colspan="5">Đặt cọc:</td>
-                    <td class="amount">${order.depositAmount.toLocaleString(
-                      "vi-VN"
-                    )} VNĐ</td>
-                  </tr>`
-                    : ""
-                }
-                ${
-                  (order.amountPaid !== undefined &&
-                    order.paymentStatus !== "pending") ||
-                  order.depositAmount > 0
-                    ? `
-                  <tr class="total-row">
-                    <td colspan="5"><strong>${
-                      (order.amountPaid || 0) >= (order.finalAmount || 0)
-                        ? "Tiền thừa:"
-                        : "Còn lại:"
-                    }</strong></td>
-                    <td class="amount"><strong>${Math.abs(
-                      (order.amountPaid || 0) - (order.finalAmount || 0)
-                    ).toLocaleString("vi-VN")} VNĐ</strong></td>
-                  </tr>`
-                    : ""
-                }
-              </tbody>
-            </table>
-            <div class="info-section">
-              <div class="info-title">Thông tin thanh toán:</div>
-              <div class="info"><span>Phương thức:</span> <span>${
-                {
-                  cash: "Tiền mặt",
-                  transfer: "Chuyển khoản",
-                }[order.paymentMethod] || "Không xác định"
-              }</span></div>
-              <div class="info"><span>Trạng thái:</span> <span>${renderPaymentStatus(
-                order.paymentStatus
-              )}</span></div>
-            </div>
-            ${
-              order.notes
-                ? `<div class="info-section"><div class="info-title">Ghi chú:</div><p>${order.notes}</p></div>`
-                : ""
-            }
-            <div class="footer">
-              <p>Cảm ơn quý khách đã mua hàng!</p>
-              <p>Hẹn gặp lại quý khách!</p>
-              <p>(Đây là hóa đơn bán lẻ)</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "absolute";
-    iframe.style.left = "-9999px";
-    document.body.appendChild(iframe);
-
-    const iframeWindow = iframe.contentWindow;
-    iframeWindow.document.open();
-    iframeWindow.document.write(printContent);
-    iframeWindow.document.close();
-
-    iframeWindow.onload = () => {
-      setTimeout(() => {
-        iframeWindow.print();
-        document.body.removeChild(iframe);
-      }, 500);
-    };
   };
 
   const handleFilterTimeRangeChange = (event) => {
@@ -392,6 +193,14 @@ function ManagerOrder() {
     });
   }, [orders, sortConfig]);
 
+  const showSnackbar = (message, severity = "success") => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
   return (
     <LocalizationProvider
       dateAdapter={AdapterDateFns}
@@ -443,7 +252,7 @@ function ManagerOrder() {
               value={filterDate}
               onChange={(newValue) => setFilterDate(newValue)}
               sx={{ flex: 0.5 }}
-              format="dd/MM/yyyy" // Thêm dòng này
+              format="dd/MM/yyyy"
             />
           )}
           {filterTimeRange === "month" && (
@@ -555,9 +364,6 @@ function ManagerOrder() {
                     <IconButton onClick={() => handleViewDetails(order)}>
                       <VisibilityIcon />
                     </IconButton>
-                    {/* <IconButton onClick={() => handlePrintOrder(order)}>
-                      <PrintIcon />
-                    </IconButton> */}
                   </TableCell>
                 </TableRow>
               ))}
@@ -571,16 +377,58 @@ function ManagerOrder() {
             onClose={handleCloseDetails}
             order={selectedOrder}
             authToken={authToken}
+            refreshOrders={fetchOrders}
+            showSnackbar={showSnackbar}
           />
         )}
+
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={handleSnackbarClose}
+        >
+          <Alert
+            onClose={handleSnackbarClose}
+            severity={snackbar.severity}
+            sx={{ width: "100%" }}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
       </Box>
     </LocalizationProvider>
   );
 }
 
-function OrderDetailDialog({ open, onClose, order, authToken }) {
+function OrderDetailDialog({
+  open,
+  onClose,
+  order,
+  authToken,
+  refreshOrders,
+  showSnackbar,
+}) {
   const [batchDetails, setBatchDetails] = useState({});
   const [loadingBatches, setLoadingBatches] = useState(false);
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [amountPaid, setAmountPaid] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedOrder, setEditedOrder] = useState({ ...order });
+
+  useEffect(() => {
+    if (order?.products) {
+      const uniqueBatchIds = new Set();
+      order.products.forEach((product) => {
+        if (product.batchesUsed?.length > 0) {
+          product.batchesUsed.forEach((batch) =>
+            uniqueBatchIds.add(batch.batchId)
+          );
+        }
+      });
+      if (uniqueBatchIds.size > 0)
+        fetchBatchDetails(Array.from(uniqueBatchIds));
+    }
+  }, [order, authToken]);
 
   const fetchBatchDetails = async (batchIds) => {
     setLoadingBatches(true);
@@ -603,180 +451,198 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
     }
   };
 
-  useEffect(() => {
-    if (order?.products) {
-      const uniqueBatchIds = new Set();
-      order.products.forEach((product) => {
-        if (product.batchesUsed?.length > 0) {
-          product.batchesUsed.forEach((batch) =>
-            uniqueBatchIds.add(batch.batchId)
-          );
-        }
-      });
-      if (uniqueBatchIds.size > 0)
-        fetchBatchDetails(Array.from(uniqueBatchIds));
+  const handleCompletePayment = async () => {
+    try {
+      const response = await axios.post(
+        `http://localhost:8000/api/orders/${order._id}/complete-payment`,
+        { amountPaid: parseFloat(amountPaid) },
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      if (response.data) {
+        showSnackbar("Thanh toán thành công", "success");
+        refreshOrders();
+        setIsPaymentDialogOpen(false);
+        onClose();
+      }
+    } catch (error) {
+      console.error("Lỗi khi hoàn thành thanh toán:", error);
+      showSnackbar("Lỗi khi thực hiện thanh toán", "error");
     }
-  }, [order, authToken]);
+  };
 
-  const getBatchDiscount = (productId) => {
-    const product = order.products.find((p) => p.productId === productId);
-    if (product?.batchesUsed?.length > 0) {
-      const batch = batchDetails[product.batchesUsed[0].batchId];
-      return batch?.discountInfo?.discountValue || 0;
+  const handleUpdateOrder = async () => {
+    try {
+      const response = await axios.patch(
+        `http://localhost:8000/api/orders/${order._id}`,
+        editedOrder,
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      if (response.data) {
+        showSnackbar("Cập nhật đơn hàng thành công", "success");
+        refreshOrders();
+        setIsEditing(false);
+      }
+    } catch (error) {
+      console.error("Lỗi khi cập nhật đơn hàng:", error);
+      showSnackbar("Lỗi khi cập nhật đơn hàng", "error");
     }
-    return 0;
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>Chi tiết đơn hàng #{order.orderNumber}</DialogTitle>
-      <DialogContent>
-        <Typography variant="h6" gutterBottom>
-          Thông tin khách hàng
-        </Typography>
-        <Typography>
-          Khách hàng: {order.customerId?.fullName || "Khách vãng lai"}
-        </Typography>
-        {order.customerId?.phone && (
-          <Typography>Điện thoại: {order.customerId.phone}</Typography>
-        )}
-        {order.customerId?.address && (
-          <Typography>Địa chỉ: {order.customerId.address}</Typography>
-        )}
-
-        <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-          Thông tin đơn hàng
-        </Typography>
-        <Typography>
-          Ngày tạo:{" "}
-          {format(new Date(order.createdAt), "dd/MM/yyyy HH:mm", {
-            locale: vi,
-          })}
-        </Typography>
-        <Typography>
-          Nhân viên: {order.employeeId?.fullName || "N/A"}
-        </Typography>
-        <Typography>
-          TT Thanh toán: {renderPaymentStatus(order.paymentStatus)}
-        </Typography>
-        <Typography>
-          Phương thức:{" "}
-          {{
-            cash: "Tiền mặt",
-            transfer: "Chuyển khoản",
-          }[order.paymentMethod] || order.paymentMethod}
-        </Typography>
-        {order.depositAmount > 0 && (
-          <Typography>
-            Đặt cọc:{" "}
-            {order.depositAmount.toLocaleString("vi-VN", {
-              style: "currency",
-              currency: "VND",
-            })}
+    <>
+      <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+        <DialogTitle>Chi tiết đơn hàng #{order.orderNumber}</DialogTitle>
+        <DialogContent>
+          <Typography variant="h6" gutterBottom>
+            Thông tin khách hàng
           </Typography>
-        )}
-        {order.amountPaid !== undefined &&
-          order.paymentStatus !== "pending" && (
-            <Typography>
-              Tiền khách đưa:{" "}
-              {order.amountPaid.toLocaleString("vi-VN", {
-                style: "currency",
-                currency: "VND",
-              })}
-            </Typography>
+          <Typography>
+            Khách hàng: {order.customerId?.fullName || "Khách vãng lai"}
+          </Typography>
+          {order.customerId?.phone && (
+            <Typography>Điện thoại: {order.customerId.phone}</Typography>
+          )}
+          {order.customerId?.address && (
+            <Typography>Địa chỉ: {order.customerId.address}</Typography>
           )}
 
-        <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-          Sản phẩm
-        </Typography>
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Sản phẩm</TableCell>
-                <TableCell>Số lượng</TableCell>
-                <TableCell>Đơn vị</TableCell>
-                <TableCell>Giá gốc</TableCell>
-                <TableCell>Giảm giá (%)</TableCell>
-                <TableCell>Thành tiền</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {order.products.map((item) => (
-                <TableRow key={item._id}>
-                  <TableCell>{item.productId?.name || "Đang tải..."}</TableCell>
-                  <TableCell>{item.quantity}</TableCell>
-                  <TableCell>{item.selectedUnitName}</TableCell>
-                  <TableCell>
-                    {(item.originalUnitPrice || 0).toLocaleString("vi-VN", {
-                      style: "currency",
-                      currency: "VND",
-                    })}
-                  </TableCell>
-                  <TableCell>{getBatchDiscount(item.productId)}%</TableCell>
-                  <TableCell>
-                    {(item.itemTotal || 0).toLocaleString("vi-VN", {
-                      style: "currency",
-                      currency: "VND",
-                    })}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {order.discountAmount > 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="right">
-                    Đã giảm giá:
-                  </TableCell>
-                  <TableCell>
-                    {order.discountAmount.toLocaleString("vi-VN", {
-                      style: "currency",
-                      currency: "VND",
-                    })}
-                  </TableCell>
-                </TableRow>
-              )}
-              {order.taxRate > 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="right">
-                    Thuế ({order.taxRate * 100}%):
-                  </TableCell>
-                  <TableCell>
-                    {order.taxAmount.toLocaleString("vi-VN", {
-                      style: "currency",
-                      currency: "VND",
-                    })}
-                  </TableCell>
-                </TableRow>
-              )}
-              <TableRow>
-                <TableCell colSpan={5} align="right">
-                  Tổng thành tiền:
-                </TableCell>
-                <TableCell>
-                  {order.finalAmount.toLocaleString("vi-VN", {
-                    style: "currency",
-                    currency: "VND",
-                  })}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </TableContainer>
+          <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+            Thông tin đơn hàng
+          </Typography>
+          <Typography>
+            Ngày tạo:{" "}
+            {format(new Date(order.createdAt), "dd/MM/yyyy HH:mm", {
+              locale: vi,
+            })}
+          </Typography>
+          <Typography>
+            Nhân viên: {order.employeeId?.fullName || "N/A"}
+          </Typography>
+          <Typography>
+            TT Thanh toán: {renderPaymentStatus(order.paymentStatus)}
+          </Typography>
+          <Typography>
+            Phương thức:{" "}
+            {{
+              cash: "Tiền mặt",
+              transfer: "Chuyển khoản",
+            }[order.paymentMethod] || order.paymentMethod}
+          </Typography>
 
-        {order.notes && (
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle1">Ghi chú:</Typography>
-            <Typography>{order.notes}</Typography>
-          </Box>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Đóng</Button>
-        <Button onClick={() => window.print()} startIcon={<PrintIcon />}>
-          In hóa đơn
-        </Button>
-      </DialogActions>
-    </Dialog>
+          <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+            Sản phẩm
+          </Typography>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Sản phẩm</TableCell>
+                  <TableCell>Số lượng</TableCell>
+                  <TableCell>Đơn vị</TableCell>
+                  <TableCell>Giá gốc</TableCell>
+                  <TableCell>Giảm giá (%)</TableCell>
+                  <TableCell>Thành tiền</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {order.products.map((item) => (
+                  <TableRow key={item._id}>
+                    <TableCell>
+                      {item.productId?.name || "Đang tải..."}
+                    </TableCell>
+                    <TableCell>{item.quantity}</TableCell>
+                    <TableCell>{item.selectedUnitName}</TableCell>
+                    <TableCell>
+                      {(item.originalUnitPrice || 0).toLocaleString("vi-VN", {
+                        style: "currency",
+                        currency: "VND",
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      {batchDetails[item.batchesUsed?.[0]?.batchId]
+                        ?.discountInfo?.discountValue || 0}
+                      %
+                    </TableCell>
+                    <TableCell>
+                      {(item.itemTotal || 0).toLocaleString("vi-VN", {
+                        style: "currency",
+                        currency: "VND",
+                      })}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions>
+          {order.orderType === "preorder" &&
+            order.paymentStatus === "unpaid" && (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => setIsPaymentDialogOpen(true)}
+              >
+                Hoàn thành thanh toán
+              </Button>
+            )}
+          <Button onClick={onClose}>Đóng</Button>
+          <Button onClick={() => window.print()} startIcon={<PrintIcon />}>
+            In hóa đơn
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={isPaymentDialogOpen}
+        onClose={() => setIsPaymentDialogOpen(false)}
+      >
+        <DialogTitle>Hoàn thành thanh toán</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Số tiền thanh toán"
+            type="number"
+            value={amountPaid}
+            onChange={(e) => setAmountPaid(e.target.value)}
+            fullWidth
+            margin="normal"
+            InputProps={{ inputProps: { min: 0 } }}
+          />
+          <Typography variant="subtitle1">
+            Tổng tiền cần thanh toán:{" "}
+            {order.finalAmount?.toLocaleString("vi-VN")} VNĐ
+          </Typography>
+          {amountPaid && (
+            <Typography
+              variant="subtitle1"
+              color={
+                parseFloat(amountPaid) < order.finalAmount ? "error" : "inherit"
+              }
+            >
+              Tiền thừa:{" "}
+              {Math.max(
+                parseFloat(amountPaid) - order.finalAmount,
+                0
+              ).toLocaleString("vi-VN")}{" "}
+              VNĐ
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsPaymentDialogOpen(false)}>Hủy bỏ</Button>
+          <Button
+            onClick={handleCompletePayment}
+            color="primary"
+            variant="contained"
+            disabled={
+              !amountPaid || isNaN(amountPaid) || parseFloat(amountPaid) <= 0
+            }
+          >
+            Xác nhận thanh toán
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }
 
