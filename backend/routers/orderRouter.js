@@ -5,14 +5,14 @@ const { protect, restrictTo } = require("../middlewares/authMiddleware");
 
 // Apply protect middleware to all routes in this router
 router.use(protect);
-// Apply restrictTo middleware to all routes in this router, allowing only 'admin' and 'employee'
-// Route để tạo đơn hàng
+
+// Route để tạo đơn hàng (xử lý cả 'instore' và 'preorder')
 router.post("/", orderController.createOrder);
 
-// Route để lấy danh sách tất cả các đơn hàng
-router.get("/", orderController.getAllOrders);
-
-// Route để lấy thông tin chi tiết của một đơn hàng theo ID
+// Route để lấy thông tin một đơn hàng theo ID
 router.get("/:orderId", orderController.getOrderById);
+
+// Route để lấy tất cả đơn hàng (có hỗ trợ tìm kiếm và lọc theo ngày)
+router.get("/", orderController.getAllOrders);
 
 module.exports = router;
