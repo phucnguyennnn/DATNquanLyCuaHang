@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Drawer,
   List,
@@ -41,6 +41,8 @@ import {
   Inventory2,
   MoveToInbox,
   History as HistoryIcon,
+  BarChart, // Thêm icon cho thống kê
+  Receipt, // Thêm icon cho báo cáo thu chi
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
@@ -49,18 +51,18 @@ const drawerWidth = 260;
 
 // Custom styled components for better UI
 const StyledListItemButton = styled(ListItemButton)(({ theme, active }) => ({
-  margin: '4px 8px',
-  borderRadius: '8px',
-  transition: 'all 0.2s ease-in-out',
-  '&:hover': {
+  margin: "4px 8px",
+  borderRadius: "8px",
+  transition: "all 0.2s ease-in-out",
+  "&:hover": {
     backgroundColor: alpha(theme.palette.primary.main, 0.08),
   },
   ...(active && {
     backgroundColor: alpha(theme.palette.primary.main, 0.12),
-    '& .MuiListItemIcon-root': {
+    "& .MuiListItemIcon-root": {
       color: theme.palette.primary.main,
     },
-    '& .MuiListItemText-primary': {
+    "& .MuiListItemText-primary": {
       fontWeight: 600,
       color: theme.palette.primary.main,
     },
@@ -68,19 +70,19 @@ const StyledListItemButton = styled(ListItemButton)(({ theme, active }) => ({
 }));
 
 const StyledSubListItemButton = styled(ListItemButton)(({ theme, active }) => ({
-  margin: '2px 8px',
-  paddingLeft: '24px',
-  borderRadius: '8px',
-  transition: 'all 0.2s ease-in-out',
-  '&:hover': {
+  margin: "2px 8px",
+  paddingLeft: "24px",
+  borderRadius: "8px",
+  transition: "all 0.2s ease-in-out",
+  "&:hover": {
     backgroundColor: alpha(theme.palette.primary.main, 0.05),
   },
   ...(active && {
     backgroundColor: alpha(theme.palette.primary.main, 0.08),
-    '& .MuiListItemIcon-root': {
+    "& .MuiListItemIcon-root": {
       color: theme.palette.primary.main,
     },
-    '& .MuiListItemText-primary': {
+    "& .MuiListItemText-primary": {
       fontWeight: 600,
       color: theme.palette.primary.main,
     },
@@ -95,13 +97,29 @@ const Sidebar = () => {
   const [openDashboard, setOpenDashboard] = useState(false);
   const [openLogoutDialog, setOpenLogoutDialog] = useState(false);
   const [openStockManagement, setOpenStockManagement] = useState(false);
-
-  const role = localStorage.getItem("userRole");
+  const [openStatistics, setOpenStatistics] = useState(false); // State cho mục Thống kê
+  const [localRole, setLocalRole] = useState(localStorage.getItem("userRole"));
   const fullName = localStorage.getItem("fullName") || "Người dùng";
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setLocalRole(localStorage.getItem("userRole"));
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  // Re-render Sidebar when the route changes to update the role-based menus
+  useEffect(() => {
+    setLocalRole(localStorage.getItem("userRole"));
+  }, [location.pathname]); // Theo dõi sự thay đổi của location.pathname
+
+  const role = localRole;
 
   // Function to check if the current path matches
   const isActive = (path) => location.pathname === path;
-  
+
   // Function to check if the current path starts with a prefix
   const isActiveGroup = (prefix) => location.pathname.startsWith(prefix);
 
@@ -169,11 +187,11 @@ const Sidebar = () => {
         sx={{
           width: drawerWidth,
           flexShrink: 0,
-          "& .MuiDrawer-paper": { 
-            width: drawerWidth, 
+          "& .MuiDrawer-paper": {
+            width: drawerWidth,
             boxSizing: "border-box",
-            boxShadow: '0 4px 12px 0 rgba(0,0,0,0.05)',
-            border: 'none'
+            boxShadow: "0 4px 12px 0 rgba(0,0,0,0.05)",
+            border: "none",
           },
         }}
         variant="permanent"
@@ -188,10 +206,10 @@ const Sidebar = () => {
           }}
         >
           {/* Logo and User Info Section
-          <Box 
-            sx={{ 
-              p: 2, 
-              display: 'flex', 
+          <Box
+            sx={{
+              p: 2,
+              display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               borderBottom: `1px solid ${theme.palette.divider}`,
@@ -199,39 +217,39 @@ const Sidebar = () => {
               pt: 3,
             }}
           >
-            <Typography 
-              variant="h5" 
-              sx={{ 
-                fontWeight: 'bold', 
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 'bold',
                 color: theme.palette.primary.main,
                 mb: 3,
               }}
             >
               STORE MANAGEMENT
             </Typography>
-            <Avatar 
-              sx={{ 
-                width: 60, 
-                height: 60, 
+            <Avatar
+              sx={{
+                width: 60,
+                height: 60,
                 mb: 1,
                 bgcolor: theme.palette.primary.main
               }}
             >
               {fullName.charAt(0)}
             </Avatar>
-            <Typography 
-              variant="subtitle1" 
-              sx={{ 
-                fontWeight: 'medium', 
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 'medium',
                 color: theme.palette.text.primary,
                 mb: 0.5
               }}
             >
               {fullName}
             </Typography>
-            <Typography 
-              variant="body2" 
-              sx={{ 
+            <Typography
+              variant="body2"
+              sx={{
                 color: theme.palette.text.secondary,
                 textTransform: 'capitalize'
               }}
@@ -243,7 +261,7 @@ const Sidebar = () => {
           {/* Main Navigation */}
           <List sx={{ p: 1 }}>
             {/* Home - Hiển thị cho tất cả các role */}
-            <StyledListItemButton 
+            <StyledListItemButton
               onClick={() => navigate("/homepage")}
               active={isActive("/homepage") ? 1 : 0}
             >
@@ -253,8 +271,50 @@ const Sidebar = () => {
               <ListItemText primary="Trang chủ" />
             </StyledListItemButton>
 
-            {/* Inventory và các mục con - Hiển thị cho admin và staff */}
-            {(role === "admin" || role === "employee") && (
+            {/* Bán hàng - Hiển thị cho tất cả các role */}
+            <StyledListItemButton
+              onClick={() => navigate("/Sales_page")}
+              active={isActive("/Sales_page") ? 1 : 0}
+            >
+              <ListItemIcon>
+                <PointOfSale />
+              </ListItemIcon>
+              <ListItemText primary="Bán hàng" />
+            </StyledListItemButton>
+
+            {/* Thống kê và các mục con - Chỉ hiển thị cho admin */}
+            {role === "admin" && (
+              <>
+                <StyledListItemButton
+                  onClick={() => setOpenStatistics(!openStatistics)}
+                  active={isActiveGroup("/statistics") ? 1 : 0}
+                >
+                  <ListItemIcon>
+                    <BarChart />
+                  </ListItemIcon>
+                  <ListItemText primary="Thống kê" />
+                  {openStatistics ? <ExpandLess /> : <ExpandMore />}
+                </StyledListItemButton>
+
+                <Collapse in={openStatistics} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding sx={{ pl: 2 }}>
+                    <StyledSubListItemButton
+                      onClick={() => navigate("/statistics/inoutpage")}
+                      active={isActive("/statistics/inoutpage") ? 1 : 0}
+                    >
+                      <ListItemIcon>
+                        <Receipt />
+                      </ListItemIcon>
+                      <ListItemText primary="Báo cáo thu chi" />
+                    </StyledSubListItemButton>
+                    {/* Thêm các mục thống kê khác nếu cần */}
+                  </List>
+                </Collapse>
+              </>
+            )}
+
+            {/* Inventory và các mục con - Chỉ hiển thị cho admin */}
+            {role === "admin" && (
               <>
                 <StyledListItemButton
                   onClick={() => setOpenInventory(!openInventory)}
@@ -292,72 +352,73 @@ const Sidebar = () => {
               </>
             )}
 
-            {/* Products - Hiển thị cho tất cả các role */}
-            <StyledListItemButton 
-              onClick={() => navigate("/Sales_page")}
-              active={isActive("/Sales_page") ? 1 : 0}
-            >
-              <ListItemIcon>
-                <PointOfSale />
-              </ListItemIcon>
-              <ListItemText primary="Bán hàng" />
-            </StyledListItemButton>
+            {/* Quản lý tồn kho với các menu con - Chỉ hiển thị cho admin */}
+            {role === "admin" && (
+              <StyledListItemButton
+                onClick={() => setOpenStockManagement(!openStockManagement)}
+                active={
+                  isActiveGroup("/Batchs_page") ||
+                  isActiveGroup("/return-history") ||
+                  isActiveGroup("/Inventory-history")
+                    ? 1
+                    : 0
+                }
+              >
+                <ListItemIcon>
+                  <Warehouse />
+                </ListItemIcon>
+                <ListItemText primary="Quản lý tồn kho" />
+                {openStockManagement ? <ExpandLess /> : <ExpandMore />}
+              </StyledListItemButton>
+            )}
 
-            {/* Quản lý tồn kho với các menu con */}
-            <StyledListItemButton 
-              onClick={() => setOpenStockManagement(!openStockManagement)}
-              active={isActiveGroup("/Batchs_page") || isActiveGroup("/return-history") ? 1 : 0}
-            >
-              <ListItemIcon>
-                <Warehouse />
-              </ListItemIcon>
-              <ListItemText primary="Quản lý tồn kho" />
-              {openStockManagement ? <ExpandLess /> : <ExpandMore />}
-            </StyledListItemButton>
+            {role === "admin" && (
+              <Collapse in={openStockManagement} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding sx={{ pl: 2 }}>
+                  <StyledSubListItemButton
+                    onClick={() => navigate("/Batchs_page")}
+                    active={isActive("/Batchs_page") ? 1 : 0}
+                  >
+                    <ListItemIcon>
+                      <Inventory />
+                    </ListItemIcon>
+                    <ListItemText primary="Danh sách tồn kho" />
+                  </StyledSubListItemButton>
+                  <StyledSubListItemButton
+                    onClick={() => navigate("/return-history")}
+                    active={isActive("/return-history") ? 1 : 0}
+                  >
+                    <ListItemIcon>
+                      <Description />
+                    </ListItemIcon>
+                    <ListItemText primary="Lịch sử trả hàng" />
+                  </StyledSubListItemButton>
+                  <StyledSubListItemButton
+                    onClick={() => navigate("/Inventory-history")}
+                    active={isActive("/Inventory-history") ? 1 : 0}
+                  >
+                    <ListItemIcon>
+                      <Description />
+                    </ListItemIcon>
+                    <ListItemText primary="Lịch sử nhập kho" />
+                  </StyledSubListItemButton>
+                </List>
+              </Collapse>
+            )}
 
-            <Collapse in={openStockManagement} timeout="auto" unmountOnExit>
-              <List component="div" disablePadding sx={{ pl: 2 }}>
-                <StyledSubListItemButton
-                  onClick={() => navigate("/Batchs_page")}
-                  active={isActive("/Batchs_page") ? 1 : 0}
-                >
-                  <ListItemIcon>
-                    <Inventory />
-                  </ListItemIcon>
-                  <ListItemText primary="Danh sách tồn kho" />
-                </StyledSubListItemButton>
-                <StyledSubListItemButton
-                  onClick={() => navigate("/return-history")}
-                  active={isActive("/return-history") ? 1 : 0}
-                >
-                  <ListItemIcon>
-                    <Description />
-                  </ListItemIcon>
-                  <ListItemText primary="Lịch sử trả hàng" />
-                </StyledSubListItemButton>
-
-                <StyledSubListItemButton
-                  onClick={() => navigate("/Inventory-history")}
-                  active={isActive("/Inventory-history") ? 1 : 0}
-                >
-                  <ListItemIcon>
-                    <Description />
-                  </ListItemIcon>
-                  <ListItemText primary="Lịch sử nhập kho" />
-                </StyledSubListItemButton>
-              </List>
-            </Collapse>
-
-            {(role === "admin" || role === "employee") && (
+            {/* Quản lý chung và các mục con - Chỉ hiển thị cho admin */}
+            {role === "admin" && (
               <>
                 <StyledListItemButton
                   onClick={() => setOpenDashboard(!openDashboard)}
                   active={
-                    isActiveGroup("/products_manager") || 
+                    isActiveGroup("/products_manager") ||
                     isActiveGroup("/categories") ||
                     isActiveGroup("/suppliers") ||
                     isActiveGroup("/users") ||
-                    isActiveGroup("/profile") ? 1 : 0
+                    isActiveGroup("/profile")
+                      ? 1
+                      : 0
                   }
                 >
                   <ListItemIcon>
@@ -424,7 +485,7 @@ const Sidebar = () => {
           {/* Bottom Section */}
           <Box sx={{ flexGrow: 1 }} />
           <List sx={{ p: 1 }}>
-            <StyledListItemButton 
+            <StyledListItemButton
               onClick={() => navigate("/settings")}
               active={isActive("/settings") ? 1 : 0}
             >
@@ -434,13 +495,13 @@ const Sidebar = () => {
               <ListItemText primary="Cài đặt" />
             </StyledListItemButton>
 
-            <StyledListItemButton 
+            <StyledListItemButton
               onClick={handleLogoutClick}
-              sx={{ 
+              sx={{
                 color: theme.palette.error.main,
-                '&:hover': {
+                "&:hover": {
                   backgroundColor: alpha(theme.palette.error.main, 0.08),
-                }
+                },
               }}
             >
               <ListItemIcon sx={{ color: theme.palette.error.main }}>
@@ -460,10 +521,10 @@ const Sidebar = () => {
           <Button onClick={handleCloseLogoutDialog} variant="outlined">
             Hủy
           </Button>
-          <Button 
-            onClick={handleConfirmLogout} 
-            variant="contained" 
-            color="error" 
+          <Button
+            onClick={handleConfirmLogout}
+            variant="contained"
+            color="error"
             autoFocus
           >
             Đăng xuất

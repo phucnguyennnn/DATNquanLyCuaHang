@@ -38,7 +38,7 @@ import { useCart } from "../contexts/CartContext";
 
 const ProductListPage = () => {
   const [categories, setCategories] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [productsWithBatches, setProductsWithBatches] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
@@ -55,30 +55,35 @@ const ProductListPage = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [currentProduct, setCurrentProduct] = useState(null);
+  const [remainingQuantity, setRemainingQuantity] = useState(0);
 
-  const fetchProducts = async () => {
+  const fetchProductsWithBatches = async () => {
     try {
-      const response = await axios.get("http://localhost:8000/api/products");
+      const response = await axios.get(
+        "http://localhost:8000/api/products/batch/products-with-batches"
+      );
       if (response.data.success) {
-        setProducts(response.data.data);
+        setProductsWithBatches(response.data.data);
       }
     } catch (error) {
-      console.error("Error fetching products:", error);
+      console.error("Error fetching products with batches:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchProductsByCategory = async (categoryId) => {
+  const fetchProductsWithBatchesByCategory = async (categoryId) => {
     try {
       const response = await axios.get(
-        `http://localhost:8000/api/products?category=${categoryId}`
+        `http://localhost:8000/api/products/batch/products-with-batches?category=${categoryId}`
       );
       if (response.data.success) {
-        setProducts(response.data.data);
+        setProductsWithBatches(response.data.data);
       }
     } catch (error) {
-      console.error("Error fetching products by category:", error);
+      console.error("Error fetching products with batches by category:", error);
+    } finally {
+      setLoading(false); // Đảm bảo trạng thái loading được cập nhật
     }
   };
 
@@ -95,11 +100,16 @@ const ProductListPage = () => {
 
   const handleCategoryClick = (category) => {
     setSelectedCategory(category);
-    category ? fetchProductsByCategory(category._id) : fetchProducts();
+    setLoading(true); // Hiển thị trạng thái loading khi chuyển đổi danh mục
+    if (category) {
+      fetchProductsWithBatchesByCategory(category._id);
+    } else {
+      fetchProductsWithBatches();
+    }
   };
 
   const handleProductClick = (productId) => {
-    const productDetails = products.find(
+    const productDetails = productsWithBatches.find(
       (product) => product._id === productId
     );
     setSelectedProductDetails(productDetails);
@@ -115,11 +125,24 @@ const ProductListPage = () => {
     navigate("/cart_page");
   };
 
+  const calculateTotalRemainingQuantity = (product) => {
+    if (!product.batches || product.batches.length === 0) {
+      return 0;
+    }
+    return product.batches.reduce(
+      (total, batch) =>
+        total +
+        ((batch.remaining_quantity || 0) - (batch.reserved_quantity || 0)),
+      0
+    );
+  };
+
   const handleAddToCartClick = (event, product) => {
     event.stopPropagation();
     setAnchorEl(event.currentTarget);
     setCurrentProduct(product);
     setSelectedQuantity(1);
+    setRemainingQuantity(calculateTotalRemainingQuantity(product));
   };
 
   const handleAddToCart = () => {
@@ -127,7 +150,17 @@ const ProductListPage = () => {
 
     const baseUnit = currentProduct.units.find((unit) => unit.ratio === 1);
     if (!baseUnit) {
-      setSnackbarMessage("Không thể thêm sản phẩm: không tìm thấy đơn vị cơ bản");
+      setSnackbarMessage(
+        "Không thể thêm sản phẩm: không tìm thấy đơn vị cơ bản"
+      );
+      setSnackbarOpen(true);
+      return;
+    }
+
+    if (selectedQuantity > remainingQuantity) {
+      setSnackbarMessage(
+        `Số lượng bạn chọn (${selectedQuantity}) vượt quá số lượng còn lại (${remainingQuantity})`
+      );
       setSnackbarOpen(true);
       return;
     }
@@ -155,10 +188,13 @@ const ProductListPage = () => {
   const handleCloseQuantityPopover = () => {
     setAnchorEl(null);
     setCurrentProduct(null);
+    setRemainingQuantity(0);
   };
 
   const handleIncrementQuantity = () => {
-    setSelectedQuantity((prev) => prev + 1);
+    if (selectedQuantity < remainingQuantity) {
+      setSelectedQuantity((prev) => prev + 1);
+    }
   };
 
   const handleDecrementQuantity = () => {
@@ -167,7 +203,15 @@ const ProductListPage = () => {
 
   const handleQuantityChange = (event) => {
     const value = parseInt(event.target.value);
-    setSelectedQuantity(isNaN(value) || value < 1 ? 1 : value);
+    if (!isNaN(value) && value >= 1 && value <= remainingQuantity) {
+      setSelectedQuantity(value);
+    } else if (value > remainingQuantity) {
+      setSelectedQuantity(remainingQuantity);
+      setSnackbarMessage(`Số lượng tối đa có thể thêm là ${remainingQuantity}`);
+      setSnackbarOpen(true);
+    } else {
+      setSelectedQuantity(1);
+    }
   };
 
   const handleSnackbarClose = () => {
@@ -176,7 +220,7 @@ const ProductListPage = () => {
 
   useEffect(() => {
     fetchCategories();
-    fetchProducts();
+    fetchProductsWithBatches();
   }, []);
 
   const getBaseUnitPrice = (product) => {
@@ -274,18 +318,16 @@ const ProductListPage = () => {
     ));
   };
 
-  const filteredProducts = products
-    .filter((product) => product.status !== "inactive")
-    .filter((product) =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+  const filteredProductsWithBatches = productsWithBatches.filter((product) =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <Box sx={{ display: "flex", bgcolor: theme.palette.background.default }}>
       <Box
         sx={{
           width: 250,
-          minWidth: 250, 
+          minWidth: 250,
           maxWidth: 250,
           borderRight: `1px solid ${theme.palette.divider}`,
           bgcolor: primaryColor,
@@ -311,7 +353,9 @@ const ProductListPage = () => {
             <ListItemButton
               onClick={() => handleCategoryClick(null)}
               sx={{
-                backgroundColor: !selectedCategory ? activeColor : "transparent",
+                backgroundColor: !selectedCategory
+                  ? activeColor
+                  : "transparent",
                 "&:hover": { backgroundColor: hoverColor },
               }}
             >
@@ -350,7 +394,7 @@ const ProductListPage = () => {
         </Box>
 
         <Grid container spacing={3}>
-          {filteredProducts.map((product) => (
+          {filteredProductsWithBatches.map((product) => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={product._id}>
               <Card sx={{ height: "100%", boxShadow: 2 }}>
                 {product.images?.length > 0 ? (
@@ -391,6 +435,13 @@ const ProductListPage = () => {
                   {renderPrice(product)}
                   <Typography variant="caption" color="text.secondary">
                     Đơn vị: {product.units.find((u) => u.ratio === 1)?.name}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="success.main"
+                    sx={{ fontWeight: "bold", mt: 1 }}
+                  >
+                    Số lượng còn lại: {calculateTotalRemainingQuantity(product)}
                   </Typography>
                   <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                     <Button
@@ -455,6 +506,7 @@ const ProductListPage = () => {
                 onChange={handleQuantityChange}
                 inputProps={{
                   min: 1,
+                  max: remainingQuantity,
                   style: { textAlign: "center", width: "50px" },
                 }}
               />
@@ -462,10 +514,17 @@ const ProductListPage = () => {
                 <AddIcon fontSize="small" />
               </Button>
             </ButtonGroup>
-            <Button variant="contained" onClick={handleAddToCart} color="primary">
+            <Button
+              variant="contained"
+              onClick={handleAddToCart}
+              color="primary"
+            >
               Xác nhận
             </Button>
           </Box>
+          <Typography variant="caption" color="text.secondary">
+            Số lượng còn lại: {remainingQuantity}
+          </Typography>
         </Box>
       </Popover>
 
@@ -512,6 +571,15 @@ const ProductListPage = () => {
                   })}
                 </Typography>
               ))}
+
+              <Typography
+                variant="body2"
+                color="success.main"
+                sx={{ fontWeight: "bold", mt: 1 }}
+              >
+                Số lượng còn lại:{" "}
+                {calculateTotalRemainingQuantity(selectedProductDetails)}
+              </Typography>
 
               {selectedProductDetails.discount && (
                 <Box sx={{ mt: 2, p: 2, bgcolor: theme.palette.action.hover }}>

@@ -481,7 +481,10 @@ exports.updateProduct = async (req, res) => {
 
     // --- Chuẩn hóa cập nhật expiryThresholdDays và lowQuantityThreshold ---
     if (updates.expiryThresholdDays !== undefined) {
-      if (updates.expiryThresholdDays === "" || updates.expiryThresholdDays === null) {
+      if (
+        updates.expiryThresholdDays === "" ||
+        updates.expiryThresholdDays === null
+      ) {
         product.expiryThresholdDays = undefined;
       } else {
         const value = Number(updates.expiryThresholdDays);
@@ -492,7 +495,10 @@ exports.updateProduct = async (req, res) => {
     }
 
     if (updates.lowQuantityThreshold !== undefined) {
-      if (updates.lowQuantityThreshold === "" || updates.lowQuantityThreshold === null) {
+      if (
+        updates.lowQuantityThreshold === "" ||
+        updates.lowQuantityThreshold === null
+      ) {
         product.lowQuantityThreshold = undefined;
       } else {
         const value = Number(updates.lowQuantityThreshold);
@@ -688,4 +694,178 @@ exports.getByBatchCode = async (req, res) => {
       error: error.message,
     });
   }
+};
+exports.getProductsWithStockDetails = async (req, res) => {
+  try {
+    const productsWithStockDetails = await Product.aggregate([
+      {
+        $lookup: {
+          from: "batches", // Tên của collection Batches
+          localField: "_id",
+          foreignField: "product",
+          as: "batches",
+        },
+      },
+      {
+        $match: {
+          "batches.remaining_quantity": { $gt: 0 },
+          "batches.status": "active", // Chỉ lấy các batch còn hoạt động
+          active: true, // Chỉ lấy các sản phẩm đang hoạt động
+        },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          name: { $first: "$name" },
+          category: { $first: "$category" },
+          description: { $first: "$description" },
+          units: { $first: "$units" },
+          minStockLevel: { $first: "$minStockLevel" },
+          reorderLevel: { $first: "$reorderLevel" },
+          weight: { $first: "$weight" },
+          dimensions: { $first: "$dimensions" },
+          taxRate: { $first: "$taxRate" },
+          tags: { $first: "$tags" },
+          expiryDiscountRules: { $first: "$expiryDiscountRules" },
+          discount: { $first: "$discount" },
+          suppliers: { $first: "$suppliers" },
+          images: { $first: "$images" },
+          inStockBatches: {
+            $push: {
+              _id: "$batches._id",
+              batchCode: "$batches.batchCode",
+              manufacture_day: "$batches.manufacture_day",
+              expiry_day: "$batches.expiry_day",
+              remaining_quantity: "$batches.remaining_quantity",
+              import_price: "$batches.import_price",
+              discountInfo: "$batches.discountInfo",
+              status: "$batches.status",
+              supplier: "$batches.supplier",
+              createdAt: "$batches.createdAt",
+              updatedAt: "$batches.updatedAt",
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          category: 1,
+          description: 1,
+          units: 1,
+          minStockLevel: 1,
+          reorderLevel: 1,
+          weight: 1,
+          dimensions: 1,
+          taxRate: 1,
+          tags: 1,
+          expiryDiscountRules: 1,
+          discount: 1,
+          suppliers: 1,
+          images: 1,
+          inStockBatches: 1,
+        },
+      },
+      {
+        $lookup: {
+          from: "categories", // Tên của collection Categories
+          localField: "category",
+          foreignField: "_id",
+          as: "categoryInfo",
+        },
+      },
+      {
+        $unwind: { path: "$categoryInfo", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $lookup: {
+          from: "suppliers", // Tên của collection Suppliers
+          localField: "inStockBatches.supplier",
+          foreignField: "_id",
+          as: "supplierInfo",
+        },
+      },
+      // Gộp thông tin nhà cung cấp (nếu cần)
+      {
+        $addFields: {
+          category: "$categoryInfo",
+          // supplierDetails: "$supplierInfo" // Nếu muốn xem thông tin chi tiết nhà cung cấp cho từng batch
+        },
+      },
+      {
+        $project: {
+          categoryInfo: 0,
+          supplierInfo: 0,
+          // Không cần loại bỏ các trường của batch nữa vì chúng ta muốn giữ lại
+        },
+      },
+    ]);
+
+    // Lọc ra các sản phẩm hết hàng (không có batch nào còn số lượng)
+    const outOfStockProducts = await Product.find({
+      _id: { $nin: productsWithStockDetails.map((p) => p._id) },
+      active: true,
+    }).populate({
+      path: "category",
+      select: "name description",
+    });
+
+    return res.status(200).json({
+      success: true,
+      inStockProducts: {
+        results: productsWithStockDetails.length,
+        data: productsWithStockDetails,
+      },
+      outOfStockProducts: {
+        results: outOfStockProducts.length,
+        data: outOfStockProducts,
+      },
+    });
+  } catch (error) {
+    console.error("Get products with stock details error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ.",
+      error: error.message,
+    });
+  }
+};exports.getProductsWithBatches = async (req, res) => {
+    try {
+        const query = {
+            batches: { $exists: true, $not: { $size: 0 } }
+        };
+
+        // Kiểm tra xem có tham số category trong query không
+        if (req.query.category) {
+            query.category = req.query.category;
+        }
+
+        const productsWithBatches = await Product.find(query)
+            .populate({
+                path: "category",
+                select: "name description",
+            })
+            .populate({
+                path: "suppliers.supplier",
+                select: "name company contact.phone contact.email",
+            })
+            .populate({
+                path: "batches",
+                select: "",
+            });
+
+        return res.status(200).json({
+            success: true,
+            results: productsWithBatches.length,
+            data: productsWithBatches,
+        });
+    } catch (error) {
+        console.error("Get products with batches error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Lỗi máy chủ nội bộ.",
+            error: error.message,
+        });
+    }
 };

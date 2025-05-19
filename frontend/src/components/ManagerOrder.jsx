@@ -71,12 +71,9 @@ function ManagerOrder() {
   const fetchOrders = async () => {
     try {
       const params = new URLSearchParams();
-      if (searchQuery) {
-        params.append("$or", searchQuery);
-      }
-      if (filterPaymentStatus) {
+      if (searchQuery) params.append("$or", searchQuery);
+      if (filterPaymentStatus)
         params.append("paymentStatus", filterPaymentStatus);
-      }
 
       if (filterTimeRange === "day" && filterDate) {
         const startOfDay = new Date(filterDate);
@@ -86,19 +83,19 @@ function ManagerOrder() {
         params.append("startDate", startOfDay.toISOString());
         params.append("endDate", endOfDay.toISOString());
       } else if (filterTimeRange === "week" && weekPickerDate) {
-        const startOfCurrentWeek = startOfWeek(weekPickerDate, { locale: vi });
-        const endOfCurrentWeek = endOfWeek(weekPickerDate, { locale: vi });
-        startOfCurrentWeek.setHours(0, 0, 0, 0);
-        endOfCurrentWeek.setHours(23, 59, 59, 999);
-        params.append("startDate", startOfCurrentWeek.toISOString());
-        params.append("endDate", endOfCurrentWeek.toISOString());
+        const start = startOfWeek(weekPickerDate, { locale: vi });
+        const end = endOfWeek(weekPickerDate, { locale: vi });
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        params.append("startDate", start.toISOString());
+        params.append("endDate", end.toISOString());
       } else if (filterTimeRange === "month" && filterDate) {
-        const startOfCurrentMonth = startOfMonth(filterDate);
-        const endOfCurrentMonth = endOfMonth(filterDate);
-        startOfCurrentMonth.setHours(0, 0, 0, 0);
-        endOfCurrentMonth.setHours(23, 59, 59, 999);
-        params.append("startDate", startOfCurrentMonth.toISOString());
-        params.append("endDate", endOfCurrentMonth.toISOString());
+        const start = startOfMonth(filterDate);
+        const end = endOfMonth(filterDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        params.append("startDate", start.toISOString());
+        params.append("endDate", end.toISOString());
       } else if (
         filterTimeRange === "custom" &&
         filterStartDate &&
@@ -114,11 +111,7 @@ function ManagerOrder() {
 
       const response = await axios.get(
         `http://localhost:8000/api/orders?${params.toString()}`,
-        {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${authToken}` } }
       );
       setOrders(response.data);
     } catch (error) {
@@ -126,49 +119,41 @@ function ManagerOrder() {
     }
   };
 
-  const handleSearchChange = (event) => {
-    setSearchQuery(event.target.value);
-  };
-
-  const handleFilterPaymentStatusChange = (event) => {
+  const handleSearchChange = (event) => setSearchQuery(event.target.value);
+  const handleFilterPaymentStatusChange = (event) =>
     setFilterPaymentStatus(event.target.value);
-  };
-
   const handleViewDetails = (order) => {
     setSelectedOrder(order);
     setIsDetailsOpen(true);
   };
-
   const handleCloseDetails = () => {
     setIsDetailsOpen(false);
     setSelectedOrder(null);
   };
 
   const handlePrintOrder = (order) => {
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(`
+    const printContent = `
       <html>
         <head>
           <title>Hóa đơn #${order.orderNumber}</title>
           <style>
-            body { font-family: 'Arial', sans-serif; font-size: 12px; line-height: 1.3; }
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .no-print { display: none !important; }
+            }
+            body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; padding: 10px; }
             .receipt { width: 380px; margin: 0 auto; padding: 20px; border-bottom: 1px dashed #000; }
             .header { text-align: center; margin-bottom: 15px; }
             .header h2 { font-size: 1.6em; margin-bottom: 5px; }
             .header p { margin: 2px 0; font-size: 0.9em; }
             .info-section { margin-bottom: 10px; }
             .info-title { font-weight: bold; margin-bottom: 5px; }
-            .info { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 0.95em; }
+            .info { display: flex; justify-content: space-between; margin-bottom: 3px; }
             .items { width: 100%; border-collapse: collapse; margin-top: 10px; }
             .items th, .items td { padding: 8px 5px; text-align: left; border-bottom: 1px dashed #eee; }
-            .items th { font-weight: bold; font-size: 1em; }
-            .items td { font-size: 0.95em; }
-            .total-row { display: flex; justify-content: space-between; margin-top: 8px; font-size: 1em; padding-top: 5px; border-top: 1px solid #ccc; }
-            .total-row strong { font-weight: bold; }
-            .footer { text-align: center; margin-top: 15px; font-size: 0.9em; font-style: italic; }
-            .product-info { display: flex; flex-direction: column; }
-            .product-name { font-weight: bold; }
-            .discount { font-size: 0.8em; color: #777; }
+            .items th { font-weight: bold; }
+            .total-row { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 5px; border-top: 1px solid #ccc; }
+            .footer { text-align: center; margin-top: 15px; font-style: italic; }
             .amount { text-align: right; }
           </style>
         </head>
@@ -187,8 +172,7 @@ function ManagerOrder() {
               }</span></div>
               <div class="info"><span>Ngày:</span> <span>${format(
                 new Date(order.createdAt),
-                "dd/MM/yyyy HH:mm",
-                { locale: vi }
+                "dd/MM/yyyy HH:mm"
               )}</span></div>
               <div class="info"><span>Nhân viên:</span> <span>${
                 order.employeeId?.fullName || "Không xác định"
@@ -224,53 +208,51 @@ function ManagerOrder() {
               <tbody>
                 ${order.products
                   .map((item) => {
+                    const originalPrice = item.originalUnitPrice || 0;
+                    const unitPrice = item.unitPrice || 0;
                     const discountPercent =
-                      item.originalUnitPrice > 0
+                      originalPrice > 0
                         ? Math.round(
-                            ((item.originalUnitPrice - item.unitPrice) /
-                              item.originalUnitPrice) *
-                              100
+                            ((originalPrice - unitPrice) / originalPrice) * 100
                           )
                         : 0;
-                    const discountAmount =
-                      item.originalUnitPrice - item.unitPrice;
                     return `
-                      <tr>
-                        <td><div class="product-info"><div class="product-name">${
-                          item.productId?.name || "Đang tải..."
-                        }</div></div></td>
-                        <td class="amount">${item.quantity}</td>
-                        <td>${item.selectedUnitName}</td>
-                        <td class="amount">${item.originalUnitPrice?.toLocaleString(
-                          "vi-VN"
-                        )} VNĐ</td>
-                        <td class="amount">${discountPercent}% ${
-                      discountAmount > 0
-                        ? `(${discountAmount.toLocaleString("vi-VN")} VNĐ)`
-                        : ""
-                    }</td>
-                        <td class="amount">${item.itemTotal?.toLocaleString(
-                          "vi-VN"
-                        )} VNĐ</td>
-                      </tr>
-                    `;
+                    <tr>
+                      <td>${item.productId?.name || "Đang tải..."}</td>
+                      <td class="amount">${item.quantity}</td>
+                      <td>${item.selectedUnitName}</td>
+                      <td class="amount">${originalPrice.toLocaleString(
+                        "vi-VN"
+                      )} VNĐ</td>
+                      <td class="amount">${discountPercent}%</td>
+                      <td class="amount">${(item.itemTotal || 0).toLocaleString(
+                        "vi-VN"
+                      )} VNĐ</td>
+                    </tr>
+                  `;
                   })
                   .join("")}
                 <tr><td colspan="6"><hr/></td></tr>
                 ${
                   order.discountAmount > 0
-                    ? `<tr class="total-row"><td colspan="5">Giảm giá (tổng):</td><td class="amount">- ${order.discountAmount.toLocaleString(
-                        "vi-VN"
-                      )} VNĐ</td></tr>`
+                    ? `
+                  <tr class="total-row">
+                    <td colspan="5">Giảm giá (tổng):</td>
+                    <td class="amount">- ${order.discountAmount.toLocaleString(
+                      "vi-VN"
+                    )} VNĐ</td>
+                  </tr>`
                     : ""
                 }
                 ${
                   order.taxRate > 0
-                    ? `<tr class="total-row"><td colspan="5">Thuế (${
-                        order.taxRate * 100
-                      }%):</td><td class="amount">${order.taxAmount?.toLocaleString(
-                        "vi-VN"
-                      )} VNĐ</td></tr>`
+                    ? `
+                  <tr class="total-row">
+                    <td colspan="5">Thuế (${order.taxRate * 100}%):</td>
+                    <td class="amount">${order.taxAmount?.toLocaleString(
+                      "vi-VN"
+                    )} VNĐ</td>
+                  </tr>`
                     : ""
                 }
                 <tr class="total-row">
@@ -281,9 +263,13 @@ function ManagerOrder() {
                 </tr>
                 ${
                   order.depositAmount > 0
-                    ? `<tr class="total-row"><td colspan="5">Đặt cọc:</td><td class="amount">${order.depositAmount.toLocaleString(
-                        "vi-VN"
-                      )} VNĐ</td></tr>`
+                    ? `
+                  <tr class="total-row">
+                    <td colspan="5">Đặt cọc:</td>
+                    <td class="amount">${order.depositAmount.toLocaleString(
+                      "vi-VN"
+                    )} VNĐ</td>
+                  </tr>`
                     : ""
                 }
                 ${
@@ -291,14 +277,16 @@ function ManagerOrder() {
                     order.paymentStatus !== "pending") ||
                   order.depositAmount > 0
                     ? `
-                      <tr class="total-row"><td colspan="5"><strong>${
-                        order.amountPaid - order.finalAmount >= 0
-                          ? "Tiền thừa:"
-                          : "Còn lại:"
-                      }</strong></td>
-                      <td class="amount"><strong>${(
-                        order.amountPaid - order.finalAmount
-                      ).toLocaleString("vi-VN")} VNĐ</strong></td></tr>`
+                  <tr class="total-row">
+                    <td colspan="5"><strong>${
+                      (order.amountPaid || 0) >= (order.finalAmount || 0)
+                        ? "Tiền thừa:"
+                        : "Còn lại:"
+                    }</strong></td>
+                    <td class="amount"><strong>${Math.abs(
+                      (order.amountPaid || 0) - (order.finalAmount || 0)
+                    ).toLocaleString("vi-VN")} VNĐ</strong></td>
+                  </tr>`
                     : ""
                 }
               </tbody>
@@ -306,11 +294,10 @@ function ManagerOrder() {
             <div class="info-section">
               <div class="info-title">Thông tin thanh toán:</div>
               <div class="info"><span>Phương thức:</span> <span>${
-                order.paymentMethod === "cash"
-                  ? "Tiền mặt"
-                  : order.paymentMethod === "transfer"
-                  ? "Chuyển khoản"
-                  : order.paymentMethod || "Không xác định"
+                {
+                  cash: "Tiền mặt",
+                  transfer: "Chuyển khoản",
+                }[order.paymentMethod] || "Không xác định"
               }</span></div>
               <div class="info"><span>Trạng thái:</span> <span>${renderPaymentStatus(
                 order.paymentStatus
@@ -329,9 +316,24 @@ function ManagerOrder() {
           </div>
         </body>
       </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
+    `;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "absolute";
+    iframe.style.left = "-9999px";
+    document.body.appendChild(iframe);
+
+    const iframeWindow = iframe.contentWindow;
+    iframeWindow.document.open();
+    iframeWindow.document.write(printContent);
+    iframeWindow.document.close();
+
+    iframeWindow.onload = () => {
+      setTimeout(() => {
+        iframeWindow.print();
+        document.body.removeChild(iframe);
+      }, 500);
+    };
   };
 
   const handleFilterTimeRangeChange = (event) => {
@@ -339,25 +341,22 @@ function ManagerOrder() {
     setFilterDate(null);
     setFilterStartDate(null);
     setFilterEndDate(null);
-    setWeekPickerDate(new Date()); // Reset week picker date
+    setWeekPickerDate(new Date());
   };
 
-  const handleWeekChange = (newDate) => {
-    setWeekPickerDate(newDate);
-  };
+  const handleWeekChange = (newDate) => setWeekPickerDate(newDate);
+  const handleSort = (key) =>
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
+    }));
 
-  const handleSort = (key) => {
-    let direction = "asc";
-    if (sortConfig.key === key && sortConfig.direction === "asc") {
-      direction = "desc";
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const renderSortIcon = (key) => {
-    if (sortConfig.key !== key) return null;
-    return sortConfig.direction === "asc" ? "↑" : "↓";
-  };
+  const renderSortIcon = (key) =>
+    sortConfig.key === key
+      ? sortConfig.direction === "asc"
+        ? "↑"
+        : "↓"
+      : null;
 
   const getSortValue = (order, key) => {
     switch (key) {
@@ -380,23 +379,30 @@ function ManagerOrder() {
 
   const sortedOrders = useMemo(() => {
     if (!sortConfig.key) return orders;
-
     return [...orders].sort((a, b) => {
       const valueA = getSortValue(a, sortConfig.key);
       const valueB = getSortValue(b, sortConfig.key);
-
-      if (valueA < valueB) {
-        return sortConfig.direction === "asc" ? -1 : 1;
-      }
-      if (valueA > valueB) {
-        return sortConfig.direction === "asc" ? 1 : -1;
-      }
-      return 0;
+      return sortConfig.direction === "asc"
+        ? valueA < valueB
+          ? -1
+          : 1
+        : valueA > valueB
+        ? -1
+        : 1;
     });
   }, [orders, sortConfig]);
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns} locale={vi}>
+    <LocalizationProvider
+      dateAdapter={AdapterDateFns}
+      adapterLocale={vi}
+      localeText={{
+        previousMonth: "Tháng trước",
+        nextMonth: "Tháng sau",
+        cancelButtonLabel: "Hủy",
+        okButtonLabel: "Chọn",
+      }}
+    >
       <Box sx={{ width: "100%", p: 2 }}>
         <Stack direction="row" alignItems="center" spacing={2} mb={2}>
           <TextField
@@ -406,12 +412,8 @@ function ManagerOrder() {
             sx={{ flex: 1 }}
           />
           <FormControl sx={{ minWidth: 180 }}>
-            <InputLabel id="payment-status-filter-label">
-              TT Thanh toán
-            </InputLabel>
+            <InputLabel>TT Thanh toán</InputLabel>
             <Select
-              labelId="payment-status-filter-label"
-              id="payment-status-filter"
               value={filterPaymentStatus}
               onChange={handleFilterPaymentStatusChange}
               label="TT Thanh toán"
@@ -423,19 +425,14 @@ function ManagerOrder() {
             </Select>
           </FormControl>
           <FormControl sx={{ minWidth: 180 }}>
-            <InputLabel id="time-range-filter-label">
-              Lọc theo thời gian
-            </InputLabel>
+            <InputLabel>Lọc theo thời gian</InputLabel>
             <Select
-              labelId="time-range-filter-label"
-              id="time-range-filter"
               value={filterTimeRange}
               onChange={handleFilterTimeRangeChange}
               label="Lọc theo thời gian"
             >
               <MenuItem value="">Tất cả</MenuItem>
               <MenuItem value="day">Ngày</MenuItem>
-              <MenuItem value="week">Tuần</MenuItem>
               <MenuItem value="month">Tháng</MenuItem>
               <MenuItem value="custom">Khoảng thời gian</MenuItem>
             </Select>
@@ -446,29 +443,28 @@ function ManagerOrder() {
               value={filterDate}
               onChange={(newValue) => setFilterDate(newValue)}
               sx={{ flex: 0.5 }}
+              format="dd/MM/yyyy" // Thêm dòng này
             />
           )}
-
-          {filterTimeRange === "week" && (
-            <DatePicker
-              label="Chọn tuần"
-              value={weekPickerDate}
-              onChange={handleWeekChange}
-              views={["year", "month", "week"]}
-              sx={{ flex: 0.5 }}
-            />
-          )}
-
           {filterTimeRange === "month" && (
             <DatePicker
               label="Chọn tháng"
               value={filterDate}
               onChange={(newValue) => setFilterDate(newValue)}
               views={["year", "month"]}
+              openTo="month"
+              format="MM/yyyy"
               sx={{ flex: 0.5 }}
+              localeText={{
+                month: "Tháng",
+                year: "Năm",
+                previousMonth: "Tháng trước",
+                nextMonth: "Tháng sau",
+                cancelButtonLabel: "Hủy",
+                okButtonLabel: "Chọn",
+              }}
             />
           )}
-
           {filterTimeRange === "custom" && (
             <>
               <DatePicker
@@ -491,7 +487,7 @@ function ManagerOrder() {
           component={Paper}
           sx={{ maxHeight: 500, overflow: "auto" }}
         >
-          <Table sx={{ minWidth: 650 }} aria-label="Danh sách đơn hàng">
+          <Table sx={{ minWidth: 650 }}>
             <TableHead>
               <TableRow>
                 <TableCell
@@ -516,7 +512,7 @@ function ManagerOrder() {
                   onClick={() => handleSort("employeeName")}
                   style={{ cursor: "pointer" }}
                 >
-                  Nhân viên tạo đơn hàng {renderSortIcon("employeeName")}
+                  Nhân viên {renderSortIcon("employeeName")}
                 </TableCell>
                 <TableCell
                   onClick={() => handleSort("finalAmount")}
@@ -535,13 +531,8 @@ function ManagerOrder() {
             </TableHead>
             <TableBody>
               {sortedOrders.map((order) => (
-                <TableRow
-                  key={order._id}
-                  sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
-                >
-                  <TableCell component="th" scope="row">
-                    {order.orderNumber}
-                  </TableCell>
+                <TableRow key={order._id}>
+                  <TableCell>{order.orderNumber}</TableCell>
                   <TableCell>
                     {order.customerId?.fullName || "Khách vãng lai"}
                   </TableCell>
@@ -561,18 +552,12 @@ function ManagerOrder() {
                     {renderPaymentStatus(order.paymentStatus)}
                   </TableCell>
                   <TableCell align="right">
-                    <IconButton
-                      aria-label="xem chi tiết"
-                      onClick={() => handleViewDetails(order)}
-                    >
+                    <IconButton onClick={() => handleViewDetails(order)}>
                       <VisibilityIcon />
                     </IconButton>
-                    <IconButton
-                      aria-label="in hóa đơn"
-                      onClick={() => handlePrintOrder(order)}
-                    >
+                    {/* <IconButton onClick={() => handlePrintOrder(order)}>
                       <PrintIcon />
-                    </IconButton>
+                    </IconButton> */}
                   </TableCell>
                 </TableRow>
               ))}
@@ -594,8 +579,6 @@ function ManagerOrder() {
 }
 
 function OrderDetailDialog({ open, onClose, order, authToken }) {
-  if (!order) return null;
-
   const [batchDetails, setBatchDetails] = useState({});
   const [loadingBatches, setLoadingBatches] = useState(false);
 
@@ -604,13 +587,11 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
     try {
       const batchPromises = batchIds.map((batchId) =>
         axios.get(`http://localhost:8000/api/batches/${batchId}`, {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
+          headers: { Authorization: `Bearer ${authToken}` },
         })
       );
-      const batchResponses = await Promise.all(batchPromises);
-      const batchData = batchResponses.reduce((acc, res) => {
+      const responses = await Promise.all(batchPromises);
+      const batchData = responses.reduce((acc, res) => {
         acc[res.data._id] = res.data;
         return acc;
       }, {});
@@ -623,27 +604,25 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
   };
 
   useEffect(() => {
-    if (order && order.products) {
+    if (order?.products) {
       const uniqueBatchIds = new Set();
       order.products.forEach((product) => {
-        if (product.batchesUsed && product.batchesUsed.length > 0) {
+        if (product.batchesUsed?.length > 0) {
           product.batchesUsed.forEach((batch) =>
             uniqueBatchIds.add(batch.batchId)
           );
         }
       });
-      if (uniqueBatchIds.size > 0) {
+      if (uniqueBatchIds.size > 0)
         fetchBatchDetails(Array.from(uniqueBatchIds));
-      }
     }
   }, [order, authToken]);
 
   const getBatchDiscount = (productId) => {
     const product = order.products.find((p) => p.productId === productId);
-    if (product && product.batchesUsed && product.batchesUsed.length > 0) {
-      const firstBatchId = product.batchesUsed[0].batchId;
-      const batch = batchDetails[firstBatchId];
-      return batch ? batch.discountInfo?.discountValue || 0 : 0;
+    if (product?.batchesUsed?.length > 0) {
+      const batch = batchDetails[product.batchesUsed[0].batchId];
+      return batch?.discountInfo?.discountValue || 0;
     }
     return 0;
   };
@@ -664,6 +643,7 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
         {order.customerId?.address && (
           <Typography>Địa chỉ: {order.customerId.address}</Typography>
         )}
+
         <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
           Thông tin đơn hàng
         </Typography>
@@ -674,22 +654,21 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
           })}
         </Typography>
         <Typography>
-          Nhân viên tạo đơn hàng: {order.employeeId?.fullName || "N/A"}
+          Nhân viên: {order.employeeId?.fullName || "N/A"}
         </Typography>
         <Typography>
           TT Thanh toán: {renderPaymentStatus(order.paymentStatus)}
         </Typography>
         <Typography>
-          Phương thức thanh toán:{" "}
-          {order.paymentMethod === "cash"
-            ? "Tiền mặt"
-            : order.paymentMethod === "transfer"
-            ? "Chuyển khoản"
-            : order.paymentMethod}
+          Phương thức:{" "}
+          {{
+            cash: "Tiền mặt",
+            transfer: "Chuyển khoản",
+          }[order.paymentMethod] || order.paymentMethod}
         </Typography>
         {order.depositAmount > 0 && (
           <Typography>
-            Số tiền đặt cọc:{" "}
+            Đặt cọc:{" "}
             {order.depositAmount.toLocaleString("vi-VN", {
               style: "currency",
               currency: "VND",
@@ -700,17 +679,18 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
           order.paymentStatus !== "pending" && (
             <Typography>
               Tiền khách đưa:{" "}
-              {order.amountPaid?.toLocaleString("vi-VN", {
+              {order.amountPaid.toLocaleString("vi-VN", {
                 style: "currency",
                 currency: "VND",
               })}
             </Typography>
           )}
+
         <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
           Sản phẩm
         </Typography>
         <TableContainer component={Paper}>
-          <Table aria-label="Chi tiết sản phẩm đơn hàng">
+          <Table>
             <TableHead>
               <TableRow>
                 <TableCell>Sản phẩm</TableCell>
@@ -722,31 +702,26 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {order.products.map((item) => {
-                const batchDiscount = getBatchDiscount(item.productId);
-                return (
-                  <TableRow key={item._id}>
-                    <TableCell>
-                      {item.productId?.name || "Đang tải..."}
-                    </TableCell>
-                    <TableCell>{item.quantity}</TableCell>
-                    <TableCell>{item.selectedUnitName}</TableCell>
-                    <TableCell>
-                      {item.originalUnitPrice?.toLocaleString("vi-VN", {
-                        style: "currency",
-                        currency: "VND",
-                      }) || "N/A"}
-                    </TableCell>
-                    <TableCell>{batchDiscount || 0}%</TableCell>
-                    <TableCell>
-                      {item.itemTotal?.toLocaleString("vi-VN", {
-                        style: "currency",
-                        currency: "VND",
-                      }) || "N/A"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {order.products.map((item) => (
+                <TableRow key={item._id}>
+                  <TableCell>{item.productId?.name || "Đang tải..."}</TableCell>
+                  <TableCell>{item.quantity}</TableCell>
+                  <TableCell>{item.selectedUnitName}</TableCell>
+                  <TableCell>
+                    {(item.originalUnitPrice || 0).toLocaleString("vi-VN", {
+                      style: "currency",
+                      currency: "VND",
+                    })}
+                  </TableCell>
+                  <TableCell>{getBatchDiscount(item.productId)}%</TableCell>
+                  <TableCell>
+                    {(item.itemTotal || 0).toLocaleString("vi-VN", {
+                      style: "currency",
+                      currency: "VND",
+                    })}
+                  </TableCell>
+                </TableRow>
+              ))}
               {order.discountAmount > 0 && (
                 <TableRow>
                   <TableCell colSpan={5} align="right">
@@ -766,10 +741,10 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
                     Thuế ({order.taxRate * 100}%):
                   </TableCell>
                   <TableCell>
-                    {order.taxAmount?.toLocaleString("vi-VN", {
+                    {order.taxAmount.toLocaleString("vi-VN", {
                       style: "currency",
                       currency: "VND",
-                    }) || "N/A"}
+                    })}
                   </TableCell>
                 </TableRow>
               )}
@@ -778,15 +753,16 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
                   Tổng thành tiền:
                 </TableCell>
                 <TableCell>
-                  {order.finalAmount?.toLocaleString("vi-VN", {
+                  {order.finalAmount.toLocaleString("vi-VN", {
                     style: "currency",
                     currency: "VND",
-                  }) || "N/A"}
+                  })}
                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
         </TableContainer>
+
         {order.notes && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle1">Ghi chú:</Typography>
@@ -796,10 +772,7 @@ function OrderDetailDialog({ open, onClose, order, authToken }) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Đóng</Button>
-        <Button
-          onClick={() => handlePrintOrder(order)}
-          startIcon={<PrintIcon />}
-        >
+        <Button onClick={() => window.print()} startIcon={<PrintIcon />}>
           In hóa đơn
         </Button>
       </DialogActions>

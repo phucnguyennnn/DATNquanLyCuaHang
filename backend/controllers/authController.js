@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const Cart = require("../models/Cart");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
@@ -88,7 +89,9 @@ const authController = {
       });
 
       const savedUser = await newUser.save();
-
+      // Tạo giỏ hàng trống cho người dùng mới
+      const newCart = new Cart({ user: savedUser._id, items: [], total: 0 });
+      await newCart.save();
       // Xóa OTP khỏi session sau khi xác thực thành công
       delete req.session.signupOTP;
 
@@ -130,9 +133,10 @@ const authController = {
       });
       if (existingUser) {
         return res.status(400).json({
-          error: existingUser.username === username
-            ? 'Username đã tồn tại'
-            : 'Email đã tồn tại'
+          error:
+            existingUser.username === username
+              ? "Username đã tồn tại"
+              : "Email đã tồn tại",
         });
       }
 
@@ -173,7 +177,6 @@ const authController = {
           subject: "Tài khoản nhân viên đã được tạo",
           html: emailContent,
         });
-
       } catch (emailError) {
         console.error("Failed to send email:", emailError);
         const { password: _, ...userInfo } = savedUser._doc;
@@ -185,12 +188,11 @@ const authController = {
 
       const { password: _, ...userInfo } = savedUser._doc;
       res.status(201).json(userInfo);
-
     } catch (error) {
-      console.error('Error in createEmployee:', error);
+      console.error("Error in createEmployee:", error);
       res.status(500).json({
-        error: 'Lỗi hệ thống',
-        details: error.message
+        error: "Lỗi hệ thống",
+        details: error.message,
       });
     }
   },

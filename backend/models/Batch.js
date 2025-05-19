@@ -30,7 +30,7 @@ const batchSchema = new mongoose.Schema(
     initial_quantity: {
       type: Number,
       required: true,
-      min: 1,
+      min: [1, "Số lượng ban đầu phải lớn hơn 0"],
       validate: {
         validator: Number.isInteger,
         message: "{VALUE} phải là số nguyên",
@@ -39,7 +39,7 @@ const batchSchema = new mongoose.Schema(
     remaining_quantity: {
       type: Number,
       required: true,
-      min: 0,
+      min: [0, "Số lượng còn lại không được âm"],
       validate: {
         validator: Number.isInteger,
         message: "{VALUE} phải là số nguyên",
@@ -48,7 +48,7 @@ const batchSchema = new mongoose.Schema(
     sold_quantity: {
       type: Number,
       default: 0,
-      min: 0,
+      min: [0, "Số lượng đã bán không được âm"],
       validate: {
         validator: Number.isInteger,
         message: "{VALUE} phải là số nguyên",
@@ -57,7 +57,7 @@ const batchSchema = new mongoose.Schema(
     lost_quantity: {
       type: Number,
       default: 0,
-      min: 0,
+      min: [0, "Số lượng bị mất không được âm"],
       validate: {
         validator: Number.isInteger,
         message: "{VALUE} phải là số nguyên",
@@ -66,11 +66,20 @@ const batchSchema = new mongoose.Schema(
     quantity_on_shelf: {
       type: Number,
       default: 0,
-      min: 0,
+      min: [0, "Số lượng trên kệ không được âm"],
       validate: {
         validator: Number.isInteger,
         message: "{VALUE} phải là số nguyên",
       },
+    },
+    reserved_quantity: { // Thêm trường mới để track số lượng đã reserve
+      type: Number,
+      default: 0,
+      min: 0,
+      validate: {
+        validator: Number.isInteger,
+        message: "{VALUE} phải là số nguyên"
+      }
     },
     status: {
       type: String,
@@ -159,6 +168,23 @@ batchSchema.pre("save", async function (next) {
   }
 });
 
+// Phương thức instance để tăng số lượng đã giữ
+batchSchema.methods.increaseReservedQuantity = async function (quantity) {
+  this.reserved_quantity += quantity;
+  this.remaining_quantity -= quantity;
+  if (this.remaining_quantity < 0) {
+    throw new Error("Không đủ số lượng tồn kho để giữ hàng");
+  }
+  await this.save({ validateBeforeSave: false }); // Tránh gọi lại middleware 'save'
+};
+
+// Phương thức instance để giảm số lượng đã giữ
+batchSchema.methods.decreaseReservedQuantity = async function (quantity) {
+  this.reserved_quantity = Math.max(0, this.reserved_quantity - quantity);
+  this.remaining_quantity += quantity;
+  await this.save({ validateBeforeSave: false });
+};
+
 // Phương thức tính giá đã giảm
 batchSchema.methods.getDiscountedPrice = async function () {
   const product = await mongoose
@@ -237,7 +263,8 @@ const updateQuantities = (batch) => {
     batch.initial_quantity -
     batch.sold_quantity -
     batch.lost_quantity -
-    batch.quantity_on_shelf;
+    batch.quantity_on_shelf -
+    batch.reserved_quantity; // Đã thêm reserved_quantity vào phép tính
 
   if (batch.remaining_quantity < 0) {
     throw new Error("Số lượng tồn không hợp lệ");
