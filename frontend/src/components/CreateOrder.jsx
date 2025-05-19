@@ -56,19 +56,26 @@ const CreateOrder = () => {
   const [token] = useState(localStorage.getItem("authToken"));
   const [hasUserSelectedBatch, setHasUserSelectedBatch] = useState(false);
   const [cashReceivedError, setCashReceivedError] = useState("");
-
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
         const productsRes = await axios.get(
           "http://localhost:8000/api/products/batch/products-with-batches",
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        setProducts(productsRes.data.data);
-        setFilteredProducts(productsRes.data.data);
+
+        // Lọc các sản phẩm có ít nhất một lô hàng với quantity_on_shelf > 0
+        const productsWithStock = productsRes.data.data.filter((product) =>
+          product.batches.some((batch) => batch.quantity_on_shelf > 0)
+        );
+
+        setProducts(productsWithStock);
+        setFilteredProducts(productsWithStock);
       } catch (error) {
         console.error(error);
       }
+      setLoading(false);
 
       setLoadingCustomers(true);
       try {
@@ -84,7 +91,6 @@ const CreateOrder = () => {
     };
     fetchData();
   }, [token]);
-
   const handleSearch = async (e) => {
     const value = e.target.value;
     setSearchTerm(value);
@@ -410,34 +416,43 @@ const CreateOrder = () => {
                 pr: 1,
               }}
             >
-              {filteredProducts.map((product) => (
-                <Paper
-                  key={product._id}
-                  sx={{
-                    p: 2,
-                    mb: 1,
-                    cursor: "pointer",
-                    "&:hover": { bgcolor: "action.hover" },
-                  }}
-                  onClick={() => handleProductClick(product)}
-                >
-                  <Typography variant="subtitle1">{product.name}</Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {product.category?.name || product.category}
-                    {product.warehouse !== undefined &&
-                      ` | Kho: ${product.warehouse} | Quầy: ${product.shelf}`}
-                  </Typography>
-                  {product.units?.[0]?.salePrice && (
-                    <Typography variant="body2" color="primary">
-                      {product.units[0].salePrice.toLocaleString()}đ/
-                      {product.units[0].name}
+              {filteredProducts.length > 0 ? (
+                filteredProducts.map((product) => (
+                  <Paper
+                    key={product._id}
+                    sx={{
+                      p: 2,
+                      mb: 1,
+                      cursor: "pointer",
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                    onClick={() => handleProductClick(product)}
+                  >
+                    <Typography variant="subtitle1">{product.name}</Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      {product.category?.name || product.category}
+                      {product.warehouse !== undefined &&
+                        ` | Kho: ${product.warehouse} | Quầy: ${product.shelf}`}
                     </Typography>
-                  )}
-                </Paper>
-              ))}
+                    {product.units?.[0]?.salePrice && (
+                      <Typography variant="body2" color="primary">
+                        {product.units[0].salePrice.toLocaleString()}đ/
+                        {product.units[0].name}
+                      </Typography>
+                    )}
+                  </Paper>
+                ))
+              ) : (
+                <Typography
+                  variant="body1"
+                  color="textSecondary"
+                  sx={{ p: 2, textAlign: "center", fontStyle: "italic" }}
+                >
+                  Hiện không có sản phẩm nào còn hàng trên quầy.
+                </Typography>
+              )}
             </Box>
           </Grid>
-
           <Grid
             item
             xs={6}

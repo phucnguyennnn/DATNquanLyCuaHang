@@ -15,4 +15,13 @@ router.get("/:orderId", orderController.getOrderById);
 // Route để lấy tất cả đơn hàng (có hỗ trợ tìm kiếm và lọc theo ngày)
 router.get("/", orderController.getAllOrders);
 
+// Route để cập nhật thông tin phiếu đặt trước
+router.patch("/:orderId", orderController.updatePreorder);
+
+// Route để hoàn thành thanh toán phiếu đặt trước
+router.post(
+  "/:orderId/complete-payment",
+  orderController.completePreorderPayment
+);
+
 module.exports = router;

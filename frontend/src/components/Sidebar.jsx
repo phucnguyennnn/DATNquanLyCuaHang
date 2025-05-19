@@ -181,6 +181,11 @@ const Sidebar = () => {
     handleLogout();
   };
 
+  // Nếu là customer, không hiển thị Sidebar
+  if (role === "customer") {
+    return null;
+  }
+
   return (
     <>
       <Drawer
