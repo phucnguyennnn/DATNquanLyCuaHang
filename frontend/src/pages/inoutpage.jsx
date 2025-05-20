@@ -35,6 +35,7 @@ import {
   LineChart,
   Line,
 } from "recharts";
+import { startOfWeek, endOfWeek, getWeek, getMonth, getYear, format as formatDateFns } from "date-fns";
 
 const COLORS = ["#1976d2", "#43a047", "#e53935", "#fbc02d", "#8e24aa"];
 
@@ -147,7 +148,7 @@ const InOutPage = () => {
   };
 
   // Tổng hợp dữ liệu thu/chi
-  const { totalIn, totalOut, chartData, pieData, tableIn, tableOut } = useMemo(() => {
+  const { totalIn, totalOut, chartData, pieData, tableIn, tableOut, chartType } = useMemo(() => {
     // Thu: hóa đơn bán hàng đã thanh toán
     const filteredOrders = orders.filter(
       (o) => filterByDate(o.createdAt, "in")
@@ -188,51 +189,121 @@ const InOutPage = () => {
     const totalOut = filteredReceipts.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
 
     // Dữ liệu biểu đồ theo ngày/tháng
-    const groupBy = filterType === "month" || filterType === "custom" ? "day" : "month";
-    const groupKey = (date) => {
-      if (!date) return "N/A";
-      const d = new Date(date);
-      if (groupBy === "day")
+    let chartMap = {};
+    let chartData = [];
+    let chartType = "bar";
+
+    if (filterType === "month") {
+      chartType = "bar";
+      // Helper: lấy tuần trong tháng và ngày bắt đầu/kết thúc tuần
+      const getWeekOfMonth = (date) => {
+        const d = new Date(date);
+        const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
+        const weekNum = Math.ceil((d.getDate() + firstDay.getDay()) / 7);
+
+        // Tính ngày bắt đầu/kết thúc tuần
+        const weekStart = startOfWeek(d, { weekStartsOn: 1 }); // Thứ 2
+        const weekEnd = endOfWeek(d, { weekStartsOn: 1 });
+        // Đảm bảo nằm trong tháng đang lọc
+        const month = d.getMonth();
+        const start =
+          weekStart.getMonth() === month
+            ? weekStart
+            : new Date(d.getFullYear(), month, 1);
+        const end =
+          weekEnd.getMonth() === month
+            ? weekEnd
+            : new Date(d.getFullYear(), month + 1, 0);
+
+        // Format ngày
+        const startStr = formatDateFns(start, "dd/MM");
+        const endStr = formatDateFns(end, "dd/MM");
+        return `Tuần ${weekNum} (${startStr} - ${endStr})`;
+      };
+
+      chartMap = {};
+      filteredOrders.forEach((o) => {
+        const key = getWeekOfMonth(o.createdAt);
+        let calculatedFinalAmount = 0;
+        if (o.products && o.products.length > 0) {
+          calculatedFinalAmount = o.products.reduce((s, item) => {
+            let discountPercent = 0;
+            if (
+              item.batchesUsed &&
+              item.batchesUsed[0] &&
+              item.batchesUsed[0].batchId &&
+              item.batchesUsed[0].batchId.discountInfo &&
+              typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+            ) {
+              discountPercent = item.batchesUsed[0].batchId.discountInfo.discountValue;
+            }
+            const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+            const discountAmount = (originalPrice * discountPercent) / 100;
+            const finalPrice = originalPrice - discountAmount;
+            return s + finalPrice;
+          }, 0);
+        } else {
+          calculatedFinalAmount = o.finalAmount || 0;
+        }
+        chartMap[key] = chartMap[key] || { name: key, Thu: 0, Chi: 0 };
+        chartMap[key].Thu += calculatedFinalAmount;
+      });
+      filteredReceipts.forEach((r) => {
+        const key = getWeekOfMonth(r.receiptDate || r.createdAt);
+        chartMap[key] = chartMap[key] || { name: key, Thu: 0, Chi: 0 };
+        chartMap[key].Chi += r.totalAmount || 0;
+      });
+      // Sắp xếp tuần theo thứ tự tuần 1, 2, 3, 4, 5
+      chartData = Object.values(chartMap).sort((a, b) => {
+        const getNum = (name) => parseInt((name || "").replace(/[^0-9]/g, ""), 10) || 0;
+        return getNum(a.name) - getNum(b.name);
+      });
+    } else {
+      // Biểu đồ Bar: theo ngày (custom hoặc day)
+      chartType = "bar";
+      const groupBy = "day";
+      const groupKey = (date) => {
+        if (!date) return "N/A";
+        const d = new Date(date);
         return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
           .toString()
           .padStart(2, "0")}`;
-      return `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
-    };
+      };
 
-    // Tính lại giá trị Thu cho từng ngày/tháng giống như bảng chi tiết
-    const chartMap = {};
-    filteredOrders.forEach((o) => {
-      const key = groupKey(o.createdAt);
-      let calculatedFinalAmount = 0;
-      if (o.products && o.products.length > 0) {
-        calculatedFinalAmount = o.products.reduce((s, item) => {
-          let discountPercent = 0;
-          if (
-            item.batchesUsed &&
-            item.batchesUsed[0] &&
-            item.batchesUsed[0].batchId &&
-            item.batchesUsed[0].batchId.discountInfo &&
-            typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
-          ) {
-            discountPercent = item.batchesUsed[0].batchId.discountInfo.discountValue;
-          }
-          const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
-          const discountAmount = (originalPrice * discountPercent) / 100;
-          const finalPrice = originalPrice - discountAmount;
-          return s + finalPrice;
-        }, 0);
-      } else {
-        calculatedFinalAmount = o.finalAmount || 0;
-      }
-      chartMap[key] = chartMap[key] || { name: key, Thu: 0, Chi: 0 };
-      chartMap[key].Thu += calculatedFinalAmount;
-    });
-    filteredReceipts.forEach((r) => {
-      const key = groupKey(r.receiptDate);
-      chartMap[key] = chartMap[key] || { name: key, Thu: 0, Chi: 0 };
-      chartMap[key].Chi += r.totalAmount || 0;
-    });
-    const chartData = Object.values(chartMap).sort((a, b) => a.name.localeCompare(b.name));
+      chartMap = {};
+      filteredOrders.forEach((o) => {
+        const key = groupKey(o.createdAt);
+        let calculatedFinalAmount = 0;
+        if (o.products && o.products.length > 0) {
+          calculatedFinalAmount = o.products.reduce((s, item) => {
+            let discountPercent = 0;
+            if (
+              item.batchesUsed &&
+              item.batchesUsed[0] &&
+              item.batchesUsed[0].batchId &&
+              item.batchesUsed[0].batchId.discountInfo &&
+              typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+            ) {
+              discountPercent = item.batchesUsed[0].batchId.discountInfo.discountValue;
+            }
+            const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+            const discountAmount = (originalPrice * discountPercent) / 100;
+            const finalPrice = originalPrice - discountAmount;
+            return s + finalPrice;
+          }, 0);
+        } else {
+          calculatedFinalAmount = o.finalAmount || 0;
+        }
+        chartMap[key] = chartMap[key] || { name: key, Thu: 0, Chi: 0 };
+        chartMap[key].Thu += calculatedFinalAmount;
+      });
+      filteredReceipts.forEach((r) => {
+        const key = groupKey(r.receiptDate || r.createdAt);
+        chartMap[key] = chartMap[key] || { name: key, Thu: 0, Chi: 0 };
+        chartMap[key].Chi += r.totalAmount || 0;
+      });
+      chartData = Object.values(chartMap).sort((a, b) => a.name.localeCompare(b.name));
+    }
 
     // Pie chart
     const pieData = [
@@ -244,7 +315,7 @@ const InOutPage = () => {
     const tableIn = filteredOrders;
     const tableOut = filteredReceipts;
 
-    return { totalIn, totalOut, chartData, pieData, tableIn, tableOut };
+    return { totalIn, totalOut, chartData, pieData, tableIn, tableOut, chartType };
   }, [orders, goodReceipts, filterType, filterDate, filterStart, filterEnd]);
 
   return (
@@ -342,7 +413,9 @@ const InOutPage = () => {
             <Grid item xs={12} md={7}>
               <Paper sx={{ p: 2, height: 350 }}>
                 <Typography variant="h6" gutterBottom>
-                  Biểu đồ thu chi theo {filterType === "day" ? "ngày" : "tháng"}
+                  {filterType === "month"
+                    ? "Biểu đồ thu chi theo tuần trong tháng"
+                    : "Biểu đồ thu chi theo ngày"}
                 </Typography>
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={chartData}>
@@ -350,7 +423,11 @@ const InOutPage = () => {
                     <YAxis />
                     <Tooltip
                       formatter={(value) => formatCurrency(value)}
-                      labelFormatter={(label) => `Ngày/Tháng: ${label}`}
+                      labelFormatter={(label) =>
+                        filterType === "month"
+                          ? `Tuần: ${label}`
+                          : `Ngày: ${label}`
+                      }
                     />
                     <Legend />
                     <Bar dataKey="Thu" fill={theme.palette.success.main} />
