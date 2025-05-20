@@ -327,7 +327,7 @@ function ManagerOrder() {
                   onClick={() => handleSort("finalAmount")}
                   style={{ cursor: "pointer" }}
                 >
-                  Tổng thành   tiền {renderSortIcon("finalAmount")}
+                  Tổng thành tiền {renderSortIcon("finalAmount")}
                 </TableCell>
                 <TableCell
                   onClick={() => handleSort("paymentStatus")}
@@ -339,34 +339,58 @@ function ManagerOrder() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedOrders.map((order) => (
-                <TableRow key={order._id}>
-                  <TableCell>{order.orderNumber}</TableCell>
-                  <TableCell>
-                    {order.customerId?.fullName || "Khách vãng lai"}
-                  </TableCell>
-                  <TableCell>
-                    {format(new Date(order.createdAt), "dd/MM/yyyy HH:mm", {
-                      locale: vi,
-                    })}
-                  </TableCell>
-                  <TableCell>{order.employeeId?.fullName || "N/A"}</TableCell>
-                  <TableCell>
-                    {order.finalAmount?.toLocaleString("vi-VN", {
-                      style: "currency",
-                      currency: "VND",
-                    }) || "N/A"}
-                  </TableCell>
-                  <TableCell sx={{ width: "150px" }}>
-                    {renderPaymentStatus(order.paymentStatus)}
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton onClick={() => handleViewDetails(order)}>
-                      <VisibilityIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {sortedOrders.map((order) => {
+                // Tính lại tổng thành tiền giống như trong chi tiết phiếu mua hàng
+                let calculatedFinalAmount = 0;
+                if (order.products && order.products.length > 0) {
+                  calculatedFinalAmount = order.products.reduce((sum, item) => {
+                    // Lấy discountPercent từ batchDetails nếu có, nếu không thì 0
+                    // Ở danh sách không có batchDetails nên chỉ lấy discountPercent từ batch đầu tiên nếu có
+                    const discountPercent =
+                      item.batchesUsed &&
+                      item.batchesUsed[0] &&
+                      item.batchesUsed[0].batchId &&
+                      item.batchesUsed[0].batchId.discountInfo &&
+                      typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+                        ? item.batchesUsed[0].batchId.discountInfo.discountValue
+                        : 0;
+                    const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+                    const discountAmount = (originalPrice * discountPercent) / 100;
+                    const finalPrice = originalPrice - discountAmount;
+                    return sum + finalPrice;
+                  }, 0);
+                } else {
+                  calculatedFinalAmount = order.finalAmount || 0;
+                }
+                return (
+                  <TableRow key={order._id}>
+                    <TableCell>{order.orderNumber}</TableCell>
+                    <TableCell>
+                      {order.customerId?.fullName || "Khách vãng lai"}
+                    </TableCell>
+                    <TableCell>
+                      {format(new Date(order.createdAt), "dd/MM/yyyy HH:mm", {
+                        locale: vi,
+                      })}
+                    </TableCell>
+                    <TableCell>{order.employeeId?.fullName || "N/A"}</TableCell>
+                    <TableCell>
+                      {calculatedFinalAmount.toLocaleString("vi-VN", {
+                        style: "currency",
+                        currency: "VND",
+                      })}
+                    </TableCell>
+                    <TableCell sx={{ width: "150px" }}>
+                      {renderPaymentStatus(order.paymentStatus)}
+                    </TableCell>
+                    <TableCell align="right">
+                      <IconButton onClick={() => handleViewDetails(order)}>
+                        <VisibilityIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>
@@ -619,10 +643,21 @@ function OrderDetailDialog({
                   </TableCell>
                   <TableCell>
                     <strong>
-                      {(order.finalAmount || 0).toLocaleString("vi-VN", {
-                        style: "currency",
-                        currency: "VND",
-                      })}
+                      {order.products
+                        .reduce((sum, item) => {
+                          const discountPercent =
+                            batchDetails[item.batchesUsed?.[0]?.batchId]?.discountInfo
+                              ?.discountValue || 0;
+                          const originalPrice =
+                            (item.originalUnitPrice || 0) * (item.quantity || 0);
+                          const discountAmount = (originalPrice * discountPercent) / 100;
+                          const finalPrice = originalPrice - discountAmount;
+                          return sum + finalPrice;
+                        }, 0)
+                        .toLocaleString("vi-VN", {
+                          style: "currency",
+                          currency: "VND",
+                        })}
                     </strong>
                   </TableCell>
                 </TableRow>

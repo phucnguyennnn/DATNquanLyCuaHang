@@ -43,6 +43,7 @@ import {
   History as HistoryIcon,
   BarChart, // Thêm icon cho thống kê
   Receipt, // Thêm icon cho báo cáo thu chi
+  ProductionQuantityLimits,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
@@ -310,9 +311,22 @@ const Sidebar = () => {
                       <ListItemIcon>
                         <Receipt />
                       </ListItemIcon>
-                      <ListItemText primary="Báo cáo thu chi" />
+                      <ListItemText primary="Danh thu & chi phí" />
                     </StyledSubListItemButton>
-                    {/* Thêm các mục thống kê khác nếu cần */}
+                  </List>
+                </Collapse>
+
+                <Collapse in={openStatistics} timeout="auto" unmountOnExit>
+                  <List component="div" disablePadding sx={{ pl: 2 }}>
+                    <StyledSubListItemButton
+                      onClick={() => navigate("/statistics/productperformance")}
+                      active={isActive("/statistics/productperformance") ? 1 : 0}
+                    >
+                      <ListItemIcon>
+                        <ProductionQuantityLimits />
+                      </ListItemIcon>
+                      <ListItemText primary="Hiệu suất sản phẩm" />
+                    </StyledSubListItemButton>
                   </List>
                 </Collapse>
               </>

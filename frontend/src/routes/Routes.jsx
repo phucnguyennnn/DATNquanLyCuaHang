@@ -30,6 +30,8 @@ import BatchPage from "../pages/BatchPage";
 import ReturnHistory from "../pages/ReturnHistory";
 import InventoryPage from "../pages/InventoryHistory";
 import InOutPage from "../pages/inoutpage";
+import ProductPerformance from "../pages/ProductPerformance";
+
 
 const useAuth = () => {
   const [isLoggedIn, setIsLoggedIn] = React.useState(
@@ -174,6 +176,15 @@ const AppRouter = () => {
               <ProtectedRoute
                 allowedRoles={["admin"]}
                 children={<InOutPage />}
+              /> 
+            }
+          />
+          <Route
+            path="statistics/productperformance"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<ProductPerformance />}
               />
             }
           />

@@ -159,7 +159,32 @@ const InOutPage = () => {
     );
 
     // Tổng giá trị thu/chi
-    const totalIn = filteredOrders.reduce((sum, o) => sum + (o.finalAmount || 0), 0);
+    // Tính lại tổng thu giống như chi tiết hóa đơn (không chỉ lấy finalAmount)
+    const totalIn = filteredOrders.reduce((sum, o) => {
+      let calculatedFinalAmount = 0;
+      if (o.products && o.products.length > 0) {
+        calculatedFinalAmount = o.products.reduce((s, item) => {
+          let discountPercent = 0;
+          if (
+            item.batchesUsed &&
+            item.batchesUsed[0] &&
+            item.batchesUsed[0].batchId &&
+            item.batchesUsed[0].batchId.discountInfo &&
+            typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+          ) {
+            discountPercent = item.batchesUsed[0].batchId.discountInfo.discountValue;
+          }
+          const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+          const discountAmount = (originalPrice * discountPercent) / 100;
+          const finalPrice = originalPrice - discountAmount;
+          return s + finalPrice;
+        }, 0);
+      } else {
+        calculatedFinalAmount = o.finalAmount || 0;
+      }
+      return sum + calculatedFinalAmount;
+    }, 0);
+
     const totalOut = filteredReceipts.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
 
     // Dữ liệu biểu đồ theo ngày/tháng
@@ -174,11 +199,33 @@ const InOutPage = () => {
       return `${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
     };
 
+    // Tính lại giá trị Thu cho từng ngày/tháng giống như bảng chi tiết
     const chartMap = {};
     filteredOrders.forEach((o) => {
       const key = groupKey(o.createdAt);
+      let calculatedFinalAmount = 0;
+      if (o.products && o.products.length > 0) {
+        calculatedFinalAmount = o.products.reduce((s, item) => {
+          let discountPercent = 0;
+          if (
+            item.batchesUsed &&
+            item.batchesUsed[0] &&
+            item.batchesUsed[0].batchId &&
+            item.batchesUsed[0].batchId.discountInfo &&
+            typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+          ) {
+            discountPercent = item.batchesUsed[0].batchId.discountInfo.discountValue;
+          }
+          const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+          const discountAmount = (originalPrice * discountPercent) / 100;
+          const finalPrice = originalPrice - discountAmount;
+          return s + finalPrice;
+        }, 0);
+      } else {
+        calculatedFinalAmount = o.finalAmount || 0;
+      }
       chartMap[key] = chartMap[key] || { name: key, Thu: 0, Chi: 0 };
-      chartMap[key].Thu += o.finalAmount || 0;
+      chartMap[key].Thu += calculatedFinalAmount;
     });
     filteredReceipts.forEach((r) => {
       const key = groupKey(r.receiptDate);
@@ -408,27 +455,52 @@ const InOutPage = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {tableIn.map((o, index) => (
-                        <TableRow key={o._id}>
-                          <TableCell>{index + 1}</TableCell>
-                          <TableCell>
-                            <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
-                              {o._id || "N/A"}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            {o.createdAt
-                              ? new Date(o.createdAt).toLocaleDateString("vi-VN")
-                              : ""}
-                          </TableCell>
-                          <TableCell>
-                            {o.customerId?.fullName || "Khách vãng lai"}
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(o.finalAmount)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {tableIn.map((o, index) => {
+                        // Tính lại tổng thành tiền giống chi tiết phiếu mua
+                        let calculatedFinalAmount = 0;
+                        if (o.products && o.products.length > 0) {
+                          calculatedFinalAmount = o.products.reduce((sum, item) => {
+                            // Nếu có discountPercent từ batch, lấy discountPercent, nếu không thì 0
+                            let discountPercent = 0;
+                            if (
+                              item.batchesUsed &&
+                              item.batchesUsed[0] &&
+                              item.batchesUsed[0].batchId &&
+                              item.batchesUsed[0].batchId.discountInfo &&
+                              typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+                            ) {
+                              discountPercent = item.batchesUsed[0].batchId.discountInfo.discountValue;
+                            }
+                            const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+                            const discountAmount = (originalPrice * discountPercent) / 100;
+                            const finalPrice = originalPrice - discountAmount;
+                            return sum + finalPrice;
+                          }, 0);
+                        } else {
+                          calculatedFinalAmount = o.finalAmount || 0;
+                        }
+                        return (
+                          <TableRow key={o._id}>
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
+                                {o._id || "N/A"}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              {o.createdAt
+                                ? new Date(o.createdAt).toLocaleDateString("vi-VN")
+                                : ""}
+                            </TableCell>
+                            <TableCell>
+                              {o.customerId?.fullName || "Khách vãng lai"}
+                            </TableCell>
+                            <TableCell align="right">
+                              {formatCurrency(calculatedFinalAmount)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                       {tableIn.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={4} align="center">
