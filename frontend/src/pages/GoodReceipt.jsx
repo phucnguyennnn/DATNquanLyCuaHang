@@ -18,9 +18,20 @@ import {
   Chip,
   CircularProgress,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from "@mui/material";
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DeleteIcon from '@mui/icons-material/Delete';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import axios from "axios";
 import { format } from 'date-fns';
 
@@ -34,10 +45,25 @@ const CreateGoodReceipt = () => {
   const [error, setError] = useState(null);
   const [supplierProducts, setSupplierProducts] = useState([]);
   const [additionalItems, setAdditionalItems] = useState([]);
+  // New state for tracking created receipt
+  const [createdReceipt, setCreatedReceipt] = useState(null);
+  const [showReceiptDetails, setShowReceiptDetails] = useState(false);
+  const [receiptDetailsLoading, setReceiptDetailsLoading] = useState(false);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const token = localStorage.getItem("authToken");
+
+  // Utility functions for default dates
+  const getFirstDayOfCurrentYear = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-01-01`;
+  };
+
+  const getFirstDayOfNextYear = () => {
+    const now = new Date();
+    return `${now.getFullYear() + 1}-01-01`;
+  };
 
   const isTokenValid = () => {
     if (!token) {
@@ -166,6 +192,10 @@ const CreateGoodReceipt = () => {
         fetchSupplierProducts(res.data.supplier._id);
       }
 
+      // Set default manufacture_day and expiry_day
+      const defaultManufactureDay = getFirstDayOfCurrentYear();
+      const defaultExpiryDay = getFirstDayOfNextYear();
+
       setBatchInfo(
         res.data.items.map((item) => ({
           product: item.product?._id || item.product,
@@ -174,8 +204,8 @@ const CreateGoodReceipt = () => {
           unit: item.unit,
           unitPrice: item.unitPrice,
           totalPrice: (item.quantity - item.receivedQuantity) * item.unitPrice,
-          manufacture_day: "",
-          expiry_day: "",
+          manufacture_day: defaultManufactureDay,
+          expiry_day: defaultExpiryDay,
         }))
       );
       console.log("Initial batchInfo:", batchInfo);
@@ -219,8 +249,8 @@ const CreateGoodReceipt = () => {
         unit: "",
         unitPrice: 0,
         totalPrice: 0,
-        manufacture_day: "",
-        expiry_day: "",
+        manufacture_day: getFirstDayOfCurrentYear(),
+        expiry_day: getFirstDayOfNextYear(),
       },
     ]);
   };
@@ -338,7 +368,7 @@ const CreateGoodReceipt = () => {
 
           return {
             productId: item.product,
-            quantity: Number(item.quantity), // Base quantity
+            quantity: Number(item.quantity) * ratio, // quantity theo ratio
             unit: item.unit, // Unit name
             unitPrice: item.unitPrice,
             totalPrice: item.unitPrice * Number(item.quantity),
@@ -356,7 +386,7 @@ const CreateGoodReceipt = () => {
 
           return {
             productId: item.product,
-            quantity: Number(item.quantity),
+            quantity: Number(item.quantity) * ratio, // quantity theo ratio
             unit: item.unit,
             unitPrice: Number(item.unitPrice),
             totalPrice: Number(item.unitPrice) * Number(item.quantity),
@@ -393,6 +423,9 @@ const CreateGoodReceipt = () => {
         }
       );
       console.log("Response tạo phiếu nhập kho:", response.data);
+      
+      // Store created receipt ID
+      const createdReceiptId = response.data._id;
 
       setConfirming(true);
       const confirmResponse = await axios.patch(
@@ -412,6 +445,11 @@ const CreateGoodReceipt = () => {
       }
 
       alert("Tạo phiếu nhập kho và nhập hàng vào kho thành công!");
+      
+      // Fetch and display the created receipt
+      fetchReceiptDetails(createdReceiptId);
+      
+      // Reset form
       setSelectedOrder(null);
       setBatchInfo([]);
       setAdditionalItems([]);
@@ -451,6 +489,103 @@ const CreateGoodReceipt = () => {
     );
     return batchTotal + additionalTotal;
   };
+
+  // Function to fetch receipt details by ID
+  const fetchReceiptDetails = async (receiptId) => {
+    if (!isTokenValid() || !receiptId) return;
+    
+    try {
+      setReceiptDetailsLoading(true);
+      const response = await axios.get(
+        `http://localhost:8000/api/goodreceipt/${receiptId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      
+      setCreatedReceipt(response.data);
+      setShowReceiptDetails(true);
+    } catch (error) {
+      console.error("Lỗi khi lấy chi tiết phiếu nhập kho:", error);
+      alert("Không thể lấy thông tin chi tiết phiếu nhập kho. Vui lòng thử lại!");
+    } finally {
+      setReceiptDetailsLoading(false);
+    }
+  };
+
+  // Receipt Details Dialog
+  const ReceiptDetailsDialog = () => (
+    <Dialog
+      open={showReceiptDetails}
+      onClose={() => setShowReceiptDetails(false)}
+      maxWidth="md"
+      fullWidth
+    >
+      <DialogTitle>
+        Chi tiết phiếu nhập kho {createdReceipt?.receiptNumber || createdReceipt?._id}
+      </DialogTitle>
+      <DialogContent dividers>
+        {receiptDetailsLoading ? (
+          <Box display="flex" justifyContent="center" p={3}>
+            <CircularProgress />
+          </Box>
+        ) : createdReceipt ? (
+          <Box>
+            <Typography variant="h6" mt={3} mb={1}>Danh sách sản phẩm</Typography>
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>STT</TableCell>
+                    <TableCell>Sản phẩm</TableCell>
+                    <TableCell>Số lượng</TableCell>
+                    <TableCell>Đơn vị</TableCell>
+                    <TableCell>Đơn giá</TableCell>
+                    <TableCell>Thành tiền</TableCell>
+                    <TableCell>Ngày SX</TableCell>
+                    <TableCell>Hạn SD</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {createdReceipt.items && createdReceipt.items.map((item, index) => (
+                    <TableRow key={`item-${index}`}>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>{item.product?.name || "Không xác định"}</TableCell>
+                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>{item.unit || "Đơn vị"}</TableCell>
+                      <TableCell>
+                        {(item.price || 0).toLocaleString()} đ
+                      </TableCell>
+                      <TableCell>
+                        {(item.totalPrice || (item.price * item.quantity) || 0).toLocaleString()} đ
+                      </TableCell>
+                      <TableCell>{formatDate(item.manufactureDate)}</TableCell>
+                      <TableCell>{formatDate(item.expiryDate)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            
+            <Box mt={2} display="flex" justifyContent="flex-end">
+              <Typography variant="h6">
+                Tổng giá trị: {(createdReceipt.totalAmount || 0).toLocaleString()} đ
+              </Typography>
+            </Box>
+          </Box>
+        ) : (
+          <Typography variant="body1" color="text.secondary">
+            Không có thông tin phiếu nhập kho để hiển thị
+          </Typography>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setShowReceiptDetails(false)}>Đóng</Button>
+      </DialogActions>
+    </Dialog>
+  );
 
   return (
     <Box
@@ -790,43 +925,20 @@ const CreateGoodReceipt = () => {
         </Paper>
       )}
 
-      {createdBatches.length > 0 && (
-        <Box mt={5}>
-          <Divider />
-          <Typography variant="h6" mt={3} mb={2} fontWeight="bold">
-            Lô hàng đã được tạo:
-          </Typography>
-          <Stack spacing={2}>
-            {createdBatches.map((batch) => (
-              <Paper key={batch._id} sx={{ p: 3, bgcolor: '#f1f8e9', borderLeft: '4px solid #689f38' }}>
-                <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                  Lô hàng ID: {batch._id}
-                </Typography>
-                <Stack direction={isMobile ? "column" : "row"} spacing={3} flexWrap="wrap">
-                  <Box minWidth={200}>
-                    <Typography><strong>Sản phẩm:</strong> {batch.productName}</Typography>
-                    <Typography><strong>Số lượng:</strong> {batch.quantity}</Typography>
-                  </Box>
-                  <Box minWidth={200}>
-                    <Typography><strong>Ngày SX:</strong> {formatDate(batch.manufactureDate)}</Typography>
-                    <Typography><strong>Hạn SD:</strong> {formatDate(batch.expiryDate)}</Typography>
-                  </Box>
-                  <Box>
-                    <Typography><strong>Đơn giá:</strong> {batch.import_price?.toLocaleString('vi-VN')} đ</Typography>
-                    <Typography><strong>Trạng thái:</strong> {batch.status || 'hoạt động'}</Typography>
-                  </Box>
-                </Stack>
-                <Box mt={1}>
-                  <Chip
-                    label="Đã nhập kho thành công"
-                    color="success"
-                    size="small"
-                  />
-                </Box>
-              </Paper>
-            ))}
-          </Stack>
-        </Box>
+      {/* Receipt Details Dialog */}
+      {createdReceipt && <ReceiptDetailsDialog />}
+
+      {/* If you want to show a button to view latest receipt */}
+      {!showReceiptDetails && createdReceipt && (
+        <Button
+          variant="outlined"
+          color="primary"
+          startIcon={<VisibilityIcon />}
+          onClick={() => setShowReceiptDetails(true)}
+          sx={{ mb: 2 }}
+        >
+          Xem phiếu nhập kho đã tạo
+        </Button>
       )}
     </Box>
   );

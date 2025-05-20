@@ -113,13 +113,17 @@ const PurchaseOrderManagement = () => {
   const [tabValue, setTabValue] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  // Thời gian lọc theo ngày giao dự kiến, mặc định 1 tháng từ ngày hiện tại
+  // Thời gian lọc theo ngày giao dự kiến, mặc định từ ngày đầu đến ngày cuối tháng hiện tại
   const [expectedStartDate, setExpectedStartDate] = useState(() => {
     const d = new Date();
-    d.setMonth(d.getMonth() - 1);
+    d.setDate(1); // Set to first day of current month
     return d;
   });
-  const [expectedEndDate, setExpectedEndDate] = useState(() => new Date());
+  const [expectedEndDate, setExpectedEndDate] = useState(() => {
+    const d = new Date();
+    // Set to last day of current month
+    return new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  });
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));

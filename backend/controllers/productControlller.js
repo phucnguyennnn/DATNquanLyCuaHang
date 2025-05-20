@@ -660,8 +660,8 @@ exports.getByBatchCode = async (req, res) => {
       batch.remaining_quantity <= 0
         ? "Hết hàng"
         : batch.remaining_quantity < 10
-        ? "Sắp hết"
-        : "Còn hàng";
+          ? "Sắp hết"
+          : "Còn hàng";
 
     return res.status(200).json({
       success: true,
@@ -830,42 +830,42 @@ exports.getProductsWithStockDetails = async (req, res) => {
       error: error.message,
     });
   }
-};exports.getProductsWithBatches = async (req, res) => {
-    try {
-        const query = {
-            batches: { $exists: true, $not: { $size: 0 } }
-        };
+}; exports.getProductsWithBatches = async (req, res) => {
+  try {
+    const query = {
+      batches: { $exists: true, $not: { $size: 0 } }
+    };
 
-        // Kiểm tra xem có tham số category trong query không
-        if (req.query.category) {
-            query.category = req.query.category;
-        }
-
-        const productsWithBatches = await Product.find(query)
-            .populate({
-                path: "category",
-                select: "name description",
-            })
-            .populate({
-                path: "suppliers.supplier",
-                select: "name company contact.phone contact.email",
-            })
-            .populate({
-                path: "batches",
-                select: "",
-            });
-
-        return res.status(200).json({
-            success: true,
-            results: productsWithBatches.length,
-            data: productsWithBatches,
-        });
-    } catch (error) {
-        console.error("Get products with batches error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Lỗi máy chủ nội bộ.",
-            error: error.message,
-        });
+    // Kiểm tra xem có tham số category trong query không
+    if (req.query.category) {
+      query.category = req.query.category;
     }
+
+    const productsWithBatches = await Product.find(query)
+      .populate({
+        path: "category",
+        select: "name description",
+      })
+      .populate({
+        path: "suppliers.supplier",
+        select: "name company contact.phone contact.email",
+      })
+      .populate({
+        path: "batches",
+        select: "",
+      });
+
+    return res.status(200).json({
+      success: true,
+      results: productsWithBatches.length,
+      data: productsWithBatches,
+    });
+  } catch (error) {
+    console.error("Get products with batches error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Lỗi máy chủ nội bộ.",
+      error: error.message,
+    });
+  }
 };
