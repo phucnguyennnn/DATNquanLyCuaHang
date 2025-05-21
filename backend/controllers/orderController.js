@@ -314,14 +314,25 @@ exports.handleInstoreOrder = async (req, res) => {
       for (const batchInfo of product.batchesUsed) {
         const batch = await Batch.findById(batchInfo.batchId);
         if (batch) {
-          const batchPrice = batch.getDiscountedPrice
-            ? await batch.getDiscountedPrice()
-            : batch.unitPrice;
-          batchInfo.unitPrice = batchPrice / product.unitRatio; // Update the unitPrice
+          // Tính giá chính xác dựa trên discount (nếu có)
+          let batchPrice;
+          if (typeof batch.getDiscountedPrice === 'function') {
+            batchPrice = await batch.getDiscountedPrice();
+          } else if (batch.discountInfo && batch.discountInfo.isDiscounted) {
+            const discountValue = batch.discountInfo.discountValue || 0;
+            batchPrice = batch.unitPrice * (1 - discountValue / 100);
+          } else {
+            batchPrice = batch.unitPrice;
+          }
+
+          // Lưu giá đúng vào batchInfo
+          batchInfo.unitPrice = batchPrice;
+
+          // Cập nhật số lượng trong kho (không chia cho unitRatio vì quantity đã là đơn vị cơ bản)
           await Batch.findByIdAndUpdate(batchInfo.batchId, {
             $inc: {
-              quantity_on_shelf: -(batchInfo.quantity / product.unitRatio),
-              sold_quantity: batchInfo.quantity / product.unitRatio,
+              quantity_on_shelf: -batchInfo.quantity,
+              sold_quantity: batchInfo.quantity,
             },
           });
         }
@@ -357,7 +368,7 @@ exports.selectGoodBatches = async (productId, requiredBaseQty) => {
     const take = Math.min(batch.quantity_on_shelf, remaining);
     if (take > 0) {
       const unitPrice = batch.getDiscountedPrice
-        ? batch.getDiscountedPrice
+        ? await batch.getDiscountedPrice()
         : batch.unitPrice;
       selected.push({
         batchId: batch._id,

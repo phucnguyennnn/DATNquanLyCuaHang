@@ -147,7 +147,7 @@ const ProductManager = () => {
         const fetchData = async () => {
             try {
                 // Gọi API với phân trang và lọc danh mục
-                let url = `http://localhost:8000/api/products?page=${page}&limit=1000`;
+                let url = `http://localhost:8000/api/products?page=${page}&limit=15`;
                 if (selectedCategoryFilter) {
                     url += `&category=${selectedCategoryFilter}`;
                 }
@@ -170,7 +170,7 @@ const ProductManager = () => {
 
                 // Tính tổng số trang
                 const total = productsRes.data.total || productsRes.data.count || productsRes.data.results || 0;
-                setTotalPages(Math.ceil((productsRes.data.count || productsRes.data.total || 0) / 20) || 11);
+                setTotalPages(Math.ceil((productsRes.data.count || productsRes.data.total || 0) / 15) || 4);
             } catch (error) {
                 console.error("Error fetching data:", error);
                 setSnackbar({

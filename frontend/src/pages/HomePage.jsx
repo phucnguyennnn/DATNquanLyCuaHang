@@ -47,7 +47,13 @@ const ProductCard = ({ product }) => {
       <CardMedia
         component="img"
         height="140"
-        image={product.images?.[0]?.url || "https://via.placeholder.com/150"}
+        image={
+          Array.isArray(product.images) && product.images.length > 0
+            ? (typeof product.images[0] === "string"
+                ? product.images[0]
+                : product.images[0]?.url) || "https://via.placeholder.com/150"
+            : "https://via.placeholder.com/150"
+        }
         alt={product.name}
       />
       <CardContent sx={{ flexGrow: 1 }}>
