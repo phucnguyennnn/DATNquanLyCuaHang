@@ -110,13 +110,14 @@ const orderSchema = new mongoose.Schema({
   orderNumber: { type: String, unique: true },
   paymentMethod: {
     type: String,
-    enum: ["cash", "transfer"],
+    enum: ["cash", "transfer", "vnpay", "momo"],
+    required: true,
     default: "cash",
   },
   paymentStatus: {
     type: String,
-    enum: ["pending", "paid", "unpaid", "deposit"],
-    default: "pending",
+    enum: ["unpaid", "paid", "pending", "failed"],
+    default: "unpaid",
   },
   orderType: {
     type: String,
@@ -133,6 +134,14 @@ const orderSchema = new mongoose.Schema({
   depositAmount: { type: Number, default: 0, min: 0 },
   amountPaid: { type: Number, default: 0, min: 0 },
   notes: { type: String, trim: true, maxlength: 500 },
+  transactionId: {
+    type: String,
+    default: null
+  },
+  paidAt: {
+    type: Date,
+    default: null
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

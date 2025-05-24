@@ -201,15 +201,15 @@ const sendPurchaseOrderEmail = async (toEmail, order) => {
     const itemsListHtml = order.items.map((item, index) => {
       const productName = item.product ? item.product.name : 'Không rõ';
       const unit = item.product?.units.find(u => u.name === item.unit);
-      const salePrice = unit ? unit.salePrice : 0;
-      const itemTotal = salePrice * item.quantity;
+      const purchasePrice = unit ? unit.purchasePrice : 0; // Changed from salePrice to purchasePrice
+      const itemTotal = purchasePrice * item.quantity;
 
       return `
         <tr>
           <td>${index + 1}</td>
           <td>${productName}</td>
           <td>${item.quantity} ${item.unit}</td>
-          <td>${salePrice.toLocaleString()} đ</td>
+          <td>${purchasePrice.toLocaleString()} đ</td>
           <td>${item.conversionRate}</td>
           <td>${itemTotal.toLocaleString()} đ</td>
         </tr>

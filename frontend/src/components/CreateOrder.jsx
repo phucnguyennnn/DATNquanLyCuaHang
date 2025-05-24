@@ -37,6 +37,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import axios from "axios";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import QRPayment from './QRPayment';
 
 const CreateOrder = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -57,6 +58,9 @@ const CreateOrder = () => {
   const [hasUserSelectedBatch, setHasUserSelectedBatch] = useState(false);
   const [cashReceivedError, setCashReceivedError] = useState("");
   const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [showQRPayment, setShowQRPayment] = useState(false);
+  const [createdOrder, setCreatedOrder] = useState(null);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -184,6 +188,7 @@ const CreateOrder = () => {
         quantity: requiredBaseQty,
         unitPrice: unitPriceBase * selectedUnit.ratio,
         unitName: selectedUnit.name,
+        discountRate: discount.isDiscounted ? discount.discountValue : 0,
       };
       return [selectedBatchInfo];
     }
@@ -216,6 +221,7 @@ const CreateOrder = () => {
             quantity: selectedBatches[b._id] * (selectedUnit?.ratio || 1),
             unitPrice: unitPriceBase * selectedUnit.ratio,
             unitName: selectedUnit.name,
+            discountRate: discount.isDiscounted ? discount.discountValue : 0,
           };
         });
     }
@@ -223,39 +229,40 @@ const CreateOrder = () => {
     const updatedOrderItems = [...orderItems];
 
     selected.forEach((batch) => {
+      // Tìm theo sản phẩm, đơn vị và mức giảm giá
       const existingItemIndex = updatedOrderItems.findIndex(
         (item) =>
           item.product.id === selectedProduct.id &&
           item.selectedUnit.name === selectedUnit.name &&
-          item.batches.some((b) => b._id === batch._id)
+          item.discountRate === batch.discountRate
       );
 
       if (existingItemIndex !== -1) {
-        const existingBatchIndex = updatedOrderItems[
-          existingItemIndex
-        ].batches.findIndex((b) => b._id === batch._id);
+        // Nếu đã có item với cùng sản phẩm, đơn vị và mức giảm giá
+        const existingItem = updatedOrderItems[existingItemIndex];
+        const existingBatchIndex = existingItem.batches.findIndex((b) => b._id === batch._id);
 
         if (existingBatchIndex !== -1) {
-          updatedOrderItems[existingItemIndex].batches[
-            existingBatchIndex
-          ].quantity += batch.quantity;
+          // Tăng số lượng nếu đã có batch này
+          existingItem.batches[existingBatchIndex].quantity += batch.quantity;
         } else {
-          updatedOrderItems[existingItemIndex].batches.push(batch);
+          // Thêm batch mới vào item hiện có
+          existingItem.batches.push(batch);
         }
 
-        updatedOrderItems[existingItemIndex].total = updatedOrderItems[
-          existingItemIndex
-        ].batches.reduce(
-          (sum, b) =>
-            sum + b.unitPrice * (b.quantity / item.selectedUnit.ratio),
+        // Cập nhật tổng
+        existingItem.total = existingItem.batches.reduce(
+          (sum, b) => sum + b.unitPrice * (b.quantity / existingItem.selectedUnit.ratio),
           0
         );
       } else {
+        // Tạo item mới nếu chưa có sản phẩm + đơn vị + mức giảm giá này
         const newItem = {
           product: selectedProduct,
           selectedUnit,
           batches: [batch],
           total: batch.unitPrice * (batch.quantity / selectedUnit.ratio),
+          discountRate: batch.discountRate,
         };
         updatedOrderItems.push(newItem);
       }
@@ -326,6 +333,7 @@ const CreateOrder = () => {
           batchId: b._id,
           quantity: b.quantity,
           unitPrice: b.unitPrice,
+          discountRate: item.discountRate || 0,
         })),
       })),
       paymentMethod,
@@ -342,477 +350,509 @@ const CreateOrder = () => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      alert(`Đơn hàng ${res.data.orderNumber} tạo thành công!`);
-      setOrderItems([]);
-      setCashReceived("");
+      
+      if (paymentMethod === 'vnpay' || paymentMethod === 'momo') {
+        setCreatedOrder(res.data);
+        setShowQRPayment(true);
+      } else {
+        alert(`Đơn hàng ${res.data.orderNumber} tạo thành công!`);
+        setOrderItems([]);
+        setCashReceived("");
+      }
     } catch (error) {
       console.error(error);
       alert("Tạo đơn thất bại!");
     }
-    setSubmittingOrder(false); // Kết thúc loading
+    setSubmittingOrder(false);
+  };
+
+  const handlePaymentSuccess = () => {
+    alert(`Đơn hàng ${createdOrder.orderNumber} thanh toán thành công!`);
+    setOrderItems([]);
+    setCashReceived("");
+    setShowQRPayment(false);
+    setCreatedOrder(null);
   };
 
   const subtotal = orderItems.reduce((sum, item) => sum + item.total, 0);
   const change = cashReceived ? parseFloat(cashReceived) - subtotal : 0;
 
   return (
-    <Container
-      maxWidth="lg"
-      sx={{
-        mt: 4,
-        height: "calc(100vh - 100px)",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <Paper
+    <>
+      <Container
+        maxWidth="lg"
         sx={{
-          p: 3,
-          mb: 2,
-          flex: 1,
+          mt: 4,
+          height: "calc(100vh - 100px)",
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
         }}
       >
-        <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
-          <Autocomplete
-            sx={{ flex: 1 }}
-            options={customers}
-            getOptionLabel={(option) => `${option.fullName} (${option.phone})`}
-            loading={loadingCustomers}
-            value={selectedCustomer}
-            onChange={(_, newValue) => setSelectedCustomer(newValue)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Chọn khách hàng"
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {loadingCustomers ? <CircularProgress size={20} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                }}
-              />
-            )}
-          />
-          <TextField
-            sx={{ flex: 2 }}
-            variant="outlined"
-            label="Tìm kiếm sản phẩm hoặc mã lô"
-            value={searchTerm}
-            onChange={handleSearch}
-            InputProps={{ endAdornment: <SearchIcon /> }}
-          />
-        </Box>
-
-        <Grid container spacing={2} sx={{ flex: 1, overflow: "hidden" }}>
-          <Grid item xs={6} sx={{ height: "100%", overflow: "hidden" }}>
-            <Typography variant="h6">Danh sách sản phẩm</Typography>
-            <Box
-              sx={{
-                height: "calc(100% - 40px)",
-                overflow: "auto",
-                pr: 1,
-              }}
-            >
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((product) => (
-                  <Paper
-                    key={product._id}
-                    sx={{
-                      p: 2,
-                      mb: 1,
-                      cursor: "pointer",
-                      "&:hover": { bgcolor: "action.hover" },
-                    }}
-                    onClick={() => handleProductClick(product)}
-                  >
-                    <Typography variant="subtitle1">{product.name}</Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      {product.category?.name || product.category}
-                      {product.warehouse !== undefined &&
-                        ` | Kho: ${product.warehouse} | Quầy: ${product.shelf}`}
-                    </Typography>
-                    {product.units?.[0]?.salePrice && (
-                      <Typography variant="body2" color="primary">
-                        {product.units[0].salePrice.toLocaleString()}đ/
-                        {product.units[0].name}
-                      </Typography>
-                    )}
-                  </Paper>
-                ))
-              ) : (
-                <Typography
-                  variant="body1"
-                  color="textSecondary"
-                  sx={{ p: 2, textAlign: "center", fontStyle: "italic" }}
-                >
-                  Hiện không có sản phẩm nào còn hàng trên quầy.
-                </Typography>
-              )}
-            </Box>
-          </Grid>
-          <Grid
-            item
-            xs={6}
-            sx={{
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-            }}
-          >
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Đơn hàng
-            </Typography>
-
-            <List
-              sx={{
-                flex: 1,
-                overflow: "auto",
-                border: "1px solid rgba(0, 0, 0, 0.12)",
-                borderRadius: 1,
-                mb: 2,
-                pr: 1,
-              }}
-            >
-              {orderItems.map((item, itemIndex) => (
-                <ListItem key={itemIndex} divider>
-                  <ListItemText
-                    primary={item.product.name}
-                    secondary={
+        <Paper
+          sx={{
+            p: 3,
+            mb: 2,
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
+            <Autocomplete
+              sx={{ flex: 1 }}
+              options={customers}
+              getOptionLabel={(option) => `${option.fullName} (${option.phone})`}
+              loading={loadingCustomers}
+              value={selectedCustomer}
+              onChange={(_, newValue) => setSelectedCustomer(newValue)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Chọn khách hàng"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
                       <>
-                        <Typography variant="body2">
-                          Đơn vị: {item.selectedUnit.name} 
-                          {/* (1
-                          {item.selectedUnit.name} = {item.selectedUnit.ratio}
-                          {item.product.units.find((u) => u.ratio === 1)?.name}) */}
-                        </Typography>
-                        {item.batches.map((batch, batchIndex) => {
-                          const currentQty =
-                            batch.quantity / item.selectedUnit.ratio;
-                          const maxQty = Math.floor(
-                            batch.quantity_on_shelf / item.selectedUnit.ratio
-                          );
-                          const truncateString = (str, maxLength = 10) => {
-                            return str.length > maxLength
-                              ? str.substring(0, maxLength - 3) + "..."
-                              : str;
-                          };
-                          return (
-                            <Box
-                              key={batch._id}
-                              sx={{
-                                mt: 1,
-                                display: "flex",
-                                alignItems: "center",
-                              }}
-                            >
-                              <Chip
-                                label={`${truncateString(
-                                  batch.batchCode
-                                )} - ${currentQty.toFixed(0)}${
-                                  item.selectedUnit.name
-                                } × ${batch.unitPrice.toLocaleString()}đ`}
-                                size="small"
-                                sx={{ mr: 1, maxWidth: 150 }}
-                              />
-                              <TextField
-                                type="number"
-                                value={currentQty}
-                                onChange={(e) =>
-                                  handleUpdateQuantity(
-                                    itemIndex,
-                                    batchIndex,
-                                    e.target.value
-                                  )
-                                }
-                                inputProps={{
-                                  min: 0,
-                                  max: maxQty,
-                                  style: {
-                                    textAlign: "center",
-                                    padding: "6px 10px",
-                                  },
-                                }}
-                                sx={{
-                                  width: 80,
-                                  mr: 1,
-                                  "& input[type=number]": {
-                                    MozAppearance: "textfield",
-                                  },
-                                  "& input[type=number]::-webkit-outer-spin-button":
-                                    {
-                                      WebkitAppearance: "none",
-                                      margin: 0,
-                                    },
-                                  "& input[type=number]::-webkit-inner-spin-button":
-                                    {
-                                      WebkitAppearance: "none",
-                                      margin: 0,
-                                    },
-                                }}
-                                error={currentQty > maxQty || currentQty < 0}
-                                helperText={
-                                  (currentQty > maxQty &&
-                                    `Tối đa: ${maxQty}`) ||
-                                  (currentQty < 0 && "Không hợp lệ")
-                                }
-                              />
-                              {batch.discountInfo?.isDiscounted && (
-                                <Typography
-                                  variant="caption"
-                                  color="success.main"
-                                >
-                                  (Giảm {batch.discountInfo.discountValue}%)
-                                </Typography>
-                              )}
-                            </Box>
-                          );
-                        })}
+                        {loadingCustomers ? <CircularProgress size={20} /> : null}
+                        {params.InputProps.endAdornment}
                       </>
-                    }
-                  />
-                  <Typography sx={{ minWidth: 100, textAlign: "right" }}>
-                    {item.total.toLocaleString()}đ
-                  </Typography>
-                  <IconButton onClick={() => handleRemoveItem(itemIndex)}>
-                    <DeleteIcon color="error" />
-                  </IconButton>
-                </ListItem>
-              ))}
-            </List>
+                    ),
+                  }}
+                />
+              )}
+            />
+            <TextField
+              sx={{ flex: 2 }}
+              variant="outlined"
+              label="Tìm kiếm sản phẩm hoặc mã lô"
+              value={searchTerm}
+              onChange={handleSearch}
+              InputProps={{ endAdornment: <SearchIcon /> }}
+            />
+          </Box>
 
-            <Box
+          <Grid container spacing={2} sx={{ flex: 1, overflow: "hidden" }}>
+            <Grid item xs={6} sx={{ height: "100%", overflow: "hidden" }}>
+              <Typography variant="h6">Danh sách sản phẩm</Typography>
+              <Box
+                sx={{
+                  height: "calc(100% - 40px)",
+                  overflow: "auto",
+                  pr: 1,
+                }}
+              >
+                {filteredProducts.length > 0 ? (
+                  filteredProducts.map((product) => (
+                    <Paper
+                      key={product._id}
+                      sx={{
+                        p: 2,
+                        mb: 1,
+                        cursor: "pointer",
+                        "&:hover": { bgcolor: "action.hover" },
+                      }}
+                      onClick={() => handleProductClick(product)}
+                    >
+                      <Typography variant="subtitle1">{product.name}</Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        {product.category?.name || product.category}
+                        {product.warehouse !== undefined &&
+                          ` | Kho: ${product.warehouse} | Quầy: ${product.shelf}`}
+                      </Typography>
+                      {product.units?.[0]?.salePrice && (
+                        <Typography variant="body2" color="primary">
+                          {product.units[0].salePrice.toLocaleString()}đ/
+                          {product.units[0].name}
+                        </Typography>
+                      )}
+                    </Paper>
+                  ))
+                ) : (
+                  <Typography
+                    variant="body1"
+                    color="textSecondary"
+                    sx={{ p: 2, textAlign: "center", fontStyle: "italic" }}
+                  >
+                    Hiện không có sản phẩm nào còn hàng trên quầy.
+                  </Typography>
+                )}
+              </Box>
+            </Grid>
+            <Grid
+              item
+              xs={6}
               sx={{
-                p: 2,
-                bgcolor: "background.paper",
-                boxShadow: 1,
-                borderRadius: 1,
-                flexShrink: 0,
+                height: "100%",
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
               }}
             >
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <TextField
-                    fullWidth
-                    label="Tiền khách đưa"
-                    value={cashReceived}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "");
-                      setCashReceived(value);
-                      if (!value) {
-                        setCashReceivedError(
-                          "Vui lòng nhập số tiền khách đưa."
-                        );
-                      } else if (parseFloat(value) < subtotal) {
-                        setCashReceivedError("Số tiền khách đưa không đủ.");
-                      } else {
-                        setCashReceivedError("");
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                Đơn hàng
+              </Typography>
+
+              <List
+                sx={{
+                  flex: 1,
+                  overflow: "auto",
+                  border: "1px solid rgba(0, 0, 0, 0.12)",
+                  borderRadius: 1,
+                  mb: 2,
+                  pr: 1,
+                }}
+              >
+                {orderItems.map((item, itemIndex) => (
+                  <ListItem key={itemIndex} divider>
+                    <ListItemText
+                      primary={
+                        <>
+                          {item.product.name}
+                          {item.discountRate > 0 && (
+                            <Typography
+                              component="span"
+                              variant="body2"
+                              color="success.main"
+                              sx={{ ml: 1 }}
+                            >
+                              (Giảm {item.discountRate}%)
+                            </Typography>
+                          )}
+                        </>
                       }
-                    }}
-                    InputProps={{ endAdornment: "đ" }}
-                    error={!!cashReceivedError}
-                    helperText={cashReceivedError}
-                    required
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Phương thức TT</InputLabel>
-                    <Select
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value)}
-                    >
-                      <MenuItem value="cash">Tiền mặt</MenuItem>
-                      <MenuItem value="card">Thẻ</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12}>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between" }}
-                  >
-                    <Typography variant="h6">Tổng cộng:</Typography>
-                    <Typography variant="h6" color="primary">
-                      {subtotal.toLocaleString()}đ
+                      secondary={
+                        <>
+                          <Typography variant="body2">
+                            Đơn vị: {item.selectedUnit.name} 
+                            {/* (1
+                            {item.selectedUnit.name} = {item.selectedUnit.ratio}
+                            {item.product.units.find((u) => u.ratio === 1)?.name}) */}
+                          </Typography>
+                          {item.batches.map((batch, batchIndex) => {
+                            const currentQty =
+                              batch.quantity / item.selectedUnit.ratio;
+                            const maxQty = Math.floor(
+                              batch.quantity_on_shelf / item.selectedUnit.ratio
+                            );
+                            const truncateString = (str, maxLength = 10) => {
+                              return str.length > maxLength
+                                ? str.substring(0, maxLength - 3) + "..."
+                                : str;
+                            };
+                            return (
+                              <Box
+                                key={batch._id}
+                                sx={{
+                                  mt: 1,
+                                  display: "flex",
+                                  alignItems: "center",
+                                }}
+                              >
+                                <Chip
+                                  label={`${truncateString(
+                                    batch.batchCode
+                                  )} - ${currentQty.toFixed(0)}${
+                                    item.selectedUnit.name
+                                  } × ${batch.unitPrice.toLocaleString()}đ`}
+                                  size="small"
+                                  sx={{ mr: 1, maxWidth: 150 }}
+                                />
+                                <TextField
+                                  type="number"
+                                  value={currentQty}
+                                  onChange={(e) =>
+                                    handleUpdateQuantity(
+                                      itemIndex,
+                                      batchIndex,
+                                      e.target.value
+                                    )
+                                  }
+                                  inputProps={{
+                                    min: 0,
+                                    max: maxQty,
+                                    style: {
+                                      textAlign: "center",
+                                      padding: "6px 10px",
+                                    },
+                                  }}
+                                  sx={{
+                                    width: 80,
+                                    mr: 1,
+                                    "& input[type=number]": {
+                                      MozAppearance: "textfield",
+                                    },
+                                    "& input[type=number]::-webkit-outer-spin-button":
+                                      {
+                                        WebkitAppearance: "none",
+                                        margin: 0,
+                                      },
+                                    "& input[type=number]::-webkit-inner-spin-button":
+                                      {
+                                        WebkitAppearance: "none",
+                                        margin: 0,
+                                      },
+                                  }}
+                                  error={currentQty > maxQty || currentQty < 0}
+                                  helperText={
+                                    (currentQty > maxQty &&
+                                      `Tối đa: ${maxQty}`) ||
+                                    (currentQty < 0 && "Không hợp lệ")
+                                  }
+                                />
+                              </Box>
+                            );
+                          })}
+                        </>
+                      }
+                    />
+                    <Typography sx={{ minWidth: 100, textAlign: "right" }}>
+                      {item.total.toLocaleString()}đ
                     </Typography>
-                  </Box>
-                  {cashReceived && !cashReceivedError && (
-                    <Box
-                      sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        mt: 1,
+                    <IconButton onClick={() => handleRemoveItem(itemIndex)}>
+                      <DeleteIcon color="error" />
+                    </IconButton>
+                  </ListItem>
+                ))}
+              </List>
+
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: "background.paper",
+                  boxShadow: 1,
+                  borderRadius: 1,
+                  flexShrink: 0,
+                }}
+              >
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextField
+                      fullWidth
+                      label="Tiền khách đưa"
+                      value={cashReceived}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        setCashReceived(value);
+                        if (!value) {
+                          setCashReceivedError(
+                            "Vui lòng nhập số tiền khách đưa."
+                          );
+                        } else if (parseFloat(value) < subtotal) {
+                          setCashReceivedError("Số tiền khách đưa không đủ.");
+                        } else {
+                          setCashReceivedError("");
+                        }
                       }}
-                    >
-                      <Typography>Tiền thừa:</Typography>
-                      <Typography
-                        color={change >= 0 ? "success.main" : "error"}
+                      InputProps={{ endAdornment: "đ" }}
+                      error={!!cashReceivedError}
+                      helperText={cashReceivedError}
+                      required
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Phương thức TT</InputLabel>
+                      <Select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
                       >
-                        {Math.abs(change).toLocaleString()}đ
+                        <MenuItem value="cash">Tiền mặt</MenuItem>
+                        <MenuItem value="card">Thẻ</MenuItem>
+                        <MenuItem value="transfer">Chuyển khoản</MenuItem>
+                        <MenuItem value="vnpay">VNPay</MenuItem>
+                        <MenuItem value="momo">MoMo</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Box
+                      sx={{ display: "flex", justifyContent: "space-between" }}
+                    >
+                      <Typography variant="h6">Tổng cộng:</Typography>
+                      <Typography variant="h6" color="primary">
+                        {subtotal.toLocaleString()}đ
                       </Typography>
                     </Box>
-                  )}
+                    {cashReceived && !cashReceivedError && (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          mt: 1,
+                        }}
+                      >
+                        <Typography>Tiền thừa:</Typography>
+                        <Typography
+                          color={change >= 0 ? "success.main" : "error"}
+                        >
+                          {Math.abs(change).toLocaleString()}đ
+                        </Typography>
+                      </Box>
+                    )}
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      size="large"
+                      onClick={handleSubmitOrder}
+                      disabled={
+                        orderItems.length === 0 ||
+                        !!cashReceivedError ||
+                        !cashReceived ||
+                        submittingOrder
+                      }
+                      startIcon={submittingOrder ? <CircularProgress size={22} /> : null}
+                    >
+                      {submittingOrder ? "Đang tạo đơn..." : `Tạo đơn hàng (${orderItems.length})`}
+                    </Button>
+                  </Grid>
                 </Grid>
-                <Grid item xs={12}>
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    size="large"
-                    onClick={handleSubmitOrder}
-                    disabled={
-                      orderItems.length === 0 ||
-                      !!cashReceivedError ||
-                      !cashReceived ||
-                      submittingOrder
-                    }
-                    startIcon={submittingOrder ? <CircularProgress size={22} /> : null}
-                  >
-                    {submittingOrder ? "Đang tạo đơn..." : `Tạo đơn hàng (${orderItems.length})`}
-                  </Button>
-                </Grid>
-              </Grid>
-            </Box>
+              </Box>
+            </Grid>
           </Grid>
-        </Grid>
-      </Paper>
+        </Paper>
 
-      <Dialog open={!!selectedProduct} fullWidth maxWidth="md">
-        <DialogTitle>
-          Chọn lô hàng - {selectedProduct?.name}
-          <FormControl sx={{ minWidth: 120, ml: 2 }}>
-            <InputLabel>Đơn vị</InputLabel>
-            <Select
-              value={selectedUnit?.name || ""}
-              onChange={(e) => {
-                const unit = selectedProduct.units.find(
-                  (u) => u.name === e.target.value
-                );
-                setSelectedUnit(unit);
-                setSelectedBatches({});
-                setHasUserSelectedBatch(false);
-              }}
+        <Dialog open={!!selectedProduct} fullWidth maxWidth="md">
+          <DialogTitle>
+            Chọn lô hàng - {selectedProduct?.name}
+            <FormControl sx={{ minWidth: 120, ml: 2 }}>
+              <InputLabel>Đơn vị</InputLabel>
+              <Select
+                value={selectedUnit?.name || ""}
+                onChange={(e) => {
+                  const unit = selectedProduct.units.find(
+                    (u) => u.name === e.target.value
+                  );
+                  setSelectedUnit(unit);
+                  setSelectedBatches({});
+                  setHasUserSelectedBatch(false);
+                }}
+              >
+                {selectedProduct?.units?.map((unit) => (
+                  <MenuItem key={unit.name} value={unit.name}>
+                    {/* {unit.name} (1{unit.name} = {unit.ratio}{" "}
+                    {selectedProduct.units.find((u) => u.ratio === 1)?.name}) */}
+                    {unit.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </DialogTitle>
+          <DialogContent>
+            {batches.length === 0 ? (
+              <Typography
+                variant="body1"
+                color="textSecondary"
+                sx={{
+                  p: 2,
+                  textAlign: "center",
+                  fontStyle: "italic",
+                }}
+              >
+                Hiện không có lô hàng nào trên quầy
+              </Typography>
+            ) : (
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Mã lô</TableCell>
+                      <TableCell>HSD</TableCell>
+                      <TableCell>Giá gốc</TableCell>
+                      <TableCell>Giảm giá</TableCell>
+                      <TableCell>Kho</TableCell>
+                      <TableCell>Quầy</TableCell>
+                      <TableCell>Số lượng</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {batches.map((batch) => {
+                      const baseUnit = selectedProduct?.units?.find(
+                        (u) => u.ratio === 1
+                      );
+                      const discount = batch.discountInfo || {};
+                      const daysRemaining = batch.daysUntilExpiry || 0;
+
+                      return (
+                        <TableRow key={batch._id}>
+                          <TableCell>{batch.batchCode}</TableCell>
+                          <TableCell>
+                            {format(new Date(batch.expiry_day), "dd/MM/yyyy", {
+                              locale: vi,
+                            })}
+                            <Typography variant="caption" color="textSecondary">
+                              ({daysRemaining} ngày)
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {(
+                              (baseUnit?.salePrice || 0) *
+                              (selectedUnit?.ratio || 1)
+                            ).toLocaleString()}
+                            đ
+                          </TableCell>
+                          <TableCell sx={{ color: "success.main" }}>
+                            {discount.isDiscounted && (
+                              <>
+                                {discount.discountValue}%
+                                {/* <Typography variant="caption">
+                                  {discount.discountReason}
+                                </Typography> */}
+                              </>
+                            )}
+                          </TableCell>
+                          <TableCell>{batch.remaining_quantity}</TableCell>
+                          <TableCell>{batch.quantity_on_shelf}</TableCell>
+                          <TableCell>
+                            <TextField
+                              type="number"
+                              value={selectedBatches[batch._id] || 0}
+                              onChange={(e) =>
+                                handleBatchQtyChange(batch._id, e.target.value)
+                              }
+                              inputProps={{ min: 1 }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setSelectedProduct(null)}>Hủy</Button>
+            <Button
+              variant="contained"
+              onClick={handleAddToOrder}
+              disabled={!selectedProduct || batches.length === 0}
             >
-              {selectedProduct?.units?.map((unit) => (
-                <MenuItem key={unit.name} value={unit.name}>
-                  {/* {unit.name} (1{unit.name} = {unit.ratio}{" "}
-                  {selectedProduct.units.find((u) => u.ratio === 1)?.name}) */}
-                  {unit.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogTitle>
-        <DialogContent>
-          {batches.length === 0 ? (
-            <Typography
-              variant="body1"
-              color="textSecondary"
-              sx={{
-                p: 2,
-                textAlign: "center",
-                fontStyle: "italic",
-              }}
-            >
-              Hiện không có lô hàng nào trên quầy
-            </Typography>
-          ) : (
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Mã lô</TableCell>
-                    <TableCell>HSD</TableCell>
-                    <TableCell>Giá gốc</TableCell>
-                    <TableCell>Giảm giá</TableCell>
-                    <TableCell>Kho</TableCell>
-                    <TableCell>Quầy</TableCell>
-                    <TableCell>Số lượng</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {batches.map((batch) => {
-                    const baseUnit = selectedProduct?.units?.find(
-                      (u) => u.ratio === 1
-                    );
-                    const discount = batch.discountInfo || {};
-                    const daysRemaining = batch.daysUntilExpiry || 0;
+              Thêm vào đơn (
+              {!hasUserSelectedBatch
+                ? 1
+                : Object.values(selectedBatches).reduce((a, b) => a + b, 0)}
+              )
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-                    return (
-                      <TableRow key={batch._id}>
-                        <TableCell>{batch.batchCode}</TableCell>
-                        <TableCell>
-                          {format(new Date(batch.expiry_day), "dd/MM/yyyy", {
-                            locale: vi,
-                          })}
-                          <Typography variant="caption" color="textSecondary">
-                            ({daysRemaining} ngày)
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {(
-                            (baseUnit?.salePrice || 0) *
-                            (selectedUnit?.ratio || 1)
-                          ).toLocaleString()}
-                          đ
-                        </TableCell>
-                        <TableCell sx={{ color: "success.main" }}>
-                          {discount.isDiscounted && (
-                            <>
-                              {discount.discountValue}%
-                              {/* <Typography variant="caption">
-                                {discount.discountReason}
-                              </Typography> */}
-                            </>
-                          )}
-                        </TableCell>
-                        <TableCell>{batch.remaining_quantity}</TableCell>
-                        <TableCell>{batch.quantity_on_shelf}</TableCell>
-                        <TableCell>
-                          <TextField
-                            type="number"
-                            value={selectedBatches[batch._id] || 0}
-                            onChange={(e) =>
-                              handleBatchQtyChange(batch._id, e.target.value)
-                            }
-                            inputProps={{ min: 1 }}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelectedProduct(null)}>Hủy</Button>
-          <Button
-            variant="contained"
-            onClick={handleAddToOrder}
-            disabled={!selectedProduct || batches.length === 0}
-          >
-            Thêm vào đơn (
-            {!hasUserSelectedBatch
-              ? 1
-              : Object.values(selectedBatches).reduce((a, b) => a + b, 0)}
-            )
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <QRPayment
+          open={showQRPayment}
+          onClose={() => setShowQRPayment(false)}
+          order={createdOrder}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
 
-      {loading && (
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-          <CircularProgress />
-        </Box>
-      )}
-    </Container>
+        {loading && (
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+            <CircularProgress />
+          </Box>
+        )}
+      </Container>
+    </>
   );
 };
 

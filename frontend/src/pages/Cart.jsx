@@ -34,6 +34,7 @@ import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import ShopIcon from "@mui/icons-material/Shop"; // Added ShopIcon
 import { useNavigate } from "react-router-dom";
+import QRPayment from "../components/QRPayment";
 
 const formatDate = (dateString) => {
   if (!dateString) return "";
@@ -127,6 +128,8 @@ const CartPage = () => {
   const [openOrdersDialog, setOpenOrdersDialog] = useState(false);
   const [customerInfo, setCustomerInfo] = useState(null);
   const [openProfileDialog, setOpenProfileDialog] = useState(false);
+  const [openQRPayment, setOpenQRPayment] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState(null);
 
   const authHeader = useCallback(
     () => ({
@@ -309,6 +312,18 @@ const CartPage = () => {
       alert("Có lỗi xảy ra khi tạo đơn hàng preorder.");
     } finally {
       setCreatingPreorder(false);
+    }
+  };
+
+  const handlePayOnline = (order) => {
+    setSelectedOrderForPayment(order);
+    setOpenQRPayment(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    alert("Thanh toán thành công!");
+    if (userId) {
+      fetchOrders(userId);
     }
   };
 
@@ -758,6 +773,32 @@ const CartPage = () => {
           )}
         </Stack>
       )}
+
+      {/* Thêm button thanh toán online cho các đơn hàng chưa thanh toán */}
+      {orders.map((order) => (
+        <div key={order._id}>
+          {/* Existing order display code */}
+
+          {order.paymentStatus === "unpaid" && (
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => handlePayOnline(order)}
+              sx={{ mt: 1 }}
+            >
+              Thanh toán online
+            </Button>
+          )}
+        </div>
+      ))}
+
+      {/* QR Payment Dialog */}
+      <QRPayment
+        open={openQRPayment}
+        onClose={() => setOpenQRPayment(false)}
+        order={selectedOrderForPayment}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
     </Container>
   );
 };

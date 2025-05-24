@@ -39,7 +39,6 @@ import axios from "axios";
 import { useFormik } from "formik";
 import * as yup from "yup";
 import { useSettings } from '../contexts/SettingsContext';
-import Pagination from "@mui/material/Pagination";
 
 const productSchema = yup.object({
     name: yup.string().required("Tên sản phẩm là bắt buộc"),
@@ -103,8 +102,6 @@ const ProductManager = () => {
     const [openCategoryDialog, setOpenCategoryDialog] = useState(false);
     const [newCategory, setNewCategory] = useState({ name: "", description: "" });
     const [submitLoading, setSubmitLoading] = useState(false);
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
     const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("");
     const token = localStorage.getItem("authToken");
 
@@ -146,10 +143,10 @@ const ProductManager = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Gọi API với phân trang và lọc danh mục
-                let url = `http://localhost:8000/api/products?page=${page}&limit=15`;
+                // Remove pagination parameters
+                let url = `http://localhost:8000/api/products`;
                 if (selectedCategoryFilter) {
-                    url += `&category=${selectedCategoryFilter}`;
+                    url += `?category=${selectedCategoryFilter}`;
                 }
                 const [productsRes, categoriesRes, suppliersRes] = await Promise.all([
                     axios.get(url, {
@@ -163,14 +160,15 @@ const ProductManager = () => {
                     }),
                 ]);
 
-                setProducts(Array.isArray(productsRes.data.data) ? productsRes.data.data : []);
+                // Handle different response formats
+                setProducts(Array.isArray(productsRes.data.data) 
+                    ? productsRes.data.data 
+                    : Array.isArray(productsRes.data) 
+                    ? productsRes.data 
+                    : []);
                 setCategories(categoriesRes.data);
                 setSuppliers(suppliersRes.data);
                 setIsLoading(false);
-
-                // Tính tổng số trang
-                const total = productsRes.data.total || productsRes.data.count || productsRes.data.results || 0;
-                setTotalPages(Math.ceil((productsRes.data.count || productsRes.data.total || 0) / 15) || 4);
             } catch (error) {
                 console.error("Error fetching data:", error);
                 setSnackbar({
@@ -183,7 +181,7 @@ const ProductManager = () => {
         };
 
         fetchData();
-    }, [page, selectedCategoryFilter, token]);
+    }, [selectedCategoryFilter, token]); // Remove page from dependencies
 
     const formik = useFormik({
         initialValues: {
@@ -528,7 +526,6 @@ const ProductManager = () => {
                         label="Lọc theo danh mục"
                         onChange={(e) => {
                             setSelectedCategoryFilter(e.target.value);
-                            setPage(1);
                         }}
                     >
                         <MenuItem value="">Tất cả</MenuItem>
@@ -625,15 +622,7 @@ const ProductManager = () => {
                     </TableBody>
                 </Table>
             </TableContainer>
-            <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-                <Pagination
-                    count={totalPages}
-                    page={page}
-                    onChange={(_, value) => setPage(value)}
-                    color="primary"
-                />
-            </Box>
-
+            
             <Dialog
                 open={openDialog}
                 onClose={handleCloseDialog}
