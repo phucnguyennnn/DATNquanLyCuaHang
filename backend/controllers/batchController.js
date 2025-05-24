@@ -3,6 +3,22 @@ const Supplier = require("../models/Supplier");
 const Product = require("../models/Product");
 const mongoose = require("mongoose");
 
+// Helper function để cập nhật trạng thái batch
+const updateBatchStatus = (batch) => {
+  const now = new Date();
+  const totalAvailable = batch.remaining_quantity + batch.quantity_on_shelf;
+
+  if (batch.expiry_day < now) {
+    batch.status = "hết hạn";
+  } else if (totalAvailable <= 0) {
+    batch.status = "hết hàng";
+  } else {
+    batch.status = "hoạt động";
+  }
+
+  return batch;
+};
+
 exports.createBatch = async (req, res) => {
   try {
     const {
@@ -50,7 +66,7 @@ exports.createBatch = async (req, res) => {
       sold_quantity: sold_quantity || 0,
       lost_quantity: lost_quantity || 0,
       quantity_on_shelf: quantity_on_shelf || 0,
-      reserved_quantity: reserved_quantity || 0, 
+      reserved_quantity: reserved_quantity || 0,
       status,
       supplier: supplier._id,
       product: product._id,
@@ -106,7 +122,21 @@ exports.getAllBatches = async (req, res) => {
       .populate("supplier", "name")
       .populate("goodReceipt", "receiptNumber");
 
-    res.status(200).json(batches);
+    // Cập nhật trạng thái cho tất cả batches và lưu những thay đổi
+    const updatedBatches = [];
+    for (const batch of batches) {
+      const originalStatus = batch.status;
+      updateBatchStatus(batch);
+
+      // Lưu nếu trạng thái thay đổi
+      if (originalStatus !== batch.status) {
+        await batch.save({ validateBeforeSave: false });
+      }
+
+      updatedBatches.push(batch);
+    }
+
+    res.status(200).json(updatedBatches);
   } catch (error) {
     console.error("Lỗi khi lấy danh sách lô hàng:", error);
     res.status(500).json({ message: "Lỗi server khi tải dữ liệu lô hàng" });
@@ -154,6 +184,15 @@ exports.getBatchById = async (req, res) => {
       return res.status(404).json({ message: "Batch không tồn tại" });
     }
 
+    // Cập nhật trạng thái batch
+    const originalStatus = batch.status;
+    updateBatchStatus(batch);
+
+    // Lưu nếu trạng thái thay đổi
+    if (originalStatus !== batch.status) {
+      await batch.save({ validateBeforeSave: false });
+    }
+
     res.status(200).json(batch);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -185,12 +224,18 @@ exports.transferToShelf = async (req, res) => {
     batch.remaining_quantity -= quantity;
     batch.quantity_on_shelf += quantity;
 
+    // Cập nhật trạng thái nếu hết hàng
+    if (batch.remaining_quantity + batch.quantity_on_shelf <= 0) {
+      batch.status = "hết hàng";
+    }
+
     const updatedBatch = await batch.save({ validateModifiedOnly: true });
     res.status(200).json(updatedBatch);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
 exports.transferToWarehouse = async (req, res) => {
   try {
     const { quantity } = req.body;
@@ -212,6 +257,9 @@ exports.transferToWarehouse = async (req, res) => {
 
     batch.remaining_quantity += quantity;
     batch.quantity_on_shelf -= quantity;
+
+    // Cập nhật trạng thái về hoạt động nếu có hàng trở lại
+    updateBatchStatus(batch);
 
     const updatedBatch = await batch.save({ validateModifiedOnly: true });
     res.status(200).json(updatedBatch);
@@ -241,7 +289,21 @@ exports.getBatchesByProduct = async (req, res) => {
       .populate("supplier", "name")
       .sort({ expiry_day: 1 }); // Sắp xếp theo ngày hết hạn tăng dần
 
-    res.status(200).json(batches);
+    // Cập nhật trạng thái cho tất cả batches
+    const updatedBatches = [];
+    for (const batch of batches) {
+      const originalStatus = batch.status;
+      updateBatchStatus(batch);
+
+      // Lưu nếu trạng thái thay đổi
+      if (originalStatus !== batch.status) {
+        await batch.save({ validateBeforeSave: false });
+      }
+
+      updatedBatches.push(batch);
+    }
+
+    res.status(200).json(updatedBatches);
   } catch (error) {
     console.error("Lỗi khi lấy lô hàng theo sản phẩm:", error);
     res.status(500).json({

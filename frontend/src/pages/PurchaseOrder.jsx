@@ -41,7 +41,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import { styled } from '@mui/material/styles';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -84,9 +84,11 @@ const StyledTab = styled(Tab)(({ theme }) => ({
 
 const PurchaseOrderManagement = () => {
   const [suppliers, setSuppliers] = useState([]);
+  const [filteredSuppliers, setFilteredSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [selectedSupplier, setSelectedSupplier] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
+  const [productSearchTerm, setProductSearchTerm] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [unit, setUnit] = useState("");
   const [unitPrice, setUnitPrice] = useState(0);
@@ -129,6 +131,8 @@ const PurchaseOrderManagement = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const navigate = useNavigate();
   const token = localStorage.getItem("authToken");
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const interceptor = axios.interceptors.request.use((config) => {
@@ -152,10 +156,61 @@ const PurchaseOrderManagement = () => {
     setTotalPrice(orderItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0));
   }, [orderItems]);
 
+  // Add new useEffect to filter suppliers when product is selected
+  useEffect(() => {
+    if (selectedProduct) {
+      fetchSuppliersForProduct(selectedProduct);
+    } else {
+      setFilteredSuppliers(suppliers);
+    }
+  }, [selectedProduct, suppliers]);
+
+  useEffect(() => {
+    fetchSuppliers();
+    fetchProducts();
+    
+    // Check for preselected product from query parameters
+    const preselectedProductId = searchParams.get('preselected-product');
+    const productName = searchParams.get('product-name');
+    
+    if (preselectedProductId && productName) {
+      // Auto-select the product when products are loaded
+      setSelectedProduct({
+        _id: preselectedProductId,
+        name: decodeURIComponent(productName)
+      });
+      
+      // Clear the URL parameters after setting the product
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [searchParams]);
+
+  // Sửa lại useEffect để handle preselection
+  useEffect(() => {
+    const preselectedProductId = searchParams.get('preselected-product');
+    const productName = searchParams.get('product-name');
+    
+    if (preselectedProductId && productName && products.length > 0) {
+      const product = products.find(p => p._id === preselectedProductId);
+      if (product) {
+        setSelectedProduct(product._id);
+        
+        // Fetch suppliers for this product
+        fetchSuppliersForProduct(product._id);
+        
+        // Clear URL parameters after setting product
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, [products, searchParams]);
+
   const fetchSuppliers = async () => {
     try {
       const response = await axios.get("http://localhost:8000/api/suppliers");
       setSuppliers(response.data);
+      setFilteredSuppliers(response.data); // Initialize filtered suppliers
     } catch (error) {
       console.error(error);
     }
@@ -175,6 +230,36 @@ const PurchaseOrderManagement = () => {
       }
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const fetchSuppliersForProduct = async (productId) => {
+    try {
+      const response = await axios.get("http://localhost:8000/api/suppliers");
+      const allSuppliers = response.data;
+      
+      // Filter suppliers that provide the selected product
+      const productSuppliers = [];
+      for (const supplier of allSuppliers) {
+        try {
+          const supplierData = await axios.get(`http://localhost:8000/api/suppliers/${supplier._id}`);
+          const suppliedProductIds = supplierData.data.suppliedProducts.map(item => item.product);
+          if (suppliedProductIds.includes(productId)) {
+            productSuppliers.push(supplier);
+          }
+        } catch (error) {
+          console.error(`Error fetching supplier ${supplier._id}:`, error);
+        }
+      }
+      setFilteredSuppliers(productSuppliers);
+      
+      // If current selected supplier doesn't provide this product, reset it
+      if (selectedSupplier && !productSuppliers.find(s => s._id === selectedSupplier)) {
+        setSelectedSupplier("");
+      }
+    } catch (error) {
+      console.error("Error filtering suppliers:", error);
+      setFilteredSuppliers(suppliers);
     }
   };
 
@@ -529,15 +614,20 @@ const PurchaseOrderManagement = () => {
               </Typography>
               <FormControl fullWidth>
                 <Autocomplete
-                  options={suppliers}
+                  options={selectedProduct ? filteredSuppliers : suppliers}
                   getOptionLabel={(option) => option.name || ""}
                   value={suppliers.find(sup => sup._id === selectedSupplier) || null}
                   onChange={(event, newValue) => {
                     setSelectedSupplier(newValue ? newValue._id : "");
                   }}
                   renderInput={(params) => (
-                    <TextField {...params} label="Chọn nhà cung cấp" />
+                    <TextField 
+                      {...params} 
+                      label={selectedProduct ? "Chọn nhà cung cấp (chỉ hiện NCC của sản phẩm)" : "Chọn nhà cung cấp"} 
+                    />
                   )}
+                  disabled={selectedProduct && filteredSuppliers.length === 0}
+                  noOptionsText={selectedProduct ? "Không có nhà cung cấp nào cho sản phẩm này" : "Không có nhà cung cấp"}
                 />
               </FormControl>
             </Paper>
