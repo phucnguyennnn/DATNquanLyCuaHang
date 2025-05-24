@@ -41,7 +41,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import { styled } from '@mui/material/styles';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -110,6 +110,7 @@ const PurchaseOrderManagement = () => {
   const [loading, setLoading] = useState(false);
   const [tabValue, setTabValue] = useState(0);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [searchParams] = useSearchParams();
 
   // Thời gian lọc theo ngày giao dự kiến, mặc định từ ngày đầu đến ngày cuối tháng hiện tại
   const [expectedStartDate, setExpectedStartDate] = useState(() => {
@@ -146,10 +147,49 @@ const PurchaseOrderManagement = () => {
     fetchProducts();
   }, [selectedSupplier]);
 
-  const fetchSuppliers = async () => {
+  useEffect(() => {
+    fetchSuppliers(selectedProduct);
+  }, [selectedProduct]);
+
+  // Thêm useEffect để xử lý preselected product từ URL
+  useEffect(() => {
+    const preselectedProductId = searchParams.get('preselected-product');
+    const productName = searchParams.get('product-name');
+    
+    if (preselectedProductId && productName && products.length > 0) {
+      // Kiểm tra xem sản phẩm có tồn tại trong danh sách không
+      const product = products.find(p => p._id === preselectedProductId);
+      if (product) {
+        setSelectedProduct(preselectedProductId);
+        // Đặt tab về tab tạo phiếu đặt hàng
+        setTabValue(0);
+        // Tự động chọn đơn vị đầu tiên của sản phẩm
+        if (product.units && product.units.length > 0) {
+          setUnit(product.units[0].name);
+        }
+        // Xóa các tham số URL sau khi đã xử lý
+        const newSearchParams = new URLSearchParams(searchParams);
+        newSearchParams.delete('preselected-product');
+        newSearchParams.delete('product-name');
+        navigate({ search: newSearchParams.toString() }, { replace: true });
+      }
+    }
+  }, [products, searchParams, navigate]);
+
+  const fetchSuppliers = async (productId = null) => {
     try {
       const response = await axios.get("http://localhost:8000/api/suppliers");
-      setSuppliers(response.data);
+      let filteredSuppliers = response.data;
+      
+      if (productId) {
+        // Filter suppliers that provide the selected product
+        filteredSuppliers = response.data.filter(supplier => 
+          supplier.suppliedProducts && 
+          supplier.suppliedProducts.some(item => item.product === productId)
+        );
+      }
+      
+      setSuppliers(filteredSuppliers);
     } catch (error) {
       console.error(error);
     }
@@ -523,13 +563,17 @@ const PurchaseOrderManagement = () => {
                 Thông tin sản phẩm
               </Typography>
               <Grid container spacing={2} alignItems="end">
-                <Grid item xs={12} md={4}>
+                <Grid item xs={12} md={6}>
                   <Autocomplete
                     options={products}
                     getOptionLabel={(option) => `${option.name} - (${option.units[0]?.name || "N/A"})`}
                     value={products.find(p => p._id === selectedProduct) || null}
                     onChange={(event, newValue) => {
                       setSelectedProduct(newValue ? newValue._id : "");
+                      // Reset supplier when product changes
+                      if (!newValue) {
+                        setSelectedSupplier("");
+                      }
                     }}
                     renderInput={(params) => (
                       <TextField {...params} label="Sản phẩm" size="medium" />
@@ -903,7 +947,19 @@ const PurchaseOrderManagement = () => {
                           Ngày đặt hàng
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 600, color: 'white' }}>Người lập đơn</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: 'white' }}>
+                        <TableSortLabel
+                          active={sortBy === "createdByName"}
+                          direction={sortOrder}
+                          onClick={() => handleSort("createdByName")}
+                          sx={{ 
+                            color: 'white !important',
+                            '& .MuiTableSortLabel-icon': { color: 'white !important' }
+                          }}
+                        >
+                          Người lập đơn
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 600, color: 'white' }}>
                         <TableSortLabel
                           active={sortBy === "expectedDeliveryDate"}
