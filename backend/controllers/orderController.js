@@ -701,3 +701,83 @@ exports.completePreorderPayment = async (req, res) => {
     res.status(400).json({ message: error.message, error });
   }
 };
+
+exports.getProductPerformance = async (req, res) => {
+  try {
+    const { startDate, endDate, limit = 20 } = req.query;
+
+    // Build date filter
+    const dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      };
+    }
+
+    // Aggregate pipeline to calculate product performance
+    const pipeline = [
+      {
+        $match: {
+          status: "completed",
+          paymentStatus: "paid",
+          ...dateFilter,
+        },
+      },
+      {
+        $unwind: "$products",
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "products.productId",
+          foreignField: "_id",
+          as: "productInfo",
+        },
+      },
+      {
+        $unwind: "$productInfo",
+      },
+      {
+        $group: {
+          _id: "$products.productId",
+          productName: { $first: "$productInfo.name" },
+          totalQuantity: { $sum: "$products.quantity" },
+          totalRevenue: { $sum: "$products.itemTotal" },
+          orderCount: { $sum: 1 },
+          avgOrderValue: { $avg: "$products.itemTotal" },
+        },
+      },
+      {
+        $sort: { totalQuantity: -1 },
+      },
+      {
+        $limit: parseInt(limit),
+      },
+    ];
+
+    const topSellingProducts = await Order.aggregate(pipeline);
+
+    // Get least selling products
+    const leastSellingPipeline = [...pipeline];
+    leastSellingPipeline[leastSellingPipeline.length - 2] = { $sort: { totalQuantity: 1 } };
+    const leastSellingProducts = await Order.aggregate(leastSellingPipeline);
+
+    // Get top revenue products
+    const topRevenuePipeline = [...pipeline];
+    topRevenuePipeline[topRevenuePipeline.length - 2] = { $sort: { totalRevenue: -1 } };
+    const topRevenueProducts = await Order.aggregate(topRevenuePipeline);
+
+    res.status(200).json({
+      topSelling: topSellingProducts,
+      leastSelling: leastSellingProducts,
+      topRevenue: topRevenueProducts,
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy thống kê hiệu suất sản phẩm:", error);
+    res.status(500).json({
+      message: "Lỗi khi lấy thống kê hiệu suất sản phẩm",
+      error: error.message,
+    });
+  }
+};

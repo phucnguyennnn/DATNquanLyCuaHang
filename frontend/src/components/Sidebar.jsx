@@ -316,7 +316,7 @@ const Sidebar = () => {
                   </List>
                 </Collapse>
 
-                {/* <Collapse in={openStatistics} timeout="auto" unmountOnExit>
+                <Collapse in={openStatistics} timeout="auto" unmountOnExit>
                   <List component="div" disablePadding sx={{ pl: 2 }}>
                     <StyledSubListItemButton
                       onClick={() => navigate("/statistics/productperformance")}
@@ -328,7 +328,7 @@ const Sidebar = () => {
                       <ListItemText primary="Hiệu suất sản phẩm" />
                     </StyledSubListItemButton>
                   </List>
-                </Collapse> */}
+                </Collapse>
               </>
             )}
 
