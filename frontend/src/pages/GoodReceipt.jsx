@@ -644,18 +644,12 @@ const CreateGoodReceipt = () => {
                   <Typography variant="body2" color="text.secondary">
                     Số lượng đặt: {item.quantity || 0}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Đơn giá: {item.unitPrice?.toLocaleString() || 0} đ
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Thành tiền: {(batchInfo[index]?.quantity * item.unitPrice)?.toLocaleString() || 0} đ
-                  </Typography>
                 </Box>
 
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}>
+                  <Grid item xs={12} sm={3}>
                     <TextField
-                      label="Số lượng nhập"
+                      label="Số lượng nhập thực tế"
                       type="number"
                       fullWidth
                       value={batchInfo[index]?.quantity || ""}
@@ -665,10 +659,21 @@ const CreateGoodReceipt = () => {
                         // Also update quantity_unit with the same value since it's the actual input quantity
                         handleBatchChange(index, "quantity_unit", value);
                       }}
-                      helperText="Số lượng nhập thực tế"
                     />
                   </Grid>
-                  <Grid item xs={12} sm={4}>
+                  <Grid item xs={12} sm={3}>
+                    <TextField
+                      label="Đơn giá"
+                      type="number"
+                      fullWidth
+                      value={batchInfo[index]?.unitPrice || ""}
+                      onChange={(e) => handleBatchChange(index, "unitPrice", e.target.value)}
+                      InputProps={{
+                        endAdornment: <span>đ</span>,
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
                     <TextField
                       label="Ngày sản xuất"
                       type="date"
@@ -690,10 +695,9 @@ const CreateGoodReceipt = () => {
                         }
                       }}
                       required
-                      helperText="Ngày sản xuất của lô hàng"
                     />
                   </Grid>
-                  <Grid item xs={12} sm={4}>
+                  <Grid item xs={12} sm={3}>
                     <TextField
                       label="Hạn sử dụng"
                       type="date"
@@ -714,11 +718,18 @@ const CreateGoodReceipt = () => {
                         batchInfo[index]?.expiry_day &&
                         new Date(batchInfo[index].expiry_day) <= new Date(batchInfo[index].manufacture_day)
                           ? "Hạn sử dụng phải sau ngày sản xuất"
-                          : "Hạn sử dụng của lô hàng"
+                          : ""
                       }
                     />
                   </Grid>
                 </Grid>
+                
+                {/* Add total price display for each item */}
+                <Box mt={1} display="flex" justifyContent="flex-end">
+                  <Typography variant="body2" color="primary" fontWeight="bold">
+                    Thành tiền: {((batchInfo[index]?.quantity || 0) * (batchInfo[index]?.unitPrice || 0)).toLocaleString()} đ
+                  </Typography>
+                </Box>
               </Paper>
             ))}
           </Stack>

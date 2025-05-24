@@ -22,7 +22,7 @@ const goodReceiptController = {
           .status(404)
           .json({ message: "Không tìm thấy phiếu đặt hàng" });
       }
-      
+
       // Transform items and calculate totalAmount as sum of all item totalPrices
       const mappedItems = items.map((item) => ({
         product: item.productId || item.product,
@@ -34,10 +34,10 @@ const goodReceiptController = {
         price: item.unitPrice || item.price, // Add price field
         totalPrice: item.totalPrice
       }));
-      
+
       // Calculate totalAmount as the sum of all item totalPrices
       const totalAmount = mappedItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
-      
+
       const goodReceipt = new GoodReceipt({
         purchaseOrder: purchaseOrderId,
         supplier: order.supplier,
@@ -46,7 +46,7 @@ const goodReceiptController = {
         notes,
         totalAmount // Use the calculated totalAmount
       });
-      
+
       const savedGoodReceipt = await goodReceipt.save();
       await PurchaseOrder.findByIdAndUpdate(
         purchaseOrderId,
@@ -64,20 +64,20 @@ const goodReceiptController = {
     try {
       // Extract filter parameters from request query
       const { supplier, status, search, startDate, endDate } = req.query;
-      
+
       // Build filter object
       const filter = {};
-      
+
       // Add supplier filter if provided
       if (supplier) {
         filter.supplier = mongoose.Types.ObjectId.isValid(supplier) ? supplier : null;
       }
-      
+
       // Add status filter if provided and not 'all'
       if (status && status !== 'all') {
         filter.status = status;
       }
-      
+
       // Add date range filters if provided
       if (startDate || endDate) {
         filter.receiptDate = {};
@@ -88,16 +88,16 @@ const goodReceiptController = {
           filter.receiptDate.$lte = new Date(endDate);
         }
       }
-      
+
       // Add search functionality if provided (can search by ID or related fields)
       if (search) {
         // We'll need to fetch supplier IDs that match the search term first
         const matchingSuppliers = await Supplier.find({
           name: { $regex: search, $options: 'i' }
         }).select('_id');
-        
+
         const supplierIds = matchingSuppliers.map(s => s._id);
-        
+
         // Create the search filter with $or to match multiple fields
         const searchFilter = {
           $or: [
@@ -106,13 +106,13 @@ const goodReceiptController = {
             { notes: { $regex: search, $options: 'i' } }
           ]
         };
-        
+
         // Combine with existing filters
         Object.assign(filter, searchFilter);
       }
-      
+
       console.log("Filter applied:", filter);
-      
+
       const receipts = await GoodReceipt.find(filter)
         .populate("supplier")
         .populate({
@@ -120,7 +120,7 @@ const goodReceiptController = {
           strictPopulate: false,
         })
         .sort({ receiptDate: -1 });
-      
+
       console.log("Tìm thấy", receipts.length, "phiếu nhập kho");
       res.status(200).json(receipts);
     } catch (error) {

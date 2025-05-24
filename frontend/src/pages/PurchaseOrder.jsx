@@ -41,7 +41,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import axios from "axios";
-import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import CircularProgress from "@mui/material/CircularProgress";
 import { styled } from '@mui/material/styles';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -84,14 +84,11 @@ const StyledTab = styled(Tab)(({ theme }) => ({
 
 const PurchaseOrderManagement = () => {
   const [suppliers, setSuppliers] = useState([]);
-  const [filteredSuppliers, setFilteredSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [selectedSupplier, setSelectedSupplier] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
-  const [productSearchTerm, setProductSearchTerm] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [unit, setUnit] = useState("");
-  const [unitPrice, setUnitPrice] = useState(0);
   const [orderItems, setOrderItems] = useState([]);
   const [sendEmail, setSendEmail] = useState(true);
   const [orders, setOrders] = useState([]);
@@ -104,7 +101,6 @@ const PurchaseOrderManagement = () => {
   const [deliveryAddress, setDeliveryAddress] = useState("Tại cửa hàng");
   const [paymentMethod, setPaymentMethod] = useState("Thanh toán khi nhận hàng");
   const [showPreview, setShowPreview] = useState(false);
-  const [totalPrice, setTotalPrice] = useState(0);
   const [approvalDate, setApprovalDate] = useState(null);
   const [orderStatus, setOrderStatus] = useState("đã gửi NCC");
   const [searchTerm, setSearchTerm] = useState("");
@@ -131,8 +127,6 @@ const PurchaseOrderManagement = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const navigate = useNavigate();
   const token = localStorage.getItem("authToken");
-  const location = useLocation();
-  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const interceptor = axios.interceptors.request.use((config) => {
@@ -152,65 +146,10 @@ const PurchaseOrderManagement = () => {
     fetchProducts();
   }, [selectedSupplier]);
 
-  useEffect(() => {
-    setTotalPrice(orderItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0));
-  }, [orderItems]);
-
-  // Add new useEffect to filter suppliers when product is selected
-  useEffect(() => {
-    if (selectedProduct) {
-      fetchSuppliersForProduct(selectedProduct);
-    } else {
-      setFilteredSuppliers(suppliers);
-    }
-  }, [selectedProduct, suppliers]);
-
-  useEffect(() => {
-    fetchSuppliers();
-    fetchProducts();
-    
-    // Check for preselected product from query parameters
-    const preselectedProductId = searchParams.get('preselected-product');
-    const productName = searchParams.get('product-name');
-    
-    if (preselectedProductId && productName) {
-      // Auto-select the product when products are loaded
-      setSelectedProduct({
-        _id: preselectedProductId,
-        name: decodeURIComponent(productName)
-      });
-      
-      // Clear the URL parameters after setting the product
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
-    }
-  }, [searchParams]);
-
-  // Sửa lại useEffect để handle preselection
-  useEffect(() => {
-    const preselectedProductId = searchParams.get('preselected-product');
-    const productName = searchParams.get('product-name');
-    
-    if (preselectedProductId && productName && products.length > 0) {
-      const product = products.find(p => p._id === preselectedProductId);
-      if (product) {
-        setSelectedProduct(product._id);
-        
-        // Fetch suppliers for this product
-        fetchSuppliersForProduct(product._id);
-        
-        // Clear URL parameters after setting product
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, '', newUrl);
-      }
-    }
-  }, [products, searchParams]);
-
   const fetchSuppliers = async () => {
     try {
       const response = await axios.get("http://localhost:8000/api/suppliers");
       setSuppliers(response.data);
-      setFilteredSuppliers(response.data); // Initialize filtered suppliers
     } catch (error) {
       console.error(error);
     }
@@ -233,36 +172,6 @@ const PurchaseOrderManagement = () => {
     }
   };
 
-  const fetchSuppliersForProduct = async (productId) => {
-    try {
-      const response = await axios.get("http://localhost:8000/api/suppliers");
-      const allSuppliers = response.data;
-      
-      // Filter suppliers that provide the selected product
-      const productSuppliers = [];
-      for (const supplier of allSuppliers) {
-        try {
-          const supplierData = await axios.get(`http://localhost:8000/api/suppliers/${supplier._id}`);
-          const suppliedProductIds = supplierData.data.suppliedProducts.map(item => item.product);
-          if (suppliedProductIds.includes(productId)) {
-            productSuppliers.push(supplier);
-          }
-        } catch (error) {
-          console.error(`Error fetching supplier ${supplier._id}:`, error);
-        }
-      }
-      setFilteredSuppliers(productSuppliers);
-      
-      // If current selected supplier doesn't provide this product, reset it
-      if (selectedSupplier && !productSuppliers.find(s => s._id === selectedSupplier)) {
-        setSelectedSupplier("");
-      }
-    } catch (error) {
-      console.error("Error filtering suppliers:", error);
-      setFilteredSuppliers(suppliers);
-    }
-  };
-
   const fetchOrders = async () => {
     try {
       const response = await axios.get("http://localhost:8000/api/purchaseOrder");
@@ -274,14 +183,13 @@ const PurchaseOrderManagement = () => {
 
   const handleAddItem = () => {
     const product = products.find((p) => p._id === selectedProduct);
-    if (!product || !selectedProduct || quantity <= 0 || !unit) return; // Removed unitPrice validation
+    if (!product || !selectedProduct || quantity <= 0 || !unit) return;
     const existingIndex = orderItems.findIndex(item => item.product === selectedProduct && item.unit === unit);
     if (existingIndex !== -1) {
       setOrderItems(orderItems.map((item, index) => 
         index === existingIndex ? {
           ...item,
           quantity: item.quantity + Number(quantity),
-          totalPrice: (item.quantity + Number(quantity)) * (item.unitPrice || 0),
         } : item
       ));
     } else {
@@ -290,14 +198,11 @@ const PurchaseOrderManagement = () => {
         name: product.name,
         quantity: Number(quantity),
         unit,
-        unitPrice: unitPrice || 0, // Allow zero or empty price
-        totalPrice: Number(quantity) * (unitPrice || 0),
       }]);
     }
     setSelectedProduct("");
     setQuantity(1);
     setUnit("");
-    setUnitPrice(0);
   };
 
   const handleRemoveItem = (productId) => {
@@ -308,7 +213,7 @@ const PurchaseOrderManagement = () => {
     setOrderItems(prev => prev.map(item => {
       if (item.product === productId) {
         const newQuantity = Math.max(1, item.quantity + delta);
-        return { ...item, quantity: newQuantity, totalPrice: newQuantity * item.unitPrice };
+        return { ...item, quantity: newQuantity };
       }
       return item;
     }));
@@ -374,16 +279,13 @@ const PurchaseOrderManagement = () => {
       const payload = {
         supplier: selectedSupplier,
         supplierName: suppliers.find(s => s._id === selectedSupplier)?.name || "",
-        items: orderItems.map(({ product, name, quantity, unit, unitPrice }) => ({
+        items: orderItems.map(({ product, name, quantity, unit }) => ({
           product,
           productName: name,
           quantity,
           unit,
-          unitPrice: unitPrice || 0,
-          totalPrice: quantity * (unitPrice || 0),
           conversionRate: products.find(p => p._id === product)?.units.find(u => u.name === unit)?.ratio || 1,
         })),
-        totalAmount: totalPrice,
         sendEmailFlag: sendEmail,
         expectedDeliveryDate,
         notes,
@@ -432,9 +334,6 @@ const PurchaseOrderManagement = () => {
       updatedItems[index] = { 
         ...updatedItems[index], 
         [field]: value,
-        totalPrice: field === 'quantity' || field === 'unitPrice' 
-          ? (field === 'unitPrice' ? updatedItems[index].quantity * (value || 0) : (value || 0) * (updatedItems[index].unitPrice || 0))
-          : updatedItems[index].totalPrice
       };
       return updatedItems;
     });
@@ -448,17 +347,14 @@ const PurchaseOrderManagement = () => {
         ...editOrder,
         supplier: editOrder.supplier._id,
         supplierName: suppliers.find(s => s._id === editOrder.supplier._id)?.name || editOrder.supplierName,
-        items: editOrderItems.map(({ product, quantity, unit, unitPrice }) => ({
+        items: editOrderItems.map(({ product, quantity, unit }) => ({
           product: product._id,
           productName: product.name || "",
           quantity,
           unit,
-          unitPrice: unitPrice || 0,
-          totalPrice: quantity * (unitPrice || 0),
           conversionRate: products.find(p => p._id === product._id)?.units.find(u => u.name === unit)?.ratio || 1,
         })),
         approvalDate: isNewlyApproved ? new Date().toISOString() : editOrder.approvalDate,
-        totalAmount: editOrderItems.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0),
       };
       await axios.put(`http://localhost:8000/api/purchaseOrder/${editOrder._id}`, payload);
       alert("Cập nhật phiếu đặt hàng thành công!");
@@ -521,9 +417,6 @@ const PurchaseOrderManagement = () => {
             return (new Date(a.orderDate) - new Date(b.orderDate)) * modifier;
           case "expectedDeliveryDate":
             return (new Date(a.expectedDeliveryDate) - new Date(b.expectedDeliveryDate)) * modifier;
-          case "totalAmount":
-            return (a.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) - 
-                   b.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)) * modifier;
           case "status":
             return a.status.localeCompare(b.status) * modifier;
           default:
@@ -540,11 +433,6 @@ const PurchaseOrderManagement = () => {
   const formatPrice = (value) => {
     if (value === undefined || value === null || value === 0) return "";
     return value.toLocaleString("vi-VN") + " đ";
-  };
-
-  const handleUnitPriceChange = (value) => {
-    const numericValue = value.replace(/\./g, ""); // Remove existing thousand separators
-    setUnitPrice(Number(numericValue));
   };
 
   const handleTabChange = (event, newValue) => {
@@ -573,13 +461,10 @@ const PurchaseOrderManagement = () => {
       height: 'calc(100vh - 64px)', 
       overflow: 'hidden',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      p: 2
     }}>
-      {/* <Typography variant="h4" mb={3} fontWeight="bold" textAlign="center" color="primary.main">
-        Quản lý phiếu đặt hàng
-      </Typography> */}
-
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <StyledTabs 
           value={tabValue} 
           onChange={handleTabChange}
@@ -600,44 +485,45 @@ const PurchaseOrderManagement = () => {
         </StyledTabs>
       </Box>
 
-      <Box sx={{ flex: 1, overflow: 'auto' }}>
+      <Box sx={{ flex: 1, overflow: 'auto', pr: 1 }}>
         {/* Tab 1: Create Purchase Order */}
         {tabValue === 0 && (
-          <>
-            <Typography variant="h5" mb={2}>
+          <Box sx={{ pb: 2 }}>
+            <Typography variant="h5" mb={3} fontWeight="600" color="primary.main">
               Tạo phiếu đặt hàng
             </Typography>
             
-            <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-              <Typography variant="h6" gutterBottom>
+            <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Box sx={{ width: 4, height: 20, bgcolor: 'primary.main', borderRadius: 1 }} />
                 Thông tin nhà cung cấp
               </Typography>
-              <FormControl fullWidth>
-                <Autocomplete
-                  options={selectedProduct ? filteredSuppliers : suppliers}
-                  getOptionLabel={(option) => option.name || ""}
-                  value={suppliers.find(sup => sup._id === selectedSupplier) || null}
-                  onChange={(event, newValue) => {
-                    setSelectedSupplier(newValue ? newValue._id : "");
-                  }}
-                  renderInput={(params) => (
-                    <TextField 
-                      {...params} 
-                      label={selectedProduct ? "Chọn nhà cung cấp (chỉ hiện NCC của sản phẩm)" : "Chọn nhà cung cấp"} 
-                    />
-                  )}
-                  disabled={selectedProduct && filteredSuppliers.length === 0}
-                  noOptionsText={selectedProduct ? "Không có nhà cung cấp nào cho sản phẩm này" : "Không có nhà cung cấp"}
-                />
-              </FormControl>
+              <Autocomplete
+                options={suppliers}
+                getOptionLabel={(option) => option.name || ""}
+                value={suppliers.find(sup => sup._id === selectedSupplier) || null}
+                onChange={(event, newValue) => {
+                  setSelectedSupplier(newValue ? newValue._id : "");
+                }}
+                renderInput={(params) => (
+                  <TextField 
+                    {...params} 
+                    label="Chọn nhà cung cấp" 
+                    variant="outlined"
+                    size="medium"
+                  />
+                )}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+              />
             </Paper>
 
-            <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-              <Typography variant="h6" gutterBottom>
+            <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                <Box sx={{ width: 4, height: 20, bgcolor: 'primary.main', borderRadius: 1 }} />
                 Thông tin sản phẩm
               </Typography>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} md={5}>
+              <Grid container spacing={2} alignItems="end">
+                <Grid item xs={12} md={4}>
                   <Autocomplete
                     options={products}
                     getOptionLabel={(option) => `${option.name} - (${option.units[0]?.name || "N/A"})`}
@@ -646,8 +532,9 @@ const PurchaseOrderManagement = () => {
                       setSelectedProduct(newValue ? newValue._id : "");
                     }}
                     renderInput={(params) => (
-                      <TextField {...params} label="Sản phẩm" />
+                      <TextField {...params} label="Sản phẩm" size="medium" />
                     )}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                   />
                 </Grid>
                 
@@ -656,19 +543,22 @@ const PurchaseOrderManagement = () => {
                     label="Số lượng"
                     type="number"
                     fullWidth
+                    size="medium"
                     value={quantity}
                     onChange={(e) => setQuantity(Number(e.target.value))}
                     inputProps={{ min: 1 }}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                   />
                 </Grid>
                 
                 <Grid item xs={6} sm={3} md={2}>
-                  <FormControl fullWidth>
+                  <FormControl fullWidth size="medium">
                     <InputLabel>Đơn vị</InputLabel>
                     <Select
                       value={unit}
                       label="Đơn vị"
                       onChange={(e) => setUnit(e.target.value)}
+                      sx={{ borderRadius: 2 }}
                     >
                       {products.find(p => p._id === selectedProduct)?.units.map(u => (
                         <MenuItem key={u.name} value={u.name}>{u.name}</MenuItem>
@@ -677,46 +567,40 @@ const PurchaseOrderManagement = () => {
                   </FormControl>
                 </Grid>
                 
-                <Grid item xs={8} sm={4} md={2}>
-                  <TextField
-                    label="Giá nhập (VNĐ)"
-                    type="text"
-                    fullWidth
-                    value={unitPrice === 0 ? "" : unitPrice.toLocaleString("vi-VN")}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "");
-                      setUnitPrice(value ? parseInt(value, 10) : 0);
-                    }}
-                    InputProps={{
-                      endAdornment: <Typography variant="caption" color="text.secondary">VNĐ</Typography>,
-                    }}
-                  />
-                </Grid>
-                
-                <Grid item xs={4} sm={2} md={1}>
+                <Grid item xs={12} sm={3} md={2}>
                   <Button
                     variant="contained"
                     onClick={handleAddItem}
-                    sx={{ height: "100%", width: "100%" }}
+                    fullWidth
+                    size="large"
+                    startIcon={<AddIcon />}
+                    sx={{ 
+                      height: 56,
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      fontWeight: 600
+                    }}
                   >
-                    <AddIcon />
+                    Thêm
                   </Button>
                 </Grid>
               </Grid>
             </Paper>
 
-            <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-              <Typography variant="h6" gutterBottom>
+            <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                <Box sx={{ width: 4, height: 20, bgcolor: 'primary.main', borderRadius: 1 }} />
                 Thông tin giao hàng
               </Typography>
 
-              <Grid container spacing={2}>
+              <Grid container spacing={3}>
                 <Grid item xs={12}>
                   <TextField
                     label="Địa chỉ giao hàng"
                     fullWidth
                     value={deliveryAddress}
                     onChange={(e) => setDeliveryAddress(e.target.value)}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                   />
                 </Grid>
 
@@ -725,13 +609,14 @@ const PurchaseOrderManagement = () => {
                     label="Ghi chú"
                     fullWidth
                     multiline
-                    rows={2}
+                    rows={3}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                   />
                 </Grid>
 
-                <Grid item xs={6}>
+                <Grid item xs={12} md={6}>
                   <TextField
                     label="Ngày giao hàng dự kiến"
                     type="date"
@@ -741,15 +626,17 @@ const PurchaseOrderManagement = () => {
                     InputLabelProps={{ shrink: true }}
                     error={!!deliveryDateError}
                     helperText={deliveryDateError}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                   />
                 </Grid>
 
-                <Grid item xs={6}>
+                <Grid item xs={12} md={6}>
                   <TextField
                     label="Phương thức thanh toán"
                     fullWidth
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                   />
                 </Grid>
                 
@@ -760,6 +647,7 @@ const PurchaseOrderManagement = () => {
                       value={orderStatus}
                       label="Trạng thái phiếu"
                       onChange={(e) => setOrderStatus(e.target.value)}
+                      sx={{ borderRadius: 2 }}
                     >
                       {STATUSES.map(status => (
                         <MenuItem key={status.value} value={status.value}>
@@ -773,149 +661,137 @@ const PurchaseOrderManagement = () => {
             </Paper>
 
             {orderItems.length > 0 && !showPreview && (
-              <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Danh sách sản phẩm đã chọn
+              <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                  <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ width: 4, height: 20, bgcolor: 'primary.main', borderRadius: 1 }} />
+                    Danh sách sản phẩm đã chọn ({orderItems.length} sản phẩm)
                   </Typography>
                   <Button 
                     variant="outlined" 
                     color="primary" 
                     onClick={handlePreviewOrder}
                     startIcon={<VisibilityIcon />}
+                    sx={{ borderRadius: 2, textTransform: 'none' }}
                   >
                     Xem trước phiếu
                   </Button>
                 </Box>
                 
-                <Box sx={{ overflowX: "auto" }}>
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell width="50px">STT</TableCell>
-                          <TableCell>Tên sản phẩm</TableCell>
-                          <TableCell sx={{ width: '100px' }}>Đơn vị</TableCell>
-                          <TableCell sx={{ width: '100px' }}>Số lượng</TableCell>
-                          <TableCell>Giá nhập</TableCell>
-                          <TableCell>Thành tiền</TableCell>
-                          <TableCell></TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {orderItems.map((item, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{index + 1}</TableCell>
-                            <TableCell>{item.name}</TableCell>
-                            <TableCell>{item.unit}</TableCell>
-                            <TableCell>
-                              <TextField
-                                type="number"
-                                size="small"
-                                value={item.quantity}
-                                onChange={(e) => {
-                                  const newQuantity = Math.max(1, parseInt(e.target.value) || 1);
-                                  setOrderItems(prev => 
-                                    prev.map((prevItem, idx) => 
-                                      idx === index 
-                                        ? { 
-                                            ...prevItem, 
-                                            quantity: newQuantity,
-                                            totalPrice: newQuantity * (prevItem.unitPrice || 0)
-                                          } 
-                                        : prevItem
-                                    )
-                                  );
-                                }}
-                                InputProps={{ inputProps: { min: 1 } }}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <TextField
-                                type="text"
-                                value={
-                                  item.unitPrice === 0 ||
-                                  item.unitPrice === undefined ||
-                                  item.unitPrice === ""
-                                    ? ""
-                                    : item.unitPrice
+                <TableContainer sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                  <Table>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: 'grey.50' }}>
+                        <TableCell sx={{ fontWeight: 600, width: 60 }}>STT</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Tên sản phẩm</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 120 }}>Đơn vị</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 140 }}>Số lượng</TableCell>
+                        <TableCell sx={{ fontWeight: 600, width: 100, textAlign: 'center' }}>Thao tác</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {orderItems.map((item, index) => (
+                        <TableRow key={index} hover>
+                          <TableCell sx={{ fontWeight: 500 }}>{index + 1}</TableCell>
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell>
+                            <Chip label={item.unit} size="small" variant="outlined" />
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const newQuantity = Math.max(1, parseInt(e.target.value) || 1);
+                                setOrderItems(prev => 
+                                  prev.map((prevItem, idx) => 
+                                    idx === index 
+                                      ? { 
+                                          ...prevItem, 
+                                          quantity: newQuantity,
+                                        } 
+                                      : prevItem
+                                  )
+                                );
+                              }}
+                              InputProps={{ inputProps: { min: 1 } }}
+                              sx={{ 
+                                '& .MuiOutlinedInput-root': { borderRadius: 1 },
+                                width: 100
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ textAlign: 'center' }}>
+                            <IconButton 
+                              onClick={() => handleRemoveItem(item.product)}
+                              color="error"
+                              size="small"
+                              sx={{ 
+                                '&:hover': { 
+                                  bgcolor: 'error.lighter',
+                                  transform: 'scale(1.1)'
                                 }
-                                onChange={(e) => {
-                                  // Chỉ cho phép nhập số, cho phép để trống
-                                  const value = e.target.value.replace(/\D/g, "");
-                                  setOrderItems(prev =>
-                                    prev.map((prevItem, idx) =>
-                                      idx === index
-                                        ? {
-                                            ...prevItem,
-                                            unitPrice: value === "" ? "" : Number(value),
-                                            totalPrice: prevItem.quantity * (value === "" ? 0 : Number(value)),
-                                          }
-                                        : prevItem
-                                    )
-                                  );
-                                }}
-                                placeholder="Nhập giá"
-                                size="small"
-                                InputProps={{
-                                  inputMode: "numeric",
-                                  endAdornment: (
-                                    <Typography variant="caption" color="text.secondary">
-                                      đ
-                                    </Typography>
-                                  ),
-                                }}
-                              />
-                            </TableCell>
-                            <TableCell>{formatPrice(item.quantity * (item.unitPrice || 0))}</TableCell>
-                            <TableCell>
-                              <IconButton onClick={() => handleRemoveItem(item.product)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Box>
-                <Box mt={2}>
-                  <Typography variant="h6">
-                    Tổng tiền: {formatPrice(totalPrice)}
-                  </Typography>
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                <Box sx={{ 
+                  mt: 3, 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 2
+                }}>
                   <FormControlLabel
                     control={
                       <Checkbox
                         checked={sendEmail}
                         onChange={(e) => setSendEmail(e.target.checked)}
+                        color="primary"
                       />
                     }
                     label="Gửi email cho nhà cung cấp"
                   />
+
                   <Button 
                     variant="contained" 
                     onClick={handleSubmit} 
-                    sx={{ mt: 2 }}
                     disabled={loading}
-                    startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
+                    startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <AddIcon />}
+                    size="large"
+                    sx={{ 
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      px: 4
+                    }}
                   >
                     {loading ? "Đang tạo phiếu..." : "Tạo phiếu đặt hàng"}
                   </Button>
                 </Box>
               </Paper>
             )}
-          </>
+          </Box>
         )}
 
         {/* Tab 2: Purchase Order List */}
         {tabValue === 1 && (
-          <>
-            <Typography variant="h5" mb={2}>
+          <Box sx={{ pb: 2 }}>
+            <Typography variant="h5" mb={3} fontWeight="600" color="primary.main">
               Danh sách phiếu đặt hàng
             </Typography>
             
-            <Paper elevation={3} sx={{ p: 2, mb: 2 }}>
-              <Grid container spacing={2} alignItems="center">
+            <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+              <Grid container spacing={3} alignItems="center">
                 <Grid item xs={12} md={4}>
                   <TextField
                     label="Tìm kiếm phiếu đặt hàng"
@@ -923,6 +799,7 @@ const PurchaseOrderManagement = () => {
                     fullWidth
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                   />
                 </Grid>
                 <Grid item xs={12} md={4}>
@@ -932,6 +809,7 @@ const PurchaseOrderManagement = () => {
                       value={statusFilter}
                       label="Lọc theo trạng thái"
                       onChange={(e) => setStatusFilter(e.target.value)}
+                      sx={{ borderRadius: 2 }}
                     >
                       <MenuItem value="all">Tất cả</MenuItem>
                       {STATUSES.map(status => (
@@ -947,7 +825,13 @@ const PurchaseOrderManagement = () => {
                       value={expectedStartDate}
                       onChange={setExpectedStartDate}
                       format="dd/MM/yyyy"
-                      slotProps={{ textField: { fullWidth: true, size: "small" } }}
+                      slotProps={{ 
+                        textField: { 
+                          fullWidth: true, 
+                          size: "medium",
+                          sx: { '& .MuiOutlinedInput-root': { borderRadius: 2 } }
+                        } 
+                      }}
                       maxDate={expectedEndDate}
                     />
                     <DatePicker
@@ -955,7 +839,13 @@ const PurchaseOrderManagement = () => {
                       value={expectedEndDate}
                       onChange={setExpectedEndDate}
                       format="dd/MM/yyyy"
-                      slotProps={{ textField: { fullWidth: true, size: "small" } }}
+                      slotProps={{ 
+                        textField: { 
+                          fullWidth: true, 
+                          size: "medium",
+                          sx: { '& .MuiOutlinedInput-root': { borderRadius: 2 } }
+                        } 
+                      }}
                       minDate={expectedStartDate}
                     />
                   </Box>
@@ -963,107 +853,155 @@ const PurchaseOrderManagement = () => {
               </Grid>
             </Paper>
 
-            <Paper elevation={3} sx={{ p: 3 }}>
+            <Paper elevation={2} sx={{ borderRadius: 2, overflow: 'hidden' }}>
               <TableContainer>
                 <Table>
                   <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ maxWidth: 90, width: 90, minWidth: 60 }}>
+                    <TableRow sx={{ bgcolor: 'primary.main' }}>
+                      <TableCell sx={{ 
+                        maxWidth: 90, 
+                        width: 90, 
+                        minWidth: 60,
+                        fontWeight: 600,
+                        color: 'white'
+                      }}>
                         <TableSortLabel
                           active={sortBy === "_id"}
                           direction={sortOrder}
                           onClick={() => handleSort("_id")}
+                          sx={{ 
+                            color: 'white !important',
+                            '& .MuiTableSortLabel-icon': { color: 'white !important' }
+                          }}
                         >
                           Mã phiếu
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: 'white' }}>
                         <TableSortLabel
                           active={sortBy === "supplier"}
                           direction={sortOrder}
                           onClick={() => handleSort("supplier")}
+                          sx={{ 
+                            color: 'white !important',
+                            '& .MuiTableSortLabel-icon': { color: 'white !important' }
+                          }}
                         >
                           Nhà cung cấp
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: 'white' }}>
                         <TableSortLabel
                           active={sortBy === "orderDate"}
                           direction={sortOrder}
                           onClick={() => handleSort("orderDate")}
+                          sx={{ 
+                            color: 'white !important',
+                            '& .MuiTableSortLabel-icon': { color: 'white !important' }
+                          }}
                         >
                           Ngày đặt hàng
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell>Người lập đơn</TableCell>
-                      <TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: 'white' }}>Người lập đơn</TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: 'white' }}>
                         <TableSortLabel
                           active={sortBy === "expectedDeliveryDate"}
                           direction={sortOrder}
                           onClick={() => handleSort("expectedDeliveryDate")}
+                          sx={{ 
+                            color: 'white !important',
+                            '& .MuiTableSortLabel-icon': { color: 'white !important' }
+                          }}
                         >
                           Ngày giao dự kiến
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell sx={{ minWidth: 120, maxWidth: 150, width: 130 }}>
-                        <TableSortLabel
-                          active={sortBy === "totalAmount"}
-                          direction={sortOrder}
-                          onClick={() => handleSort("totalAmount")}
-                        >
-                          Tổng tiền
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: 'white' }}>
                         <TableSortLabel
                           active={sortBy === "status"}
                           direction={sortOrder}
                           onClick={() => handleSort("status")}
+                          sx={{ 
+                            color: 'white !important',
+                            '& .MuiTableSortLabel-icon': { color: 'white !important' }
+                          }}
                         >
                           Trạng thái
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ fontWeight: 600, color: 'white', textAlign: 'center' }}>
                         Hành động
                       </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {getFilteredAndSortedOrders().map((order) => (
-                      <TableRow key={order._id}>
-                        <TableCell>{order._id}</TableCell>
+                    {getFilteredAndSortedOrders().map((order, index) => (
+                      <TableRow 
+                        key={order._id}
+                        hover
+                        sx={{ 
+                          '&:nth-of-type(even)': { bgcolor: 'grey.50' },
+                          '&:hover': { bgcolor: 'primary.lighter' }
+                        }}
+                      >
+                        <TableCell sx={{ fontWeight: 500 }}>{order._id}</TableCell>
                         <TableCell>{order.supplier.name}</TableCell>
-                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{new Date(order.orderDate).toLocaleDateString('vi-VN')}</TableCell>
                         <TableCell>{order.createdByName || "Không xác định"}</TableCell>
-                        <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          <Typography fontWeight="bold">
-                            {formatPrice(order.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0))}
-                          </Typography>
-                        </TableCell>
+                        <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString('vi-VN')}</TableCell>
                         <TableCell>
                           <Chip
                             label={getStatusText(order.status)}
                             color={getStatusColor(order.status)}
                             size="small"
+                            sx={{ fontWeight: 500 }}
                           />
                         </TableCell>
-                        <TableCell>
-                          {["hoàn thành", "completed", "đã hủy"].includes(order.status) ? (
-                            <IconButton onClick={() => handleEdit(order)}>
-                              <VisibilityIcon />
-                            </IconButton>
-                          ) : (
-                            <>
-                              <IconButton onClick={() => handleEdit(order)}>
-                                <EditIcon />
+                        <TableCell sx={{ textAlign: 'center' }}>
+                          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                            {["hoàn thành", "completed", "đã hủy"].includes(order.status) ? (
+                              <IconButton 
+                                onClick={() => handleEdit(order)}
+                                color="primary"
+                                size="small"
+                                sx={{ '&:hover': { transform: 'scale(1.1)' } }}
+                              >
+                                <VisibilityIcon />
                               </IconButton>
-                              <IconButton onClick={() => handleDelete(order._id)}>
-                                <DeleteIcon />
-                              </IconButton>
-                              <Button onClick={() => handleResendEmail(order)}>Gửi lại Email</Button>
-                            </>
-                          )}
+                            ) : (
+                              <>
+                                <IconButton 
+                                  onClick={() => handleEdit(order)}
+                                  color="primary"
+                                  size="small"
+                                  sx={{ '&:hover': { transform: 'scale(1.1)' } }}
+                                >
+                                  <EditIcon />
+                                </IconButton>
+                                <IconButton 
+                                  onClick={() => handleDelete(order._id)}
+                                  color="error"
+                                  size="small"
+                                  sx={{ '&:hover': { transform: 'scale(1.1)' } }}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                                <Button 
+                                  onClick={() => handleResendEmail(order)}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ 
+                                    textTransform: 'none',
+                                    fontSize: '0.75rem',
+                                    borderRadius: 1
+                                  }}
+                                >
+                                  Gửi lại Email
+                                </Button>
+                              </>
+                            )}
+                          </Box>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1071,35 +1009,55 @@ const PurchaseOrderManagement = () => {
                 </Table>
               </TableContainer>
             </Paper>
+
             {/* Confirm Delete Dialog */}
             <Dialog
               open={!!confirmDeleteId}
               onClose={() => setConfirmDeleteId(null)}
+              PaperProps={{ sx: { borderRadius: 2 } }}
             >
-              <DialogTitle>Xác nhận xóa phiếu đặt hàng</DialogTitle>
+              <DialogTitle sx={{ fontWeight: 600 }}>Xác nhận xóa phiếu đặt hàng</DialogTitle>
               <DialogContent>
                 <Typography>Bạn có chắc chắn muốn xóa phiếu đặt hàng này không?</Typography>
               </DialogContent>
-              <DialogActions>
-                <Button onClick={() => setConfirmDeleteId(null)}>Hủy</Button>
-                <Button onClick={confirmDelete} color="error" variant="contained">Xóa</Button>
+              <DialogActions sx={{ p: 3, gap: 1 }}>
+                <Button 
+                  onClick={() => setConfirmDeleteId(null)}
+                  sx={{ borderRadius: 2, textTransform: 'none' }}
+                >
+                  Hủy
+                </Button>
+                <Button 
+                  onClick={confirmDelete} 
+                  color="error" 
+                  variant="contained"
+                  sx={{ borderRadius: 2, textTransform: 'none' }}
+                >
+                  Xóa
+                </Button>
               </DialogActions>
             </Dialog>
-          </>
+          </Box>
         )}
 
+        {/* Preview Dialog */}
         <Dialog
           open={showPreview}
           onClose={() => setShowPreview(false)}
           fullWidth
           maxWidth="md"
           scroll="paper"
+          PaperProps={{ sx: { borderRadius: 2 } }}
         >
-          <DialogTitle>Xem trước phiếu đặt hàng</DialogTitle>
-          <DialogContent dividers sx={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          <DialogTitle sx={{ fontWeight: 600, bgcolor: 'primary.main', color: 'white' }}>
+            Xem trước phiếu đặt hàng
+          </DialogTitle>
+          <DialogContent dividers sx={{ maxHeight: '70vh', overflowY: 'auto', p: 3 }}>
             <Stack spacing={3}>
               <Box>
-                <Typography variant="h6" gutterBottom>Thông tin chung</Typography>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'primary.main' }}>
+                  Thông tin chung
+                </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
                     <Typography variant="body1">
@@ -1108,12 +1066,12 @@ const PurchaseOrderManagement = () => {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body1">
-                      <strong>Ngày đặt hàng:</strong> {new Date().toLocaleDateString()}
+                      <strong>Ngày đặt hàng:</strong> {new Date().toLocaleDateString('vi-VN')}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body1">
-                      <strong>Ngày giao hàng dự kiến:</strong> {new Date(expectedDeliveryDate).toLocaleDateString()}
+                      <strong>Ngày giao hàng dự kiến:</strong> {new Date(expectedDeliveryDate).toLocaleDateString('vi-VN')}
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
@@ -1132,8 +1090,8 @@ const PurchaseOrderManagement = () => {
                     </Typography>
                   </Grid>
                   <Grid item xs={6}>
-                    <Typography variant="body1">
-                      <strong>Trạng thái:</strong>{" "}
+                    <Typography variant="body1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <strong>Trạng thái:</strong>
                       <Chip
                         label={getStatusText(orderStatus)}
                         color={getStatusColor(orderStatus)}
@@ -1150,26 +1108,28 @@ const PurchaseOrderManagement = () => {
               </Box>
               
               <Box>
-                <Typography variant="h6" gutterBottom>Danh sách sản phẩm</Typography>
-                <TableContainer>
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, color: 'primary.main' }}>
+                  Danh sách sản phẩm
+                </Typography>
+                <TableContainer sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                   <Table>
                     <TableHead>
-                      <TableRow>
-                        <TableCell>STT</TableCell>
-                        <TableCell>Tên sản phẩm</TableCell>
-                        <TableCell>Đơn vị</TableCell>
-                        <TableCell>Số lượng</TableCell>
-                        <TableCell>Giá nhập</TableCell>
-                        <TableCell>Thành tiền</TableCell>
-                        <TableCell>Hành động</TableCell>
+                      <TableRow sx={{ bgcolor: 'grey.100' }}>
+                        <TableCell sx={{ fontWeight: 600 }}>STT</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Tên sản phẩm</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Đơn vị</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Số lượng</TableCell>
+                        <TableCell sx={{ fontWeight: 600, textAlign: 'center' }}>Hành động</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {orderItems.map((item, index) => (
-                        <TableRow key={index}>
+                        <TableRow key={index} hover>
                           <TableCell>{index + 1}</TableCell>
                           <TableCell>{item.name}</TableCell>
-                          <TableCell>{item.unit}</TableCell>
+                          <TableCell>
+                            <Chip label={item.unit} size="small" variant="outlined" />
+                          </TableCell>
                           <TableCell>
                             <TextField
                               type="number"
@@ -1183,54 +1143,16 @@ const PurchaseOrderManagement = () => {
                                       ? { 
                                           ...prevItem, 
                                           quantity: newQuantity,
-                                          totalPrice: newQuantity * (prevItem.unitPrice || 0)
                                         } 
                                       : prevItem
                                   )
                                 );
                               }}
                               InputProps={{ inputProps: { min: 1 } }}
+                              sx={{ width: 100 }}
                             />
                           </TableCell>
-                          <TableCell>
-                            <TextField
-                              type="text"
-                              value={
-                                item.unitPrice === 0 ||
-                                item.unitPrice === undefined ||
-                                item.unitPrice === ""
-                                  ? ""
-                                  : item.unitPrice
-                              }
-                              onChange={(e) => {
-                                // Chỉ cho phép nhập số, cho phép để trống
-                                const value = e.target.value.replace(/\D/g, "");
-                                setOrderItems(prev =>
-                                  prev.map((prevItem, idx) =>
-                                    idx === index
-                                      ? {
-                                            ...prevItem,
-                                            unitPrice: value === "" ? "" : Number(value),
-                                            totalPrice: prevItem.quantity * (value === "" ? 0 : Number(value)),
-                                          }
-                                        : prevItem
-                                    )
-                                  );
-                              }}
-                              placeholder="Nhập giá"
-                              size="small"
-                              InputProps={{
-                                inputMode: "numeric",
-                                endAdornment: (
-                                  <Typography variant="caption" color="text.secondary">
-                                    đ
-                                  </Typography>
-                                ),
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>{formatPrice(item.quantity * (item.unitPrice || 0))}</TableCell>
-                          <TableCell>
+                          <TableCell sx={{ textAlign: 'center' }}>
                             <IconButton 
                               color="error" 
                               onClick={() => handleRemoveItem(item.product)}
@@ -1247,9 +1169,6 @@ const PurchaseOrderManagement = () => {
               </Box>
               
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6">
-                  Tổng tiền: {formatPrice(totalPrice)}
-                </Typography>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -1262,23 +1181,39 @@ const PurchaseOrderManagement = () => {
               </Box>
             </Stack>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowPreview(false)}>Quay lại chỉnh sửa</Button>
+          <DialogActions sx={{ p: 3, gap: 2 }}>
+            <Button 
+              onClick={() => setShowPreview(false)}
+              sx={{ borderRadius: 2, textTransform: 'none' }}
+            >
+              Quay lại chỉnh sửa
+            </Button>
             <Button 
               variant="contained" 
               color="primary" 
               onClick={handleSubmit}
+              sx={{ borderRadius: 2, textTransform: 'none', px: 3 }}
             >
               Xác nhận tạo phiếu
             </Button>
           </DialogActions>
         </Dialog>
 
-        <Dialog open={openDialog} onClose={() => setOpenDialog(false)} fullWidth maxWidth="md" scroll="paper">
-          <DialogTitle>Chỉnh sửa phiếu đặt hàng</DialogTitle>
-          <DialogContent dividers sx={{ maxHeight: '70vh', overflowY: 'auto' }}>
+        {/* Edit Dialog */}
+        <Dialog 
+          open={openDialog} 
+          onClose={() => setOpenDialog(false)} 
+          fullWidth 
+          maxWidth="md" 
+          scroll="paper"
+          PaperProps={{ sx: { borderRadius: 2 } }}
+        >
+          <DialogTitle sx={{ fontWeight: 600, bgcolor: 'primary.main', color: 'white' }}>
+            {editOrder?.isReadOnly ? 'Xem chi tiết phiếu đặt hàng' : 'Chỉnh sửa phiếu đặt hàng'}
+          </DialogTitle>
+          <DialogContent dividers sx={{ maxHeight: '70vh', overflowY: 'auto', p: 3 }}>
             {editOrder && (
-              <Stack spacing={2} mt={2}>
+              <Stack spacing={3} mt={2}>
                 <Autocomplete
                   options={suppliers}
                   getOptionLabel={(option) => option.name || ""}
@@ -1289,25 +1224,24 @@ const PurchaseOrderManagement = () => {
                       supplier: { ...editOrder.supplier, _id: newValue ? newValue._id : "" }
                     });
                   }}
+                  disabled={editOrder.isReadOnly}
                   renderInput={(params) => (
                     <TextField {...params} label="Nhà cung cấp" />
                   )}
                 />
 
-                <TableContainer>
+                <TableContainer sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
                   <Table>
                     <TableHead>
-                      <TableRow>
-                        <TableCell>Tên sản phẩm</TableCell>
-                        <TableCell sx={{ width: '150px' }}>Đơn vị</TableCell>
-                        <TableCell sx={{ width: '100px' }}>Số lượng</TableCell>
-                        <TableCell>Đơn giá</TableCell>
-                        <TableCell>Thành tiền</TableCell>
+                      <TableRow sx={{ bgcolor: 'grey.100' }}>
+                        <TableCell sx={{ fontWeight: 600 }}>Tên sản phẩm</TableCell>
+                        <TableCell sx={{ width: '150px', fontWeight: 600 }}>Đơn vị</TableCell>
+                        <TableCell sx={{ width: '100px', fontWeight: 600 }}>Số lượng</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {editOrderItems.map((item, index) => (
-                        <TableRow key={index}>
+                        <TableRow key={index} hover>
                           <TableCell>{item.product?.name}</TableCell>
                           <TableCell>
                             <Autocomplete
@@ -1316,6 +1250,7 @@ const PurchaseOrderManagement = () => {
                               onChange={(event, newValue) => 
                                 handleEditOrderItemChange(index, "unit", newValue)
                               }
+                              disabled={editOrder.isReadOnly}
                               renderInput={(params) => (
                                 <TextField {...params} label="Đơn vị" size="small" />
                               )}
@@ -1328,36 +1263,11 @@ const PurchaseOrderManagement = () => {
                               onChange={(e) => 
                                 handleEditOrderItemChange(index, "quantity", Number(e.target.value))
                               }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <TextField
-                              type="text"
-                              value={
-                                item.unitPrice === 0 ||
-                                item.unitPrice === undefined ||
-                                item.unitPrice === ""
-                                  ? ""
-                                  : item.unitPrice
-                              }
-                              onChange={(e) => {
-                                // Chỉ cho phép nhập số, cho phép để trống
-                                const value = e.target.value.replace(/\D/g, "");
-                                handleEditOrderItemChange(index, "unitPrice", value === "" ? "" : Number(value));
-                              }}
-                              placeholder="Nhập giá"
+                              disabled={editOrder.isReadOnly}
                               size="small"
-                              InputProps={{
-                                inputMode: "numeric",
-                                endAdornment: (
-                                  <Typography variant="caption" color="text.secondary">
-                                    đ
-                                  </Typography>
-                                ),
-                              }}
+                              sx={{ width: 100 }}
                             />
                           </TableCell>
-                          <TableCell>{formatPrice(item.quantity * item.unitPrice)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1371,14 +1281,8 @@ const PurchaseOrderManagement = () => {
                   onChange={(e) => {
                     const newDate = e.target.value;
                     setEditOrder({ ...editOrder, expectedDeliveryDate: newDate });
-                    
-                    // Validate the date when editing
-                    const currentDate = new Date();
-                    currentDate.setHours(0, 0, 0, 0);
-                    const deliveryDate = new Date(newDate);
-                    
-
                   }}
+                  disabled={editOrder.isReadOnly}
                   fullWidth
                 />
 
@@ -1386,6 +1290,7 @@ const PurchaseOrderManagement = () => {
                   label="Địa chỉ giao hàng"
                   value={editOrder.deliveryAddress}
                   onChange={(e) => setEditOrder({ ...editOrder, deliveryAddress: e.target.value })}
+                  disabled={editOrder.isReadOnly}
                   fullWidth
                 />
 
@@ -1393,6 +1298,7 @@ const PurchaseOrderManagement = () => {
                   label="Phương thức thanh toán"
                   value={editOrder.paymentMethod}
                   onChange={(e) => setEditOrder({ ...editOrder, paymentMethod: e.target.value })}
+                  disabled={editOrder.isReadOnly}
                   fullWidth
                 />
 
@@ -1402,6 +1308,7 @@ const PurchaseOrderManagement = () => {
                   rows={4}
                   value={editOrder.notes}
                   onChange={(e) => setEditOrder({ ...editOrder, notes: e.target.value })}
+                  disabled={editOrder.isReadOnly}
                   fullWidth
                 />
 
@@ -1411,6 +1318,7 @@ const PurchaseOrderManagement = () => {
                     value={editOrder.status}
                     label="Trạng thái"
                     onChange={(e) => setEditOrder({ ...editOrder, status: e.target.value })}
+                    disabled={editOrder.isReadOnly}
                   >
                     {STATUSES.map(status => (
                       <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
@@ -1422,7 +1330,7 @@ const PurchaseOrderManagement = () => {
                   <Grid item xs={6}>
                     <TextField
                       label="Ngày lập đơn"
-                      value={new Date(editOrder.orderDate).toLocaleDateString()}
+                      value={new Date(editOrder.orderDate).toLocaleDateString('vi-VN')}
                       InputProps={{ readOnly: true }}
                       fullWidth
                     />
@@ -1431,7 +1339,7 @@ const PurchaseOrderManagement = () => {
                     <Grid item xs={6}>
                       <TextField
                         label="Ngày duyệt đơn"
-                        value={editOrder.approvalDate ? new Date(editOrder.approvalDate).toLocaleDateString() : "Chưa duyệt"}
+                        value={editOrder.approvalDate ? new Date(editOrder.approvalDate).toLocaleDateString('vi-VN') : "Chưa duyệt"}
                         InputProps={{ readOnly: true }}
                         fullWidth
                       />
@@ -1441,10 +1349,19 @@ const PurchaseOrderManagement = () => {
               </Stack>
             )}
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setOpenDialog(false)}>Đóng</Button>
+          <DialogActions sx={{ p: 3, gap: 2 }}>
+            <Button 
+              onClick={() => setOpenDialog(false)}
+              sx={{ borderRadius: 2, textTransform: 'none' }}
+            >
+              Đóng
+            </Button>
             {!editOrder?.isReadOnly && (
-              <Button onClick={handleUpdateOrder} variant="contained">
+              <Button 
+                onClick={handleUpdateOrder} 
+                variant="contained"
+                sx={{ borderRadius: 2, textTransform: 'none', px: 3 }}
+              >
                 Cập nhật
               </Button>
             )}
