@@ -58,7 +58,7 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
   const { isLoggedIn, userRole } = useAuth();
 
   if (!isLoggedIn) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/homePage" />;
   }
 
   if (allowedRoles && !allowedRoles.includes(userRole)) {
@@ -82,11 +82,12 @@ const AppRouter = () => {
           <Route path="cart_page" element={<CartPage />} />
         </Route>
         <Route path="cart_page" element={<CartPage />} />
+        <Route path="homepage" element={<HomePage />} />
+
         {/* Protected routes with layout */}
         <Route path="/" element={<ProtectedRoute children={<MainLayout />} />}>
           {/* Routes accessible to all logged-in users */}
           <Route index element={<HomePage />} />
-          <Route path="homepage" element={<HomePage />} />
           <Route path="Sales_page" element={<SalesPage />} />
           <Route path="settings" element={<Settings />} />
           <Route path="profile" element={<Profile />} />

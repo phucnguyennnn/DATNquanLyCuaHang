@@ -200,9 +200,9 @@ const ProductPerformance = () => {
           const productName = item.productId?.name || 'Sản phẩm không xác định';
           const quantity = item.quantity || 0;
           
-          // Calculate actual quantity considering unit ratio
+          // Calculate actual quantity sold = quantity * unitRatio
           const unitRatio = item.productId?.unitRatio || 1;
-          const actualQuantity = quantity * unitRatio;
+          const quantitySold = quantity * unitRatio;
           
           // Calculate actual price (use finalUnitPrice if available, otherwise originalUnitPrice)
           let actualPrice = 0;
@@ -236,7 +236,7 @@ const ProductPerformance = () => {
             };
           }
 
-          stats[productId].totalQuantity += actualQuantity;
+          stats[productId].totalQuantity += quantitySold;
           stats[productId].totalRevenue += actualPrice;
           stats[productId].orderCount += 1;
         });
@@ -304,7 +304,7 @@ const ProductPerformance = () => {
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={vi}>
       <Box sx={{ height: '100vh', overflow: 'auto' }}>
-        <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Container maxWidth="lg">
           <Typography variant="h4" component="h1" gutterBottom>
             Thống kê hiệu suất sản phẩm
           </Typography>

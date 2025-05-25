@@ -57,7 +57,7 @@ const LoginPage = () => {
       if (response.data.role === "customer") {
         navigate("/products_page");
       } else {
-        navigate("/homepage");
+        navigate("/Sales_page");
       }
     } catch (err) {
       setError("Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");

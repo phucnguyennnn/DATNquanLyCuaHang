@@ -65,7 +65,7 @@ const Navbar = ({ onLogout }) => {
         localStorage.removeItem('userID');
         localStorage.removeItem('userRole');
         onLogout(); // Gọi hàm đăng xuất từ props (nếu có logic cụ thể nào đó ở component cha)
-        navigate('/login'); // Chuyển hướng về trang đăng nhập
+        navigate('/'); // Chuyển hướng về trang landing
     };
 
     const handleCancelLogout = () => {
