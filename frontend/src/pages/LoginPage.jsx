@@ -115,7 +115,7 @@ const LoginPage = () => {
 
         <Box component="form" onSubmit={handleLogin} width="100%">
           <TextField
-            label="Username"
+            label="Tên tài khoản"
             variant="outlined"
             fullWidth
             margin="normal"
@@ -123,7 +123,7 @@ const LoginPage = () => {
             onChange={(e) => setUsername(e.target.value)}
           />
           <TextField
-            label="Password"
+            label="Mật khẩu"
             type={showPassword ? "text" : "password"}
             variant="outlined"
             fullWidth

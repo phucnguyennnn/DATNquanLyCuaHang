@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import {
   Container,
-  Grid, // Removed Grid
   Typography,
   List,
   ListItem,
@@ -23,7 +22,9 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Stack, // Added Stack
+  Stack,
+  AppBar,
+  Toolbar,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
@@ -32,9 +33,28 @@ import ShoppingCartCheckoutIcon from "@mui/icons-material/ShoppingCartCheckout";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
-import ShopIcon from "@mui/icons-material/Shop"; // Added ShopIcon
+import ShopIcon from "@mui/icons-material/Shop";
 import { useNavigate } from "react-router-dom";
 import QRPayment from "../components/QRPayment";
+
+// Footer component (simple, can move to separate file if needed)
+const Footer = () => (
+  <Box
+    component="footer"
+    sx={{
+      mt: 4,
+      py: 2,
+      bgcolor: "#f5f5f5",
+      textAlign: "center",
+      borderTop: "1px solid #e0e0e0",
+    }}
+  >
+    <Typography variant="body2" color="text.secondary">
+      &copy; {new Date().getFullYear()} Cửa hàng bán lẻ DandP All rights
+      reserved.
+    </Typography>
+  </Box>
+);
 
 const formatDate = (dateString) => {
   if (!dateString) return "";
@@ -43,14 +63,22 @@ const formatDate = (dateString) => {
 };
 
 const CustomerProfile = ({ customer, onClose }) => (
-  <Dialog open={!!customer} onClose={onClose} fullWidth maxWidth="sm">
+  <Dialog
+    open={!!customer}
+    onClose={onClose}
+    fullWidth
+    maxWidth="sm"
+    PaperProps={{
+      sx: { width: { xs: "98vw", sm: "90vw", md: "500px" } },
+    }}
+  >
     <DialogTitle>Thông tin cá nhân</DialogTitle>
     <DialogContent>
       {customer ? (
         <Paper
           elevation={3}
           sx={{
-            p: 3,
+            p: { xs: 2, md: 3 },
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -63,7 +91,7 @@ const CustomerProfile = ({ customer, onClose }) => (
               sx={{ width: 80, height: 80 }}
             />
           </Box>
-          <Typography variant="h6" component="div" gutterBottom align="center">
+          <Typography variant="h6" gutterBottom align="center">
             {customer.fullName}
           </Typography>
           <Typography
@@ -111,6 +139,54 @@ const CustomerProfile = ({ customer, onClose }) => (
   </Dialog>
 );
 
+const CartHeader = ({
+  onGoToProducts,
+  onMenuOpen,
+  anchorEl,
+  isMenuOpen,
+  handleMenuClose,
+  handleProfileClick,
+  handleOrdersClick,
+  handleLogoutClick,
+}) => (
+  <AppBar
+    position="static"
+    color="default"
+    elevation={1}
+    sx={{ mb: { xs: 1, md: 3 } }}
+  >
+    <Toolbar sx={{ justifyContent: "space-between", px: { xs: 1, sm: 2 } }}>
+      <Box sx={{ display: "flex", alignItems: "center" }}>
+        <IconButton color="inherit" onClick={onGoToProducts}>
+          <ShopIcon sx={{ fontSize: { xs: "1.5rem", sm: "2rem" } }} />
+        </IconButton>
+        <Typography
+          variant="h6"
+          sx={{
+            ml: 1,
+            fontWeight: 700,
+            color: "primary.main",
+            fontSize: { xs: "1.1rem", sm: "1.25rem" },
+            whiteSpace: "nowrap",
+          }}
+        >
+          Cửa hàng bán lẻ DandP
+        </Typography>
+      </Box>
+      <Box>
+        <IconButton color="inherit" onClick={onMenuOpen}>
+          <AccountCircleIcon sx={{ fontSize: { xs: "1.5rem", sm: "2rem" } }} />
+        </IconButton>
+        <Menu anchorEl={anchorEl} open={isMenuOpen} onClose={handleMenuClose}>
+          <MenuItem onClick={handleProfileClick}>Hồ sơ</MenuItem>
+          <MenuItem onClick={handleOrdersClick}>Đơn đặt hàng</MenuItem>
+          <MenuItem onClick={handleLogoutClick}>Đăng xuất</MenuItem>
+        </Menu>
+      </Box>
+    </Toolbar>
+  </AppBar>
+);
+
 const CartPage = () => {
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -129,8 +205,8 @@ const CartPage = () => {
   const [customerInfo, setCustomerInfo] = useState(null);
   const [openProfileDialog, setOpenProfileDialog] = useState(false);
   const [openQRPayment, setOpenQRPayment] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState(null);
-  // Thêm state cho localCart nếu chưa đăng nhập
   const [localCart, setLocalCartState] = useState([]);
 
   const authHeader = useCallback(
@@ -148,7 +224,7 @@ const CartPage = () => {
       );
       setCart(data);
     } catch (error) {
-      console.error("Lỗi khi lấy giỏ hàng:", error);
+      setCart(null);
     } finally {
       setLoading(false);
     }
@@ -164,7 +240,7 @@ const CartPage = () => {
         );
         setOrders(data);
       } catch (error) {
-        console.error("Lỗi khi lấy đơn hàng:", error);
+        setOrders([]);
       } finally {
         setLoadingOrders(false);
       }
@@ -181,14 +257,14 @@ const CartPage = () => {
         );
         setCustomerInfo(response.data);
       } catch (error) {
-        console.error("Lỗi khi lấy thông tin người dùng:", error);
+        setCustomerInfo(null);
       }
     } else {
       setCustomerInfo(null);
     }
   }, [userId, authHeader]);
 
-  // Hàm lấy localCart
+  // Local cart helpers
   const getLocalCart = () => {
     try {
       const cart = JSON.parse(localStorage.getItem("localCart") || "[]");
@@ -198,19 +274,22 @@ const CartPage = () => {
     }
   };
 
-  // Hàm lưu localCart
   const setLocalCart = (cart) => {
     localStorage.setItem("localCart", JSON.stringify(cart));
     setLocalCartState(cart);
   };
 
-  // Khi đăng nhập, đồng bộ localCart lên server
+  // Sync localCart to server on login
   useEffect(() => {
     if (authToken) {
       const localCartArr = getLocalCart();
       if (localCartArr.length > 0) {
         axios
-          .post("http://localhost:8000/api/cart/add", localCartArr, authHeader())
+          .post(
+            "http://localhost:8000/api/cart/add",
+            localCartArr,
+            authHeader()
+          )
           .then(() => {
             setLocalCart([]);
             fetchCart();
@@ -261,7 +340,6 @@ const CartPage = () => {
       );
       await fetchCart();
     } catch (error) {
-      console.error("Lỗi khi cập nhật giỏ hàng:", error);
       alert("Có lỗi xảy ra khi cập nhật giỏ hàng");
     } finally {
       setUpdating(false);
@@ -338,7 +416,6 @@ const CartPage = () => {
     }
   };
 
-  // Sửa hàm formatCurrency cho localCart
   const formatCurrency = (value) => {
     return new Intl.NumberFormat("vi-VN", {
       style: "currency",
@@ -359,7 +436,7 @@ const CartPage = () => {
 
     setCreatingPreorder(true);
     try {
-      const response = await axios.post(
+      await axios.post(
         "http://localhost:8000/api/orders",
         {
           orderType: "preorder",
@@ -395,22 +472,15 @@ const CartPage = () => {
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
   };
 
-  const handleMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
+  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
 
   const handleProfileClick = () => {
     setOpenProfileDialog(true);
     handleMenuClose();
   };
 
-  const handleCloseProfileDialog = () => {
-    setOpenProfileDialog(false);
-  };
+  const handleCloseProfileDialog = () => setOpenProfileDialog(false);
 
   const handleOrdersClick = () => {
     setOpenOrdersDialog(true);
@@ -420,9 +490,7 @@ const CartPage = () => {
     handleMenuClose();
   };
 
-  const handleCloseOrdersDialog = () => {
-    setOpenOrdersDialog(false);
-  };
+  const handleCloseOrdersDialog = () => setOpenOrdersDialog(false);
 
   const handleLogoutClick = () => {
     setOpenLogoutDialog(true);
@@ -436,13 +504,103 @@ const CartPage = () => {
     setOpenLogoutDialog(false);
   };
 
-  const handleCloseLogoutDialog = () => {
-    setOpenLogoutDialog(false);
-  };
+  const handleCloseLogoutDialog = () => setOpenLogoutDialog(false);
 
   const handleGoToProducts = () => {
     navigate("/products_page");
   };
+
+  const OrderItem = ({
+    order,
+    expandedOrderId,
+    toggleOrderDetails,
+    handlePayOnline,
+  }) => (
+    <Paper key={order._id} sx={{ mb: 2, p: { xs: 1, sm: 2 } }}>
+      <ListItem
+        secondaryAction={
+          <IconButton onClick={() => toggleOrderDetails(order._id)}>
+            {expandedOrderId === order._id ? (
+              <ExpandLessIcon />
+            ) : (
+              <ExpandMoreIcon />
+            )}
+          </IconButton>
+        }
+      >
+        <ListItemText
+          primary={
+            <Typography sx={{ fontSize: { xs: "1rem", sm: "1.1rem" } }}>
+              Mã đơn hàng: {order.orderNumber}
+            </Typography>
+          }
+          secondary={
+            <>
+              {`Ngày đặt: ${formatDate(order.createdAt)} - `}
+              {`Tổng tiền: ${formatCurrency(order.finalAmount)} - `}
+              {`Trạng thái: ${
+                order.paymentStatus === "unpaid"
+                  ? "Chưa thanh toán"
+                  : "Đã thanh toán"
+              }`}
+              {order.expirationDate &&
+                ` - Hạn nhận: ${formatDate(order.expirationDate)}`}
+            </>
+          }
+        />
+      </ListItem>
+      <Collapse in={expandedOrderId === order._id} timeout="auto" unmountOnExit>
+        <List component="div" disablePadding>
+          <Divider />
+          {order.products.map((productItem) => (
+            <ListItem key={productItem._id} sx={{ pl: 2 }}>
+              <ListItemText
+                primary={`${productItem.productId.name} (${productItem.selectedUnitName}) x ${productItem.quantity}`}
+                secondary={`Đơn giá: ${formatCurrency(
+                  productItem.unitPrice
+                )} - Tổng cộng: ${formatCurrency(productItem.itemTotal)}`}
+              />
+            </ListItem>
+          ))}
+          <Divider sx={{ mt: 1 }} />
+          <Box
+            sx={{ display: "flex", justifyContent: "flex-end", mt: 1, pr: 2 }}
+          >
+            <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+              Tổng tiền: {formatCurrency(order.finalAmount)}
+            </Typography>
+          </Box>
+          {order.expirationDate && order.orderType === "preorder" && (
+            <Box sx={{ mt: 1, pr: 2 }}>
+              <Typography variant="body2" color="text.secondary" align="right">
+                Hết hạn vào: {new Date(order.expirationDate).toLocaleString()}
+              </Typography>
+              <Typography
+                variant="body2"
+                color="primary"
+                align="right"
+                sx={{ fontWeight: "bold" }}
+              >
+                Vui lòng đến nhận hàng trước: {formatDate(order.expirationDate)}
+              </Typography>
+            </Box>
+          )}
+          {order.paymentStatus === "unpaid" && (
+            <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => handlePayOnline(order)}
+                sx={{ mr: 2 }}
+              >
+                Thanh toán ngay
+              </Button>
+            </Box>
+          )}
+        </List>
+      </Collapse>
+    </Paper>
+  );
 
   if (loading) {
     return (
@@ -456,343 +614,459 @@ const CartPage = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          mb: 2,
-        }}
-      >
-        <IconButton onClick={handleGoToProducts}>
-          <ShopIcon sx={{ fontSize: "2rem" }} />
-        </IconButton>
-        <IconButton onClick={handleMenuOpen}>
-          <AccountCircleIcon sx={{ fontSize: "2rem" }} />
-        </IconButton>
-        <Menu anchorEl={anchorEl} open={isMenuOpen} onClose={handleMenuClose}>
-          <MenuItem onClick={handleProfileClick}>Hồ sơ</MenuItem>
-          <MenuItem onClick={handleOrdersClick}>Đơn đặt hàng</MenuItem>
-          <MenuItem onClick={handleLogoutClick}>Đăng xuất</MenuItem>
-        </Menu>
-      </Box>
-
-      <CustomerProfile
-        customer={customerInfo}
-        onClose={handleCloseProfileDialog}
+    <>
+      {/* Header */}
+      <CartHeader
+        onGoToProducts={handleGoToProducts}
+        onMenuOpen={handleMenuOpen}
+        anchorEl={anchorEl}
+        isMenuOpen={isMenuOpen}
+        handleMenuClose={handleMenuClose}
+        handleProfileClick={handleProfileClick}
+        handleOrdersClick={handleOrdersClick}
+        handleLogoutClick={handleLogoutClick}
       />
 
-      <Dialog
-        open={openOrdersDialog}
-        onClose={handleCloseOrdersDialog}
-        fullWidth
-        maxWidth="md"
+      <Container
+        maxWidth="lg"
+        sx={{
+          mt: { xs: 1, md: 2 },
+          mb: { xs: 2, md: 4 },
+          px: { xs: 0.5, sm: 2 },
+        }}
       >
-        <DialogTitle>Đơn hàng của bạn</DialogTitle>
-        <DialogContent>
-          {loadingOrders ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-              <CircularProgress size={24} />
-            </Box>
-          ) : orders?.length > 0 ? (
-            <List>
-              {orders.map((order) => (
-                <Paper key={order._id} sx={{ mb: 2, p: 2 }}>
-                  <ListItem
-                    secondaryAction={
-                      <IconButton onClick={() => toggleOrderDetails(order._id)}>
-                        {expandedOrderId === order._id ? (
-                          <ExpandLessIcon />
-                        ) : (
-                          <ExpandMoreIcon />
-                        )}
-                      </IconButton>
-                    }
-                  >
-                    <ListItemText
-                      primary={`Mã đơn hàng: ${order.orderNumber}`}
-                      secondary={`Ngày đặt: ${new Date(
-                        order.createdAt
-                      ).toLocaleDateString()} - Tổng tiền: ${formatCurrency(
-                        order.finalAmount
-                      )} - Trạng thái: ${
-                        order.paymentStatus === "unpaid"
-                          ? "Chưa thanh toán"
-                          : order.paymentStatus
-                      } ${
-                        order.expirationDate
-                          ? `- Hạn nhận hàng: ${new Date(
-                              order.expirationDate
-                            ).toLocaleDateString()}`
-                          : ""
-                      }`}
-                    />
-                  </ListItem>
-                  <Collapse
-                    in={expandedOrderId === order._id}
-                    timeout="auto"
-                    unmountOnExit
-                  >
-                    <List component="div" disablePadding>
-                      <Divider />
-                      {order.products.map((productItem) => (
-                        <ListItem key={productItem._id} sx={{ pl: 2 }}>
-                          <ListItemText
-                            primary={`${productItem.productId.name} (${productItem.selectedUnitName}) x ${productItem.quantity}`}
-                            secondary={`Đơn giá: ${formatCurrency(
-                              productItem.unitPrice
-                            )} - Tổng cộng: ${formatCurrency(
-                              productItem.itemTotal
-                            )}`}
-                          />
-                        </ListItem>
-                      ))}
-                      <Divider sx={{ mt: 1 }} />
-                      <Box
-                        sx={{
-                          display: "flex",
-                          justifyContent: "flex-end",
-                          mt: 1,
-                          pr: 2,
-                        }}
-                      >
-                        <Typography
-                          variant="subtitle1"
-                          sx={{ fontWeight: "bold" }}
-                        >
-                          Tổng tiền: {formatCurrency(order.finalAmount)}
-                        </Typography>
-                      </Box>
-                      {order.expirationDate &&
-                        order.orderType === "preorder" && (
-                          <Box sx={{ mt: 1, pr: 2 }}>
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              align="right"
-                            >
-                              Hết hạn vào:{" "}
-                              {new Date(order.expirationDate).toLocaleString()}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              color="primary"
-                              align="right"
-                              sx={{ fontWeight: "bold" }}
-                            >
-                              Vui lòng đến nhận hàng trước:{" "}
-                              {new Date(
-                                order.expirationDate
-                              ).toLocaleDateString()}
-                            </Typography>
-                          </Box>
-                        )}
-                    </List>
-                  </Collapse>
-                </Paper>
-              ))}
-            </List>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              Bạn chưa có đơn hàng nào.
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseOrdersDialog}>Đóng</Button>
-        </DialogActions>
-      </Dialog>
+        <CustomerProfile
+          customer={customerInfo}
+          onClose={handleCloseProfileDialog}
+        />
 
-      <Dialog
-        open={openLogoutDialog}
-        onClose={handleCloseLogoutDialog}
-        aria-labelledby="alert-dialog-title"
-        aria-describedby="alert-dialog-description"
-      >
-        <DialogTitle id="alert-dialog-title">
-          {"Xác nhận đăng xuất?"}
-        </DialogTitle>
-        <DialogContent>
-          <Typography id="alert-dialog-description">
-            Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này không?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseLogoutDialog}>Hủy</Button>
-          <Button onClick={handleConfirmLogout} autoFocus>
-            Đăng xuất
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <Typography
-        variant="h4"
-        gutterBottom
-        sx={{ fontWeight: "bold", display: "flex", alignItems: "center" }}
-      >
-        <ShoppingCartCheckoutIcon sx={{ mr: 1, fontSize: "2rem" }} />
-        Giỏ hàng của bạn
-      </Typography>
+        <Dialog
+          open={openOrdersDialog}
+          onClose={handleCloseOrdersDialog}
+          fullWidth
+          maxWidth="md"
+          PaperProps={{
+            sx: { width: { xs: "98vw", sm: "90vw", md: "700px" } },
+          }}
+        >
+          <DialogTitle>Đơn hàng của bạn</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              label="Tìm kiếm đơn hàng theo mã"
+              variant="outlined"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={{ mb: 3, mt: 1 }}
+            />
 
-      {/* Nếu chưa đăng nhập thì hiển thị localCart */}
-      {!authToken ? (
-        !localCart.length ? (
-          <Paper sx={{ p: 3, textAlign: "center" }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Giỏ hàng của bạn đang trống
-            </Typography>
-            <Button variant="contained" href="/products_page">
-              Tiếp tục mua sắm
-            </Button>
-          </Paper>
-        ) : (
-          <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
-            <Box sx={{ flexGrow: 1, height: "70vh", overflow: "hidden" }}>
-              <List
-                sx={{
-                  bgcolor: "background.paper",
-                  height: "100%",
-                  overflowY: "auto",
-                  pr: 2,
-                  "&::-webkit-scrollbar": { width: "6px" },
-                  "&::-webkit-scrollbar-track": { background: "#f1f1f1" },
-                  "&::-webkit-scrollbar-thumb": {
-                    background: "#888",
-                    borderRadius: "4px",
-                  },
-                }}
-              >
-                {localCart.map((item, index) => (
-                  <Paper key={index} sx={{ mb: 2, p: 2 }}>
-                    <ListItem sx={{ position: "relative" }}>
-                      <ListItemAvatar>
-                        <Avatar
-                          src={item.productImage || ""}
-                          alt={item.productName || ""}
-                          sx={{ width: 80, height: 80, mr: 2, borderRadius: 2 }}
-                          variant="rounded"
-                        />
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={
-                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            {item.productName || item.productId}
-                          </Typography>
-                        }
-                        secondary={
-                          <>
-                            <Typography variant="body2" color="text.secondary">
-                              Đơn vị: {item.selectedUnitName}
-                            </Typography>
-                          </>
-                        }
-                      />
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                        <Box sx={{ display: "flex", alignItems: "center" }}>
-                          <IconButton
-                            onClick={() =>
-                              handleQuantityChange(index, item.quantity - 1)
-                            }
-                          >
-                            <RemoveIcon />
-                          </IconButton>
-                          <TextField
-                            value={item.quantity}
-                            size="small"
-                            sx={{ width: 60 }}
-                            inputProps={{
-                              min: 1,
-                              type: "number",
-                              style: { textAlign: "center" },
-                            }}
-                            onChange={(e) =>
-                              handleQuantityChange(
-                                index,
-                                parseInt(e.target.value) || 1
-                              )
-                            }
-                          />
-                          <IconButton
-                            onClick={() =>
-                              handleQuantityChange(index, item.quantity + 1)
-                            }
-                          >
-                            <AddIcon />
-                          </IconButton>
-                        </Box>
-                        <Typography
-                          variant="h6"
-                          sx={{ minWidth: 120, textAlign: "right" }}
-                        >
-                          {/* Hiển thị giá nếu có */}
-                          {item.unitPrice ? formatCurrency(item.quantity * item.unitPrice) : `x${item.quantity}`}
-                        </Typography>
-                        <IconButton
-                          onClick={() =>
-                            handleRemoveItem(item.productId, item.selectedUnitName)
-                          }
-                          color="error"
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </Box>
-                    </ListItem>
-                  </Paper>
-                ))}
-              </List>
-            </Box>
-            <Paper
-              sx={{
-                p: 3,
-                position: "sticky",
-                top: 16,
-                width: { xs: "100%", md: "350px" },
-              }}
-            >
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                Đơn hàng
-              </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  mb: 2,
-                }}
-              >
-                <Typography variant="body1">Tạm tính:</Typography>
-                <Typography variant="body1">
-                  {/* Hiển thị tổng giá nếu có, nếu không thì hiển thị số lượng */}
-                  {localCart.some(item => item.unitPrice) ? 
-                    formatCurrency(localCart.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0)) :
-                    `${localCart.reduce((sum, item) => sum + item.quantity, 0)} sản phẩm`
-                  }
-                </Typography>
+            {loadingOrders ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                <CircularProgress size={24} />
               </Box>
-              <Divider sx={{ my: 3 }} />
-              <Button
-                fullWidth
-                variant="contained"
-                size="large"
-                sx={{ mb: 2 }}
-                onClick={handleCreatePreorder}
-              >
-                Đặt hàng
-              </Button>
-              <Button
-                fullWidth
-                variant="outlined"
-                color="error"
-                onClick={handleClearCart}
-              >
-                Xóa giỏ hàng
+            ) : (
+              <>
+                {/* Đơn hàng chưa hoàn thành */}
+                <Typography
+                  variant="h6"
+                  sx={{ mb: 2, fontWeight: "bold", color: "#d32f2f" }}
+                >
+                  Đơn hàng chưa hoàn thành
+                </Typography>
+                {orders.filter(
+                  (order) =>
+                    order.paymentStatus === "unpaid" &&
+                    order.orderNumber
+                      .toLowerCase()
+                      .includes(searchTerm.toLowerCase())
+                ).length > 0 ? (
+                  orders
+                    .filter(
+                      (order) =>
+                        order.paymentStatus === "unpaid" &&
+                        order.orderNumber
+                          .toLowerCase()
+                          .includes(searchTerm.toLowerCase())
+                    )
+                    .map((order) => (
+                      <OrderItem
+                        key={order._id}
+                        order={order}
+                        expandedOrderId={expandedOrderId}
+                        toggleOrderDetails={toggleOrderDetails}
+                        handlePayOnline={handlePayOnline}
+                      />
+                    ))
+                ) : (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 3 }}
+                  >
+                    Không có đơn hàng nào chưa hoàn thành
+                  </Typography>
+                )}
+
+                {/* Đơn hàng đã hoàn thành */}
+                <Typography
+                  variant="h6"
+                  sx={{ mt: 4, mb: 2, fontWeight: "bold", color: "#2e7d32" }}
+                >
+                  Đơn hàng đã hoàn thành
+                </Typography>
+                {orders.filter(
+                  (order) =>
+                    order.paymentStatus === "paid" &&
+                    order.orderNumber
+                      .toLowerCase()
+                      .includes(searchTerm.toLowerCase())
+                ).length > 0 ? (
+                  orders
+                    .filter(
+                      (order) =>
+                        order.paymentStatus === "paid" &&
+                        order.orderNumber
+                          .toLowerCase()
+                          .includes(searchTerm.toLowerCase())
+                    )
+                    .map((order) => (
+                      <OrderItem
+                        key={order._id}
+                        order={order}
+                        expandedOrderId={expandedOrderId}
+                        toggleOrderDetails={toggleOrderDetails}
+                      />
+                    ))
+                ) : (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 3 }}
+                  >
+                    Không có đơn hàng nào đã hoàn thành
+                  </Typography>
+                )}
+
+                {orders.length === 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Bạn chưa có đơn hàng nào.
+                  </Typography>
+                )}
+              </>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseOrdersDialog}>Đóng</Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={openLogoutDialog}
+          onClose={handleCloseLogoutDialog}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+          PaperProps={{
+            sx: { width: { xs: "90vw", sm: "400px" } },
+          }}
+        >
+          <DialogTitle id="alert-dialog-title">
+            {"Xác nhận đăng xuất?"}
+          </DialogTitle>
+          <DialogContent>
+            <Typography id="alert-dialog-description">
+              Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này không?
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseLogoutDialog}>Hủy</Button>
+            <Button onClick={handleConfirmLogout} autoFocus>
+              Đăng xuất
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Typography
+          variant="h4"
+          gutterBottom
+          sx={{
+            fontWeight: "bold",
+            display: "flex",
+            alignItems: "center",
+            fontSize: { xs: "1.3rem", sm: "2rem" },
+          }}
+        >
+          <ShoppingCartCheckoutIcon
+            sx={{ mr: 1, fontSize: { xs: "1.5rem", sm: "2rem" } }}
+          />
+          Giỏ hàng của bạn
+        </Typography>
+
+        {/* Nếu chưa đăng nhập thì hiển thị localCart */}
+        {!authToken ? (
+          !localCart.length ? (
+            <Paper sx={{ p: { xs: 2, md: 3 }, textAlign: "center" }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Giỏ hàng của bạn đang trống
+              </Typography>
+              <Button variant="contained" href="/products_page">
+                Tiếp tục mua sắm
               </Button>
             </Paper>
-          </Stack>
-        )
-      ) : (
-        !cart?.items?.length ? (
-          <Paper sx={{ p: 3, textAlign: "center" }}>
+          ) : (
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={{ xs: 1.5, md: 3 }}
+              sx={{ width: "100%" }}
+            >
+              <Box
+                sx={{
+                  flexGrow: 1,
+                  height: { md: "70vh" },
+                  overflowY: "auto", // Sửa: luôn có scroll dọc nếu tràn
+                  mb: { xs: 2, md: 0 },
+                }}
+              >
+                <List
+                  sx={{
+                    bgcolor: "background.paper",
+                    height: { md: "100%" },
+                    pr: { xs: 0, md: 2 },
+                    "&::-webkit-scrollbar": { width: "6px" },
+                    "&::-webkit-scrollbar-track": { background: "#f1f1f1" },
+                    "&::-webkit-scrollbar-thumb": {
+                      background: "#888",
+                      borderRadius: "4px",
+                    },
+                  }}
+                >
+                  {localCart.map((item, index) => (
+                    <Paper key={index} sx={{ mb: 2, p: { xs: 1, md: 2 } }}>
+                      <ListItem
+                        sx={{
+                          position: "relative",
+                          flexDirection: { xs: "column", sm: "row" },
+                          alignItems: { xs: "flex-start", sm: "center" },
+                        }}
+                      >
+                        <ListItemAvatar>
+                          <Avatar
+                            src={item.productImage || ""}
+                            alt={item.productName || ""}
+                            sx={{
+                              width: { xs: 60, sm: 80 },
+                              height: { xs: 60, sm: 80 },
+                              mr: { xs: 0, sm: 2 },
+                              mb: { xs: 1, sm: 0 },
+                              borderRadius: 2,
+                            }}
+                            variant="rounded"
+                          />
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Typography
+                              variant="h6"
+                              sx={{
+                                fontWeight: 600,
+                                fontSize: { xs: "1rem", sm: "1.1rem" },
+                              }}
+                            >
+                              {item.productName || item.productId}
+                            </Typography>
+                          }
+                          secondary={
+                            <>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                Đơn vị: {item.selectedUnitName}
+                              </Typography>
+                            </>
+                          }
+                          sx={{ minWidth: 0 }}
+                        />
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 2,
+                            width: { xs: "100%", sm: "auto" },
+                            mt: { xs: 1, sm: 0 },
+                            flexWrap: { xs: "wrap", sm: "nowrap" },
+                          }}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center" }}>
+                            <IconButton
+                              onClick={() =>
+                                handleQuantityChange(index, item.quantity - 1)
+                              }
+                            >
+                              <RemoveIcon />
+                            </IconButton>
+                            <TextField
+                              value={item.quantity}
+                              size="small"
+                              sx={{ width: 60 }}
+                              inputProps={{
+                                min: 1,
+                                type: "number",
+                                style: { textAlign: "center" },
+                              }}
+                              onChange={(e) =>
+                                handleQuantityChange(
+                                  index,
+                                  parseInt(e.target.value) || 1
+                                )
+                              }
+                            />
+                            <IconButton
+                              onClick={() =>
+                                handleQuantityChange(index, item.quantity + 1)
+                              }
+                            >
+                              <AddIcon />
+                            </IconButton>
+                          </Box>
+                          <Typography
+                            variant="h6"
+                            sx={{
+                              minWidth: 80,
+                              textAlign: "right",
+                              fontSize: { xs: "1rem", sm: "1.1rem" },
+                            }}
+                          >
+                            {item.unitPrice
+                              ? formatCurrency(item.quantity * item.unitPrice)
+                              : `x${item.quantity}`}
+                          </Typography>
+                          <IconButton
+                            onClick={() =>
+                              handleRemoveItem(
+                                item.productId,
+                                item.selectedUnitName
+                              )
+                            }
+                            color="error"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Box>
+                      </ListItem>
+                    </Paper>
+                  ))}
+                </List>
+              </Box>
+              <Paper
+                sx={{
+                  p: { xs: 2, md: 3 },
+                  position: { md: "sticky" },
+                  top: { md: 16 },
+                  width: { xs: "100%", md: "350px" },
+                  minWidth: { xs: "unset", md: "320px" },
+                  mt: { xs: 2, md: 0 },
+                  maxWidth: "100%",
+                  boxSizing: "border-box",
+                }}
+              >
+                <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                  Đơn hàng
+                </Typography>
+                <Divider sx={{ my: 2 }} />
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: { xs: "column", sm: "row" },
+                    justifyContent: "space-between",
+                    alignItems: { xs: "stretch", sm: "center" },
+                    mb: 2,
+                    gap: { xs: 0.5, sm: 0 },
+                    width: "100%",
+                  }}
+                >
+                  <Typography
+                    variant="body1"
+                    sx={{ textAlign: "left", width: "100%" }}
+                  >
+                    Tạm tính:
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    sx={{ textAlign: "right", width: "100%" }}
+                  >
+                    {localCart.some((item) => item.unitPrice)
+                      ? formatCurrency(
+                          localCart.reduce(
+                            (sum, item) =>
+                              sum + item.quantity * (item.unitPrice || 0),
+                            0
+                          )
+                        )
+                      : `${localCart.reduce(
+                          (sum, item) => sum + item.quantity,
+                          0
+                        )} sản phẩm`}
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: { xs: "column", sm: "row" },
+                    justifyContent: "space-between",
+                    alignItems: { xs: "stretch", sm: "center" },
+                    gap: { xs: 0.5, sm: 0 },
+                    width: "100%",
+                  }}
+                >
+                  <Typography
+                    variant="body1"
+                    sx={{ textAlign: "left", width: "100%" }}
+                  >
+                    Thành tiền:
+                  </Typography>
+                  <Typography
+                    variant="h6"
+                    color="primary"
+                    sx={{ fontWeight: 600, textAlign: "right", width: "100%" }}
+                  >
+                    {localCart.some((item) => item.unitPrice)
+                      ? formatCurrency(
+                          localCart.reduce(
+                            (sum, item) =>
+                              sum + item.quantity * (item.unitPrice || 0),
+                            0
+                          )
+                        )
+                      : `${localCart.reduce(
+                          (sum, item) => sum + item.quantity,
+                          0
+                        )} sản phẩm`}
+                  </Typography>
+                </Box>
+                <Divider sx={{ my: 3 }} />
+                <Button
+                  fullWidth
+                  variant="contained"
+                  size="large"
+                  sx={{ mb: 2, width: "100%" }}
+                  onClick={handleCreatePreorder}
+                >
+                  Đặt hàng
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  color="error"
+                  onClick={handleClearCart}
+                  sx={{ width: "100%" }}
+                >
+                  Xóa giỏ hàng
+                </Button>
+              </Paper>
+            </Stack>
+          )
+        ) : !cart?.items?.length ? (
+          <Paper sx={{ p: { xs: 2, md: 3 }, textAlign: "center" }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Giỏ hàng của bạn đang trống
             </Typography>
@@ -801,14 +1075,24 @@ const CartPage = () => {
             </Button>
           </Paper>
         ) : (
-          <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
-            <Box sx={{ flexGrow: 1, height: "70vh", overflow: "hidden" }}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={{ xs: 1.5, md: 3 }}
+            sx={{ width: "100%" }}
+          >
+            <Box
+              sx={{
+                flexGrow: 1,
+                height: { md: "70vh" },
+                overflowY: "auto", // Sửa: luôn có scroll dọc nếu tràn
+                mb: { xs: 2, md: 0 },
+              }}
+            >
               <List
                 sx={{
                   bgcolor: "background.paper",
-                  height: "100%",
-                  overflowY: "auto",
-                  pr: 2,
+                  height: { md: "100%" },
+                  pr: { xs: 0, md: 2 },
                   "&::-webkit-scrollbar": { width: "6px" },
                   "&::-webkit-scrollbar-track": { background: "#f1f1f1" },
                   "&::-webkit-scrollbar-thumb": {
@@ -818,8 +1102,14 @@ const CartPage = () => {
                 }}
               >
                 {cart.items.map((item, index) => (
-                  <Paper key={item._id} sx={{ mb: 2, p: 2 }}>
-                    <ListItem sx={{ position: "relative" }}>
+                  <Paper key={item._id} sx={{ mb: 2, p: { xs: 1, md: 2 } }}>
+                    <ListItem
+                      sx={{
+                        position: "relative",
+                        flexDirection: { xs: "column", sm: "row" },
+                        alignItems: { xs: "flex-start", sm: "center" },
+                      }}
+                    >
                       {updating && (
                         <Box
                           sx={{
@@ -842,14 +1132,26 @@ const CartPage = () => {
                         <Avatar
                           src={item.product.images[0]}
                           alt={item.product.name}
-                          sx={{ width: 80, height: 80, mr: 2, borderRadius: 2 }}
+                          sx={{
+                            width: { xs: 60, sm: 80 },
+                            height: { xs: 60, sm: 80 },
+                            mr: { xs: 0, sm: 2 },
+                            mb: { xs: 1, sm: 0 },
+                            borderRadius: 2,
+                          }}
                           variant="rounded"
                         />
                       </ListItemAvatar>
 
                       <ListItemText
                         primary={
-                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          <Typography
+                            variant="h6"
+                            sx={{
+                              fontWeight: 600,
+                              fontSize: { xs: "1rem", sm: "1.1rem" },
+                            }}
+                          >
                             {item.product.name}
                           </Typography>
                         }
@@ -863,9 +1165,19 @@ const CartPage = () => {
                             </Typography>
                           </>
                         }
+                        sx={{ minWidth: 0 }}
                       />
 
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 2,
+                          width: { xs: "100%", sm: "auto" },
+                          mt: { xs: 1, sm: 0 },
+                          flexWrap: { xs: "wrap", sm: "nowrap" },
+                        }}
+                      >
                         <Box sx={{ display: "flex", alignItems: "center" }}>
                           <IconButton
                             onClick={() =>
@@ -906,7 +1218,11 @@ const CartPage = () => {
 
                         <Typography
                           variant="h6"
-                          sx={{ minWidth: 120, textAlign: "right" }}
+                          sx={{
+                            minWidth: 80,
+                            textAlign: "right",
+                            fontSize: { xs: "1rem", sm: "1.1rem" },
+                          }}
                         >
                           {formatCurrency(item.quantity * item.unitPrice)}
                         </Typography>
@@ -933,10 +1249,14 @@ const CartPage = () => {
             {cart?.items?.length > 0 && (
               <Paper
                 sx={{
-                  p: 3,
-                  position: "sticky",
-                  top: 16,
+                  p: { xs: 2, md: 3 },
+                  position: { md: "sticky" },
+                  top: { md: 16 },
                   width: { xs: "100%", md: "350px" },
+                  minWidth: { xs: "unset", md: "320px" },
+                  mt: { xs: 2, md: 0 },
+                  maxWidth: "100%",
+                  boxSizing: "border-box",
                 }}
               >
                 <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
@@ -947,22 +1267,48 @@ const CartPage = () => {
                 <Box
                   sx={{
                     display: "flex",
+                    flexDirection: { xs: "column", sm: "row" },
                     justifyContent: "space-between",
+                    alignItems: { xs: "stretch", sm: "center" },
                     mb: 2,
+                    gap: { xs: 0.5, sm: 0 },
+                    width: "100%",
                   }}
                 >
-                  <Typography variant="body1">Tạm tính:</Typography>
-                  <Typography variant="body1">
+                  <Typography
+                    variant="body1"
+                    sx={{ textAlign: "left", width: "100%" }}
+                  >
+                    Tạm tính:
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    sx={{ textAlign: "right", width: "100%" }}
+                  >
                     {formatCurrency(cart?.total || 0)}
                   </Typography>
                 </Box>
 
-                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                  <Typography variant="body1">Thành tiền:</Typography>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: { xs: "column", sm: "row" },
+                    justifyContent: "space-between",
+                    alignItems: { xs: "stretch", sm: "center" },
+                    gap: { xs: 0.5, sm: 0 },
+                    width: "100%",
+                  }}
+                >
+                  <Typography
+                    variant="body1"
+                    sx={{ textAlign: "left", width: "100%" }}
+                  >
+                    Thành tiền:
+                  </Typography>
                   <Typography
                     variant="h6"
                     color="primary"
-                    sx={{ fontWeight: 600 }}
+                    sx={{ fontWeight: 600, textAlign: "right", width: "100%" }}
                   >
                     {formatCurrency(cart?.total || 0)}
                   </Typography>
@@ -974,9 +1320,11 @@ const CartPage = () => {
                   fullWidth
                   variant="contained"
                   size="large"
-                  sx={{ mb: 2 }}
+                  sx={{ mb: 2, width: "100%" }}
                   onClick={handleCreatePreorder}
-                  disabled={updating || creatingPreorder || !cart?.items?.length}
+                  disabled={
+                    updating || creatingPreorder || !cart?.items?.length
+                  }
                 >
                   Đặt hàng
                 </Button>
@@ -986,42 +1334,47 @@ const CartPage = () => {
                   variant="outlined"
                   color="error"
                   onClick={handleClearCart}
-                  disabled={updating || creatingPreorder || !cart?.items?.length}
+                  disabled={
+                    updating || creatingPreorder || !cart?.items?.length
+                  }
+                  sx={{ width: "100%" }}
                 >
                   Xóa giỏ hàng
                 </Button>
               </Paper>
             )}
           </Stack>
-        )
-      )}
+        )}
 
-      {/* Thêm button thanh toán online cho các đơn hàng chưa thanh toán */}
-      {orders.map((order) => (
-        <div key={order._id}>
-          {/* Existing order display code */}
+        {/* Thêm button thanh toán online cho các đơn hàng chưa thanh toán */}
+        {orders.map((order) => (
+          <div key={order._id}>
+            {/* Existing order display code */}
+            {order.paymentStatus === "unpaid" && (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => handlePayOnline(order)}
+                sx={{ mt: 1 }}
+              >
+                Thanh toán online
+              </Button>
+            )}
+          </div>
+        ))}
 
-          {order.paymentStatus === "unpaid" && (
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => handlePayOnline(order)}
-              sx={{ mt: 1 }}
-            >
-              Thanh toán online
-            </Button>
-          )}
-        </div>
-      ))}
+        {/* QR Payment Dialog */}
+        <QRPayment
+          open={openQRPayment}
+          onClose={() => setOpenQRPayment(false)}
+          order={selectedOrderForPayment}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
+      </Container>
 
-      {/* QR Payment Dialog */}
-      <QRPayment
-        open={openQRPayment}
-        onClose={() => setOpenQRPayment(false)}
-        order={selectedOrderForPayment}
-        onPaymentSuccess={handlePaymentSuccess}
-      />
-    </Container>
+      {/* Footer */}
+      <Footer />
+    </>
   );
 };
 

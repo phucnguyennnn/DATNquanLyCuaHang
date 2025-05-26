@@ -33,7 +33,6 @@ import InOutPage from "../pages/inoutpage";
 import ProductPerformance from "../pages/ProductPerformance";
 import PriceHistory from "../pages/PriceHistory";
 
-
 const useAuth = () => {
   const [isLoggedIn, setIsLoggedIn] = React.useState(
     () => !!localStorage.getItem("authToken")
@@ -63,7 +62,7 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
   }
 
   if (allowedRoles && !allowedRoles.includes(userRole)) {
-    return <Navigate to="/unauthorized" />; // You might want to create an Unauthorized page
+    return <Navigate to="/unauthorized" />;
   }
 
   return children;
@@ -83,7 +82,16 @@ const AppRouter = () => {
           <Route path="cart_page" element={<CartPage />} />
         </Route>
         <Route path="cart_page" element={<CartPage />} />
-        <Route path="homepage" element={<HomePage />} />
+
+        {/* Chỉ khách hàng mới truy cập được homepage */}
+        <Route
+          path="homepage"
+          element={
+            <ProtectedRoute allowedRoles={["customer"]}>
+              <HomePage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Protected routes with layout */}
         <Route path="/" element={<ProtectedRoute children={<MainLayout />} />}>
@@ -178,7 +186,7 @@ const AppRouter = () => {
               <ProtectedRoute
                 allowedRoles={["admin"]}
                 children={<InOutPage />}
-              /> 
+              />
             }
           />
           <Route
@@ -205,7 +213,7 @@ const AppRouter = () => {
         <Route
           path="/unauthorized"
           element={<div>Trang không tìm thấy</div>}
-        />{" "}
+        />
         {/* Optional Unauthorized page */}
       </Routes>
     </Router>

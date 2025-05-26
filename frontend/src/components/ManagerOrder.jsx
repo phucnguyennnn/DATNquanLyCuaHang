@@ -79,7 +79,7 @@ function ManagerOrder() {
   const fetchOrders = async () => {
     try {
       const params = new URLSearchParams();
-      if (searchQuery) params.append("$or", searchQuery);
+      if (searchQuery) params.append("searchQuery", searchQuery);
       if (filterPaymentStatus)
         params.append("paymentStatus", filterPaymentStatus);
 
@@ -124,12 +124,12 @@ function ManagerOrder() {
         }
       );
       setOrders(response.data);
-      
+
       // Calculate revenue and invoice count
       let revenue = 0;
       const invoiceCount = response.data.length;
-      
-      response.data.forEach(order => {
+
+      response.data.forEach((order) => {
         if (order.products && order.products.length > 0) {
           const orderRevenue = order.products.reduce((sum, item) => {
             const discountPercent =
@@ -137,10 +137,12 @@ function ManagerOrder() {
               item.batchesUsed[0] &&
               item.batchesUsed[0].batchId &&
               item.batchesUsed[0].batchId.discountInfo &&
-              typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+              typeof item.batchesUsed[0].batchId.discountInfo.discountValue ===
+                "number"
                 ? item.batchesUsed[0].batchId.discountInfo.discountValue
                 : 0;
-            const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+            const originalPrice =
+              (item.originalUnitPrice || 0) * (item.quantity || 0);
             const discountAmount = (originalPrice * discountPercent) / 100;
             const finalPrice = originalPrice - discountAmount;
             return sum + finalPrice;
@@ -150,7 +152,7 @@ function ManagerOrder() {
           revenue += order.finalAmount || 0;
         }
       });
-      
+
       setTotalRevenue(revenue);
       setTotalInvoices(invoiceCount);
     } catch (error) {
@@ -310,7 +312,7 @@ function ManagerOrder() {
               label="TT Thanh toán"
             >
               <MenuItem value="">Tất cả</MenuItem>
-              <MenuItem value="pending">Chưa thanh toán</MenuItem>
+              <MenuItem value="unpaid">Chưa thanh toán</MenuItem>
               <MenuItem value="partial">Thanh toán một phần</MenuItem>
               <MenuItem value="paid">Đã thanh toán</MenuItem>
             </Select>
@@ -433,11 +435,14 @@ function ManagerOrder() {
                       item.batchesUsed[0] &&
                       item.batchesUsed[0].batchId &&
                       item.batchesUsed[0].batchId.discountInfo &&
-                      typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+                      typeof item.batchesUsed[0].batchId.discountInfo
+                        .discountValue === "number"
                         ? item.batchesUsed[0].batchId.discountInfo.discountValue
                         : 0;
-                    const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
-                    const discountAmount = (originalPrice * discountPercent) / 100;
+                    const originalPrice =
+                      (item.originalUnitPrice || 0) * (item.quantity || 0);
+                    const discountAmount =
+                      (originalPrice * discountPercent) / 100;
                     const finalPrice = originalPrice - discountAmount;
                     return sum + finalPrice;
                   }, 0);
@@ -656,8 +661,10 @@ function OrderDetailDialog({
                   const discountPercent =
                     batchDetails[item.batchesUsed?.[0]?.batchId]?.discountInfo
                       ?.discountValue || 0;
-                  const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
-                  const discountAmount = (originalPrice * discountPercent) / 100;
+                  const originalPrice =
+                    (item.originalUnitPrice || 0) * (item.quantity || 0);
+                  const discountAmount =
+                    (originalPrice * discountPercent) / 100;
                   const finalPrice = originalPrice - discountAmount;
                   return (
                     <TableRow key={item._id}>
@@ -705,10 +712,11 @@ function OrderDetailDialog({
                       {order.products
                         .reduce((sum, item) => {
                           const discountPercent =
-                            batchDetails[item.batchesUsed?.[0]?.batchId]?.discountInfo
-                              ?.discountValue || 0;
+                            batchDetails[item.batchesUsed?.[0]?.batchId]
+                              ?.discountInfo?.discountValue || 0;
                           const originalPrice =
-                            (item.originalUnitPrice || 0) * (item.quantity || 0);
+                            (item.originalUnitPrice || 0) *
+                            (item.quantity || 0);
                           return sum + (originalPrice * discountPercent) / 100;
                         }, 0)
                         .toLocaleString("vi-VN", {
@@ -728,11 +736,13 @@ function OrderDetailDialog({
                       {order.products
                         .reduce((sum, item) => {
                           const discountPercent =
-                            batchDetails[item.batchesUsed?.[0]?.batchId]?.discountInfo
-                              ?.discountValue || 0;
+                            batchDetails[item.batchesUsed?.[0]?.batchId]
+                              ?.discountInfo?.discountValue || 0;
                           const originalPrice =
-                            (item.originalUnitPrice || 0) * (item.quantity || 0);
-                          const discountAmount = (originalPrice * discountPercent) / 100;
+                            (item.originalUnitPrice || 0) *
+                            (item.quantity || 0);
+                          const discountAmount =
+                            (originalPrice * discountPercent) / 100;
                           const finalPrice = originalPrice - discountAmount;
                           return sum + finalPrice;
                         }, 0)

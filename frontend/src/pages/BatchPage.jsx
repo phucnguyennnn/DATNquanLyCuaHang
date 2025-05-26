@@ -23,13 +23,11 @@ import {
   DialogContent,
   DialogActions,
   Button,
-  ImageList,
-  ImageListItem,
   Chip,
   IconButton,
   Collapse,
   FormHelperText,
-  Pagination, // Added for pagination
+  Pagination,
 } from "@mui/material";
 import { format, isBefore, addDays } from "date-fns";
 import axios from "axios";
@@ -39,7 +37,6 @@ import { useSettings } from "../contexts/SettingsContext";
 import { useNavigate } from "react-router-dom";
 
 function ShelfInventoryPage() {
-  // Use settings from context instead of constants
   const { settings } = useSettings();
   const navigate = useNavigate();
   const [shelfData, setShelfData] = useState([]);
@@ -47,9 +44,7 @@ function ShelfInventoryPage() {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  // Thêm state cho warning filter
   const [warningFilter, setWarningFilter] = useState("");
-  // Thêm state cho supplier filter và danh sách suppliers
   const [supplierFilter, setSupplierFilter] = useState("");
   const [suppliers, setSuppliers] = useState([]);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
@@ -64,9 +59,12 @@ function ShelfInventoryPage() {
   const [selectedTransferBatch, setSelectedTransferBatch] = useState(null);
   const [transferQuantity, setTransferQuantity] = useState("");
   const [transferError, setTransferError] = useState(null);
-  const [warehouseTransferDialogOpen, setWarehouseTransferDialogOpen] = useState(false);
-  const [selectedWarehouseTransferBatch, setSelectedWarehouseTransferBatch] = useState(null);
-  const [warehouseTransferQuantity, setWarehouseTransferQuantity] = useState("");
+  const [warehouseTransferDialogOpen, setWarehouseTransferDialogOpen] =
+    useState(false);
+  const [selectedWarehouseTransferBatch, setSelectedWarehouseTransferBatch] =
+    useState(null);
+  const [warehouseTransferQuantity, setWarehouseTransferQuantity] =
+    useState("");
   const [warehouseTransferError, setWarehouseTransferError] = useState(null);
   const [openRows, setOpenRows] = useState({});
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
@@ -75,10 +73,42 @@ function ShelfInventoryPage() {
   const [returnReason, setReturnReason] = useState("");
   const [returnError, setReturnError] = useState(null);
   const [returnSuccess, setReturnSuccess] = useState(false);
-  const [returnDate, setReturnDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [returnDate, setReturnDate] = useState(
+    format(new Date(), "yyyy-MM-dd")
+  );
   const [returnType, setReturnType] = useState("return");
 
-  // Add handler for opening return dialog
+  // Hàm hủy lô hàng
+  const handleCancelBatch = async (batch) => {
+    if (
+      !window.confirm(
+        "Bạn có chắc chắn muốn hủy toàn bộ lô hàng này? Thao tác này không thể hoàn tác."
+      )
+    )
+      return;
+    try {
+      await axios.post(
+        "http://localhost:8000/api/orders/cancel-batch",
+        {
+          batchId: batch._id,
+          reason: "Hủy lô hàng từ giao diện quản lý",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+          },
+        }
+      );
+      alert("Đã hủy lô hàng và tạo hóa đơn 0 đồng.");
+      fetchData();
+    } catch (err) {
+      alert(
+        err.response?.data?.message ||
+          "Lỗi khi hủy lô hàng. Có thể lô này đang được giữ bởi đơn đặt trước."
+      );
+    }
+  };
+
   const handleOpenReturnDialog = (batch) => {
     setSelectedReturnBatch(batch);
     setReturnDialogOpen(true);
@@ -89,48 +119,41 @@ function ShelfInventoryPage() {
     setReturnDate(format(new Date(), "yyyy-MM-dd"));
   };
 
-  // Add handler for return quantity changes
   const handleReturnQuantityChange = (event) => {
     setReturnQuantity(event.target.value.replace(/\D/g, ""));
   };
 
-  // Add handler for return reason changes
   const handleReturnReasonChange = (event) => {
     setReturnReason(event.target.value);
   };
 
-  // Add handler for return date changes
   const handleReturnDateChange = (event) => {
     setReturnDate(event.target.value);
   };
 
-  // Add handler for return type changes
   const handleReturnTypeChange = (event) => {
     setReturnType(event.target.value);
   };
 
-  // Add handler for submitting return
   const handleReturnSubmit = async () => {
-    // Validate inputs
     if (!returnQuantity || parseInt(returnQuantity) <= 0) {
       setReturnError("Vui lòng nhập số lượng hợp lệ");
       return;
     }
-
-    // Validate that return quantity doesn't exceed total available quantity
-    const totalAvailable = selectedReturnBatch.remaining_quantity + selectedReturnBatch.quantity_on_shelf;
+    const totalAvailable =
+      selectedReturnBatch.remaining_quantity +
+      selectedReturnBatch.quantity_on_shelf;
     if (parseInt(returnQuantity) > totalAvailable) {
-      setReturnError(`Số lượng đổi/trả không thể vượt quá tổng số lượng hiện có (${totalAvailable})`);
+      setReturnError(
+        `Số lượng đổi/trả không thể vượt quá tổng số lượng hiện có (${totalAvailable})`
+      );
       return;
     }
-
     if (!returnReason.trim()) {
       setReturnError("Vui lòng nhập lý do đổi/trả hàng");
       return;
     }
-
     try {
-      // Submit return receipt
       const response = await axios.post("http://localhost:8000/api/returns", {
         batchId: selectedReturnBatch._id,
         supplierId: selectedReturnBatch.supplier?._id,
@@ -138,30 +161,31 @@ function ShelfInventoryPage() {
         reason: returnReason,
         returnDate: returnDate,
         productId: selectedReturnBatch.product?._id,
-        type: returnType
+        type: returnType,
       });
-
-      // Send email to supplier
       if (selectedReturnBatch.supplier?.contact?.email) {
         try {
-          await axios.post(`http://localhost:8000/api/returns/${response.data._id}/resend-email`);
+          await axios.post(
+            `http://localhost:8000/api/returns/${response.data._id}/resend-email`
+          );
           alert("Email đã được gửi thành công đến nhà cung cấp.");
         } catch (emailError) {
           console.error("Lỗi khi gửi email:", emailError);
-          alert("Phiếu đã được tạo nhưng không thể gửi email đến nhà cung cấp.");
+          alert(
+            "Phiếu đã được tạo nhưng không thể gửi email đến nhà cung cấp."
+          );
         }
       }
-
       setReturnSuccess(true);
       await fetchData();
-      
-      // Close dialog after 2 seconds of showing success message
       setTimeout(() => {
         setReturnDialogOpen(false);
       }, 2000);
     } catch (err) {
       setReturnError(
-        err.response?.data?.message || err.message || "Lỗi khi trả hàng cho nhà cung cấp"
+        err.response?.data?.message ||
+          err.message ||
+          "Lỗi khi trả hàng cho nhà cung cấp"
       );
     }
   };
@@ -189,7 +213,6 @@ function ShelfInventoryPage() {
       setTransferError("Vui lòng nhập số lượng hợp lệ");
       return;
     }
-    const userId = localStorage.getItem("userId");
     try {
       await axios.put(
         `http://localhost:8000/api/batches/${selectedTransferBatch._id}/transfer-to-shelf`,
@@ -209,16 +232,22 @@ function ShelfInventoryPage() {
   };
 
   const handleWarehouseTransferSubmit = async () => {
-    if (!warehouseTransferQuantity || parseInt(warehouseTransferQuantity) <= 0) {
+    if (
+      !warehouseTransferQuantity ||
+      parseInt(warehouseTransferQuantity) <= 0
+    ) {
       setWarehouseTransferError("Vui lòng nhập số lượng hợp lệ");
       return;
     }
-
-    if (parseInt(warehouseTransferQuantity) > selectedWarehouseTransferBatch.quantity_on_shelf) {
-      setWarehouseTransferError("Số lượng không thể lớn hơn số lượng trên quầy");
+    if (
+      parseInt(warehouseTransferQuantity) >
+      selectedWarehouseTransferBatch.quantity_on_shelf
+    ) {
+      setWarehouseTransferError(
+        "Số lượng không thể lớn hơn số lượng trên quầy"
+      );
       return;
     }
-
     try {
       await axios.put(
         `http://localhost:8000/api/batches/${selectedWarehouseTransferBatch._id}/transfer-to-warehouse`,
@@ -233,11 +262,10 @@ function ShelfInventoryPage() {
     }
   };
 
-  // Thêm function để fetch suppliers
   const fetchSuppliers = async () => {
     setLoadingSuppliers(true);
     try {
-      const response = await axios.get("http://localhost:8000/api/suppliers",{
+      const response = await axios.get("http://localhost:8000/api/suppliers", {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("authToken")}`,
         },
@@ -269,7 +297,8 @@ function ShelfInventoryPage() {
 
   useEffect(() => {
     fetchData();
-    fetchSuppliers(); // Fetch suppliers when component mounts
+    fetchSuppliers();
+    // eslint-disable-next-line
   }, [searchTerm, statusFilter]);
 
   const handleSearchChange = (event) => {
@@ -280,12 +309,10 @@ function ShelfInventoryPage() {
     setStatusFilter(event.target.value);
   };
 
-  // Thêm handler cho warning filter
   const handleWarningFilterChange = (event) => {
     setWarningFilter(event.target.value);
   };
 
-  // Thêm handler cho supplier filter
   const handleSupplierFilterChange = (event) => {
     setSupplierFilter(event.target.value);
   };
@@ -317,7 +344,6 @@ function ShelfInventoryPage() {
     return quantities;
   }, [shelfData]);
 
-  // Helper functions to consistently get thresholds with proper priority
   const getExpiryThreshold = (product) => {
     if (
       product &&
@@ -342,7 +368,6 @@ function ShelfInventoryPage() {
     return settings.lowQuantityThreshold;
   };
 
-  // Helper to check if product is nearing expiry
   const isNearingExpiry = (expiryDate, product) => {
     if (!expiryDate) return false;
     const threshold = getExpiryThreshold(product);
@@ -351,33 +376,22 @@ function ShelfInventoryPage() {
 
   const sortedShelfData = useMemo(() => {
     const now = new Date();
-
     const withWarnings = shelfData.map((item) => {
       let warnings = [];
       const expiryDate = item.expiry_day ? new Date(item.expiry_day) : null;
-
-      // Use helper functions for consistent threshold logic
       const expiryThreshold = getExpiryThreshold(item.product);
       const lowQtyThreshold = getLowQuantityThreshold(item.product);
-
-      if (
-        expiryDate &&
-        isBefore(expiryDate, addDays(now, expiryThreshold))
-      ) {
+      if (expiryDate && isBefore(expiryDate, addDays(now, expiryThreshold))) {
         warnings.push("Sắp hết hạn");
       }
-
       if (item.quantity_on_shelf <= lowQtyThreshold) {
         warnings.push("Ít trên quầy");
       }
-
       if (item.remaining_quantity <= lowQtyThreshold) {
         warnings.push("Ít trong kho");
       }
-
       return { ...item, warnings };
     });
-
     const prioritizedData = [...withWarnings].sort((a, b) => {
       if (a.warnings.length > 0 && b.warnings.length === 0) {
         return -1;
@@ -387,14 +401,11 @@ function ShelfInventoryPage() {
       }
       return 0;
     });
-
     if (!sortColumn) {
       return prioritizedData;
     }
-
     return prioritizedData.sort((a, b) => {
       let valueA, valueB;
-
       if (sortColumn === "productName") {
         valueA = a.product?.name || "";
         valueB = b.product?.name || "";
@@ -423,16 +434,13 @@ function ShelfInventoryPage() {
         valueA = a.status || "";
         valueB = b.status || "";
       }
-
       if (valueA == null || valueB == null) {
         return valueA == null ? 1 : -1;
       }
-
       if (typeof valueA === "string") {
         valueA = valueA.toLowerCase();
         valueB = valueB.toLowerCase();
       }
-
       if (sortDirection === "asc") {
         return valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
       } else {
@@ -443,13 +451,10 @@ function ShelfInventoryPage() {
 
   const groupedByProduct = useMemo(() => {
     const grouped = {};
-
     sortedShelfData.forEach((item) => {
       if (!item.product) return;
-
       const productId = item.product._id;
       const productName = item.product.name;
-
       if (!grouped[productId]) {
         grouped[productId] = {
           productId,
@@ -462,46 +467,38 @@ function ShelfInventoryPage() {
           latestManufactureDate: null,
         };
       }
-
-      // Add batch to group
       grouped[productId].batches.push(item);
       grouped[productId].totalShelfQuantity += item.quantity_on_shelf;
       grouped[productId].totalWarehouseQuantity += item.remaining_quantity;
-
-      // Track earliest expiry date
       if (item.expiry_day) {
         const expiryDate = new Date(item.expiry_day);
-        if (!grouped[productId].earliestExpiryDate || 
-            expiryDate < new Date(grouped[productId].earliestExpiryDate)) {
+        if (
+          !grouped[productId].earliestExpiryDate ||
+          expiryDate < new Date(grouped[productId].earliestExpiryDate)
+        ) {
           grouped[productId].earliestExpiryDate = item.expiry_day;
         }
       }
-      
-      // Track latest manufacture date
       if (item.manufacture_day) {
         const manufactureDate = new Date(item.manufacture_day);
-        if (!grouped[productId].latestManufactureDate || 
-            manufactureDate > new Date(grouped[productId].latestManufactureDate)) {
+        if (
+          !grouped[productId].latestManufactureDate ||
+          manufactureDate > new Date(grouped[productId].latestManufactureDate)
+        ) {
           grouped[productId].latestManufactureDate = item.manufacture_day;
         }
       }
-
-      // Collect warnings
       item.warnings.forEach((warning) => {
         grouped[productId].warnings.add(warning);
       });
     });
-
-    // Calculate total quantity for each product
     let groupedArray = Object.values(grouped);
-    groupedArray.forEach(product => {
-      product.totalQuantity = product.totalShelfQuantity + product.totalWarehouseQuantity;
-      
-      // Sort the batches within each group if sortColumn is specified
+    groupedArray.forEach((product) => {
+      product.totalQuantity =
+        product.totalShelfQuantity + product.totalWarehouseQuantity;
       if (sortColumn) {
         product.batches.sort((a, b) => {
           let valueA, valueB;
-
           if (sortColumn === "batchCode") {
             valueA = a.batchCode || "";
             valueB = b.batchCode || "";
@@ -524,18 +521,15 @@ function ShelfInventoryPage() {
             valueA = a.createdAt ? new Date(a.createdAt) : null;
             valueB = b.createdAt ? new Date(b.createdAt) : null;
           } else {
-            return 0; // No sort
+            return 0;
           }
-
           if (valueA == null || valueB == null) {
             return valueA == null ? 1 : -1;
           }
-
           if (typeof valueA === "string") {
             valueA = valueA.toLowerCase();
             valueB = valueB.toLowerCase();
           }
-
           if (sortDirection === "asc") {
             return valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
           } else {
@@ -544,27 +538,34 @@ function ShelfInventoryPage() {
         });
       }
     });
-    
-    // Sort product groups by the selected sort column
     if (sortColumn) {
       groupedArray.sort((a, b) => {
         let valueA, valueB;
-        
         if (sortColumn === "productName") {
           valueA = a.productName || "";
           valueB = b.productName || "";
         } else if (sortColumn === "totalQuantity") {
           valueA = a.totalQuantity;
           valueB = b.totalQuantity;
-        } else if (sortColumn === "shelfQuantity" || sortColumn === "totalShelfQuantity") {
+        } else if (
+          sortColumn === "shelfQuantity" ||
+          sortColumn === "totalShelfQuantity"
+        ) {
           valueA = a.totalShelfQuantity;
           valueB = b.totalShelfQuantity;
-        } else if (sortColumn === "warehouseQuantity" || sortColumn === "totalWarehouseQuantity") {
+        } else if (
+          sortColumn === "warehouseQuantity" ||
+          sortColumn === "totalWarehouseQuantity"
+        ) {
           valueA = a.totalWarehouseQuantity;
           valueB = b.totalWarehouseQuantity;
         } else if (sortColumn === "manufactureDay") {
-          valueA = a.latestManufactureDate ? new Date(a.latestManufactureDate) : null;
-          valueB = b.latestManufactureDate ? new Date(b.latestManufactureDate) : null;
+          valueA = a.latestManufactureDate
+            ? new Date(a.latestManufactureDate)
+            : null;
+          valueB = b.latestManufactureDate
+            ? new Date(b.latestManufactureDate)
+            : null;
         } else if (sortColumn === "expiryDay") {
           valueA = a.earliestExpiryDate ? new Date(a.earliestExpiryDate) : null;
           valueB = b.earliestExpiryDate ? new Date(b.earliestExpiryDate) : null;
@@ -572,16 +573,13 @@ function ShelfInventoryPage() {
           valueA = a.createdAt ? new Date(a.createdAt) : null;
           valueB = b.createdAt ? new Date(b.createdAt) : null;
         }
-
         if (valueA == null || valueB == null) {
           return valueA == null ? 1 : -1;
         }
-
         if (typeof valueA === "string") {
           valueA = valueA.toLowerCase();
           valueB = valueB.toLowerCase();
         }
-
         if (sortDirection === "asc") {
           return valueA < valueB ? -1 : valueA > valueB ? 1 : 0;
         } else {
@@ -589,7 +587,6 @@ function ShelfInventoryPage() {
         }
       });
     }
-
     return groupedArray;
   }, [sortedShelfData, sortColumn, sortDirection]);
 
@@ -634,58 +631,46 @@ function ShelfInventoryPage() {
     }));
   };
 
-  // Add pagination state
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  // Handle page change
   const handlePageChange = (event, newPage) => {
     setPage(newPage);
-    // Reset open rows when changing page
     setOpenRows({});
   };
 
-  // Áp dụng warning filter và supplier filter vào dữ liệu đã sort
   const filteredGroupedByProduct = useMemo(() => {
     let filtered = groupedByProduct;
-    
-    // Apply warning filter
     if (warningFilter) {
-      filtered = filtered.filter(group =>
+      filtered = filtered.filter((group) =>
         Array.from(group.warnings).includes(warningFilter)
       );
     }
-    
-    // Apply supplier filter
     if (supplierFilter) {
-      filtered = filtered.filter(group => {
-        // Check if any batch in the group has the selected supplier
-        return group.batches.some(batch => 
-          batch.supplier && batch.supplier._id === supplierFilter
+      filtered = filtered.filter((group) => {
+        return group.batches.some(
+          (batch) => batch.supplier && batch.supplier._id === supplierFilter
         );
       });
     }
-    
     return filtered;
   }, [groupedByProduct, warningFilter, supplierFilter]);
 
-  // Calculate paginated data for the current page
   const paginatedGroupedByProduct = useMemo(() => {
     const startIndex = (page - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return filteredGroupedByProduct.slice(startIndex, endIndex);
   }, [filteredGroupedByProduct, page, itemsPerPage]);
 
-  // Calculate total number of pages
   const totalPages = useMemo(() => {
     return Math.ceil(filteredGroupedByProduct.length / itemsPerPage);
   }, [filteredGroupedByProduct, itemsPerPage]);
 
-  // Handler để chuyển đến trang nhập hàng với sản phẩm được chọn
   const handleNavigateToGoodReceipt = (productId, productName) => {
-    // Mở trang purchase order trong tab mới với query params để pre-select sản phẩm
-    const url = `/inventory/purchase-order?preselected-product=${productId}&product-name=${encodeURIComponent(productName)}`;
-    window.open(url, '_blank');
+    const url = `/inventory/purchase-order?preselected-product=${productId}&product-name=${encodeURIComponent(
+      productName
+    )}`;
+    window.open(url, "_blank");
   };
 
   return (
@@ -727,7 +712,6 @@ function ShelfInventoryPage() {
               <MenuItem value="hết hàng">Hết hàng</MenuItem>
             </Select>
           </FormControl>
-          {/* Thêm bộ lọc cảnh báo */}
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel id="warning-filter-label" shrink>
               Cảnh báo
@@ -750,7 +734,6 @@ function ShelfInventoryPage() {
               <MenuItem value="Ít trong kho">Ít trong kho</MenuItem>
             </Select>
           </FormControl>
-          {/* Thêm bộ lọc nhà cung cấp */}
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel id="supplier-filter-label" shrink>
               Nhà cung cấp
@@ -764,8 +747,10 @@ function ShelfInventoryPage() {
               displayEmpty
               renderValue={(value) => {
                 if (value === "") return "Tất cả";
-                const selectedSupplier = suppliers.find(s => s._id === value);
-                return selectedSupplier ? selectedSupplier.name : "Không xác định";
+                const selectedSupplier = suppliers.find((s) => s._id === value);
+                return selectedSupplier
+                  ? selectedSupplier.name
+                  : "Không xác định";
               }}
               inputProps={{
                 "aria-label": "Nhà cung cấp",
@@ -794,12 +779,19 @@ function ShelfInventoryPage() {
       ) : error ? (
         <Alert severity="error">{error}</Alert>
       ) : (
-        <Box sx={{ flex: 1, minHeight: 400, display: 'flex', flexDirection: 'column' }}>
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 400,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
           <TableContainer
             component={Paper}
             sx={{
               flex: 1,
-              maxHeight: "calc(110vh - 260px)", // Adjusted to make room for pagination
+              maxHeight: "calc(110vh - 260px)",
               "& .MuiTable-root": { minWidth: 1000 },
             }}
           >
@@ -880,7 +872,9 @@ function ShelfInventoryPage() {
                           )}
                         </IconButton>
                       </TableCell>
-                      <TableCell>{(page - 1) * itemsPerPage + index + 1}</TableCell>
+                      <TableCell>
+                        {(page - 1) * itemsPerPage + index + 1}
+                      </TableCell>
                       <TableCell
                         component="th"
                         scope="row"
@@ -892,30 +886,53 @@ function ShelfInventoryPage() {
                       >
                         {group.productName}
                       </TableCell>
-                      <TableCell align="right">
-                        {group.totalQuantity}
-                      </TableCell>
-                      <TableCell align="right">
+                      <TableCell align="right">{group.totalQuantity}</TableCell>
+                      <TableCell
+                        align="right"
+                        style={
+                          group.totalShelfQuantity <=
+                          getLowQuantityThreshold(group.batches[0]?.product)
+                            ? { color: "red", fontWeight: "bold" }
+                            : {}
+                        }
+                      >
                         {group.totalShelfQuantity}
                       </TableCell>
-                      <TableCell align="right">
+                      <TableCell
+                        align="right"
+                        style={
+                          group.totalWarehouseQuantity <=
+                          getLowQuantityThreshold(group.batches[0]?.product)
+                            ? { color: "red", fontWeight: "bold" }
+                            : {}
+                        }
+                      >
                         {group.totalWarehouseQuantity}
                       </TableCell>
                       <TableCell>
-                        {group.latestManufactureDate 
-                          ? format(new Date(group.latestManufactureDate), "dd/MM/yyyy") 
+                        {group.latestManufactureDate
+                          ? format(
+                              new Date(group.latestManufactureDate),
+                              "dd/MM/yyyy"
+                            )
                           : "-"}
                       </TableCell>
                       <TableCell
                         style={
                           group.earliestExpiryDate &&
-                          isNearingExpiry(group.earliestExpiryDate, group.batches[0]?.product)
+                          isNearingExpiry(
+                            group.earliestExpiryDate,
+                            group.batches[0]?.product
+                          )
                             ? { color: "red" }
                             : {}
                         }
                       >
-                        {group.earliestExpiryDate 
-                          ? format(new Date(group.earliestExpiryDate), "dd/MM/yyyy") 
+                        {group.earliestExpiryDate
+                          ? format(
+                              new Date(group.earliestExpiryDate),
+                              "dd/MM/yyyy"
+                            )
                           : "-"}
                       </TableCell>
                       <TableCell>
@@ -939,7 +956,12 @@ function ShelfInventoryPage() {
                             padding: "4px 8px",
                             textTransform: "none",
                           }}
-                          onClick={() => handleNavigateToGoodReceipt(group.productId, group.productName)}
+                          onClick={() =>
+                            handleNavigateToGoodReceipt(
+                              group.productId,
+                              group.productName
+                            )
+                          }
                         >
                           Nhập hàng
                         </Button>
@@ -950,9 +972,17 @@ function ShelfInventoryPage() {
                         style={{ paddingBottom: 0, paddingTop: 0 }}
                         colSpan={10}
                       >
-                        <Collapse in={openRows[group.productId]} timeout="auto" unmountOnExit>
+                        <Collapse
+                          in={openRows[group.productId]}
+                          timeout="auto"
+                          unmountOnExit
+                        >
                           <Box sx={{ margin: 1 }}>
-                            <Typography variant="h6" gutterBottom component="div">
+                            <Typography
+                              variant="h6"
+                              gutterBottom
+                              component="div"
+                            >
                               Chi tiết lô hàng
                             </Typography>
                             <Table size="small" aria-label="batch details">
@@ -966,7 +996,7 @@ function ShelfInventoryPage() {
                                     {sortColumn === "batchCode" &&
                                       (sortDirection === "asc" ? "▲" : "▼")}
                                   </TableCell>
-                                  <TableCell 
+                                  <TableCell
                                     align="right"
                                     style={{ cursor: "pointer" }}
                                     onClick={() => handleSort("shelfQuantity")}
@@ -975,10 +1005,12 @@ function ShelfInventoryPage() {
                                     {sortColumn === "shelfQuantity" &&
                                       (sortDirection === "asc" ? "▲" : "▼")}
                                   </TableCell>
-                                  <TableCell 
+                                  <TableCell
                                     align="right"
                                     style={{ cursor: "pointer" }}
-                                    onClick={() => handleSort("warehouseQuantity")}
+                                    onClick={() =>
+                                      handleSort("warehouseQuantity")
+                                    }
                                   >
                                     Số Lượng Trong Kho{" "}
                                     {sortColumn === "warehouseQuantity" &&
@@ -1021,108 +1053,189 @@ function ShelfInventoryPage() {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {group.batches.map((batch) => (
-                                  <TableRow key={batch._id}>
-                                    <TableCell
-                                      style={{
-                                        cursor: "pointer",
-                                        color: "blue",
-                                        textDecoration: "underline",
-                                      }}
-                                      onClick={() => handleBatchClick(batch._id)}
-                                    >
-                                      {batch.batchCode || batch._id}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      {batch.quantity_on_shelf}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      {batch.remaining_quantity}
-                                    </TableCell>
-                                    <TableCell>
-                                      {batch.manufacture_day
-                                        ? format(new Date(batch.manufacture_day), "dd/MM/yyyy")
-                                        : "-"}
-                                    </TableCell>
-                                    <TableCell
-                                      style={
-                                        batch.expiry_day &&
-                                        isNearingExpiry(batch.expiry_day, batch.product)
-                                          ? { color: "red" }
-                                          : {}
-                                      }
-                                    >
-                                      {batch.expiry_day
-                                        ? format(new Date(batch.expiry_day), "dd/MM/yyyy")
-                                        : "-"}
-                                    </TableCell>
-                                    <TableCell>
-                                      {batch.createdAt
-                                        ? format(new Date(batch.createdAt), "dd/MM/yyyy")
-                                        : "-"}
-                                    </TableCell>
-                                    <TableCell>{batch.status}</TableCell>
-                                    <TableCell>
-                                      {batch.warnings.map((warning, idx) => (
-                                        <Chip
-                                          key={idx}
-                                          label={warning}
-                                          color="warning"
-                                          size="small"
-                                          sx={{ mr: 0.5 }}
-                                        />
-                                      ))}
-                                    </TableCell>
-                                    <TableCell>
-                                      <Stack direction="row" spacing={1}>
-                                        <Button
-                                          size="small"
-                                          sx={{
-                                            fontSize: "0.7rem",
-                                            padding: "2px 6px",
-                                            margin: "0 2px",
-                                            textTransform: "none",
-                                          }}
-                                          variant="contained"
-                                          onClick={() => handleOpenTransferDialog(batch)}
-                                          disabled={batch.remaining_quantity <= 0}
-                                        >
-                                          chuyển lên quầy
-                                        </Button>
-                                        <Button
-                                          size="small"
-                                          sx={{
-                                            fontSize: "0.7rem",
-                                            padding: "2px 6px",
-                                            margin: "0 2px",
-                                            textTransform: "none",
-                                          }}
-                                          variant="outlined"
-                                          color="primary"
-                                          onClick={() => handleOpenWarehouseTransferDialog(batch)}
-                                          disabled={batch.quantity_on_shelf <= 0}
-                                        >
-                                          chuyển xuống kho
-                                        </Button>
-                                        <Button
-                                          size="small"
-                                          sx={{
-                                            fontSize: "0.7rem",
-                                            padding: "2px 6px",
-                                            margin: "0 2px",
-                                            textTransform: "none",
-                                          }}
-                                          variant="outlined"
-                                          color="error"
-                                          onClick={() => handleOpenReturnDialog(batch)}
-                                          disabled={batch.remaining_quantity + batch.quantity_on_shelf <= 0 || !batch.supplier}
-                                        >
-                                          đổi/trả hàng NCC
-                                        </Button>
-                                      </Stack>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
+                                {group.batches
+                                  .filter(
+                                    (batch) =>
+                                      (batch.quantity_on_shelf || 0) +
+                                        (batch.remaining_quantity || 0) >
+                                      0
+                                  )
+                                  .map((batch) => (
+                                    <TableRow key={batch._id}>
+                                      <TableCell
+                                        style={{
+                                          cursor: "pointer",
+                                          color: "blue",
+                                          textDecoration: "underline",
+                                        }}
+                                        onClick={() =>
+                                          handleBatchClick(batch._id)
+                                        }
+                                      >
+                                        {batch.batchCode || batch._id}
+                                      </TableCell>
+                                      <TableCell
+                                        align="right"
+                                        style={
+                                          batch.quantity_on_shelf <=
+                                          getLowQuantityThreshold(batch.product)
+                                            ? {
+                                                color: "red",
+                                                fontWeight: "bold",
+                                              }
+                                            : {}
+                                        }
+                                      >
+                                        {batch.quantity_on_shelf}
+                                      </TableCell>
+                                      <TableCell
+                                        align="right"
+                                        style={
+                                          batch.remaining_quantity <=
+                                          getLowQuantityThreshold(batch.product)
+                                            ? {
+                                                color: "red",
+                                                fontWeight: "bold",
+                                              }
+                                            : {}
+                                        }
+                                      >
+                                        {batch.remaining_quantity}
+                                      </TableCell>
+                                      <TableCell>
+                                        {batch.manufacture_day
+                                          ? format(
+                                              new Date(batch.manufacture_day),
+                                              "dd/MM/yyyy"
+                                            )
+                                          : "-"}
+                                      </TableCell>
+                                      <TableCell
+                                        style={
+                                          batch.expiry_day &&
+                                          isNearingExpiry(
+                                            batch.expiry_day,
+                                            batch.product
+                                          )
+                                            ? { color: "red" }
+                                            : {}
+                                        }
+                                      >
+                                        {batch.expiry_day
+                                          ? format(
+                                              new Date(batch.expiry_day),
+                                              "dd/MM/yyyy"
+                                            )
+                                          : "-"}
+                                      </TableCell>
+                                      <TableCell>
+                                        {batch.createdAt
+                                          ? format(
+                                              new Date(batch.createdAt),
+                                              "dd/MM/yyyy"
+                                            )
+                                          : "-"}
+                                      </TableCell>
+                                      <TableCell>{batch.status}</TableCell>
+                                      <TableCell>
+                                        {batch.warnings.map((warning, idx) => (
+                                          <Chip
+                                            key={idx}
+                                            label={warning}
+                                            color="warning"
+                                            size="small"
+                                            sx={{ mr: 0.5 }}
+                                          />
+                                        ))}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Stack direction="row" spacing={1}>
+                                          <Button
+                                            size="small"
+                                            sx={{
+                                              fontSize: "0.7rem",
+                                              padding: "2px 6px",
+                                              margin: "0 2px",
+                                              textTransform: "none",
+                                            }}
+                                            variant="contained"
+                                            onClick={() =>
+                                              handleOpenTransferDialog(batch)
+                                            }
+                                            disabled={
+                                              batch.remaining_quantity <= 0
+                                            }
+                                          >
+                                            chuyển lên quầy
+                                          </Button>
+                                          <Button
+                                            size="small"
+                                            sx={{
+                                              fontSize: "0.7rem",
+                                              padding: "2px 6px",
+                                              margin: "0 2px",
+                                              textTransform: "none",
+                                            }}
+                                            variant="outlined"
+                                            color="primary"
+                                            onClick={() =>
+                                              handleOpenWarehouseTransferDialog(
+                                                batch
+                                              )
+                                            }
+                                            disabled={
+                                              batch.quantity_on_shelf <= 0
+                                            }
+                                          >
+                                            chuyển xuống kho
+                                          </Button>
+                                          <Button
+                                            size="small"
+                                            sx={{
+                                              fontSize: "0.7rem",
+                                              padding: "2px 6px",
+                                              margin: "0 2px",
+                                              textTransform: "none",
+                                            }}
+                                            variant="outlined"
+                                            color="error"
+                                            onClick={() =>
+                                              handleOpenReturnDialog(batch)
+                                            }
+                                            disabled={
+                                              batch.remaining_quantity +
+                                                batch.quantity_on_shelf <=
+                                                0 || !batch.supplier
+                                            }
+                                          >
+                                            đổi/trả hàng NCC
+                                          </Button>
+                                          <Button
+                                            size="small"
+                                            sx={{
+                                              fontSize: "0.7rem",
+                                              padding: "2px 6px",
+                                              margin: "0 2px",
+                                              textTransform: "none",
+                                            }}
+                                            variant="outlined"
+                                            color="secondary"
+                                            onClick={() =>
+                                              handleCancelBatch(batch)
+                                            }
+                                            disabled={
+                                              (batch.quantity_on_shelf || 0) +
+                                                (batch.remaining_quantity ||
+                                                  0) <=
+                                              0
+                                            }
+                                          >
+                                            Hủy lô hàng
+                                          </Button>
+                                        </Stack>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
                               </TableBody>
                             </Table>
                           </Box>
@@ -1134,23 +1247,22 @@ function ShelfInventoryPage() {
               </TableBody>
             </Table>
           </TableContainer>
-          
-          {/* Pagination control */}
           {filteredGroupedByProduct.length > 0 && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 2 }}>
-              <Pagination 
-                count={totalPages} 
-                page={page} 
-                onChange={handlePageChange} 
+            <Box
+              sx={{ display: "flex", justifyContent: "center", mt: 2, mb: 2 }}
+            >
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={handlePageChange}
                 color="primary"
                 showFirstButton
                 showLastButton
               />
             </Box>
           )}
-          
           {filteredGroupedByProduct.length === 0 && !loading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}>
+            <Box sx={{ display: "flex", justifyContent: "center", my: 3 }}>
               <Typography variant="body1" color="text.secondary">
                 Không tìm thấy sản phẩm nào phù hợp với bộ lọc đã chọn
               </Typography>
@@ -1158,13 +1270,14 @@ function ShelfInventoryPage() {
           )}
         </Box>
       )}
-      
       <Dialog open={batchDialogOpen} onClose={handleCloseBatchDialog}>
         <DialogTitle>Thông tin Lô hàng</DialogTitle>
         <DialogContent>
           {selectedBatch && (
             <Box>
-              <Typography>Mã Lô: {selectedBatch.batchCode || selectedBatch._id}</Typography>
+              <Typography>
+                Mã Lô: {selectedBatch.batchCode || selectedBatch._id}
+              </Typography>
               <Typography>
                 Ngày Sản Xuất:{" "}
                 {selectedBatch.manufacture_day
@@ -1177,7 +1290,10 @@ function ShelfInventoryPage() {
               <Typography
                 style={
                   selectedBatch.expiry_day &&
-                  isNearingExpiry(selectedBatch.expiry_day, selectedBatch.product)
+                  isNearingExpiry(
+                    selectedBatch.expiry_day,
+                    selectedBatch.product
+                  )
                     ? { color: "red" }
                     : {}
                 }
@@ -1196,7 +1312,14 @@ function ShelfInventoryPage() {
               <Typography>
                 Số lượng ban đầu: {selectedBatch.initial_quantity}
               </Typography>
-              <Typography>
+              <Typography
+                style={
+                  selectedBatch.remaining_quantity <=
+                  getLowQuantityThreshold(selectedBatch?.product)
+                    ? { color: "red", fontWeight: "bold" }
+                    : {}
+                }
+              >
                 Số lượng còn lại: {selectedBatch.remaining_quantity}
               </Typography>
               <Typography>
@@ -1207,8 +1330,9 @@ function ShelfInventoryPage() {
               </Typography>
               <Typography
                 style={
-                  selectedBatch.quantity_on_shelf <= getLowQuantityThreshold(selectedBatch?.product)
-                    ? { color: "orange" }
+                  selectedBatch.quantity_on_shelf <=
+                  getLowQuantityThreshold(selectedBatch?.product)
+                    ? { color: "red", fontWeight: "bold" }
                     : {}
                 }
               >
@@ -1242,7 +1366,6 @@ function ShelfInventoryPage() {
           <Button onClick={handleCloseBatchDialog}>Đóng</Button>
         </DialogActions>
       </Dialog>
-
       <Dialog
         open={transferDialogOpen}
         onClose={() => setTransferDialogOpen(false)}
@@ -1274,7 +1397,6 @@ function ShelfInventoryPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
       <Dialog
         open={warehouseTransferDialogOpen}
         onClose={() => setWarehouseTransferDialogOpen(false)}
@@ -1291,12 +1413,15 @@ function ShelfInventoryPage() {
               helperText={warehouseTransferError}
             />
             <Typography variant="body2" color="text.secondary" mt={1}>
-              Có sẵn trên quầy: {selectedWarehouseTransferBatch?.quantity_on_shelf}
+              Có sẵn trên quầy:{" "}
+              {selectedWarehouseTransferBatch?.quantity_on_shelf}
             </Typography>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setWarehouseTransferDialogOpen(false)}>Hủy</Button>
+          <Button onClick={() => setWarehouseTransferDialogOpen(false)}>
+            Hủy
+          </Button>
           <Button
             onClick={handleWarehouseTransferSubmit}
             variant="contained"
@@ -1306,8 +1431,6 @@ function ShelfInventoryPage() {
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* Return to Supplier Dialog */}
       <Dialog
         open={returnDialogOpen}
         onClose={() => setReturnDialogOpen(false)}
@@ -1326,12 +1449,13 @@ function ShelfInventoryPage() {
                 <strong>Sản phẩm:</strong> {selectedReturnBatch?.product?.name}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Mã lô:</strong> {selectedReturnBatch?.batchCode || selectedReturnBatch?._id}
+                <strong>Mã lô:</strong>{" "}
+                {selectedReturnBatch?.batchCode || selectedReturnBatch?._id}
               </Typography>
               <Typography variant="body2" gutterBottom>
-                <strong>Nhà cung cấp:</strong> {selectedReturnBatch?.supplier?.name || "Không có thông tin"}
+                <strong>Nhà cung cấp:</strong>{" "}
+                {selectedReturnBatch?.supplier?.name || "Không có thông tin"}
               </Typography>
-              
               <FormControl fullWidth margin="normal">
                 <InputLabel>Loại phiếu</InputLabel>
                 <Select
@@ -1343,12 +1467,11 @@ function ShelfInventoryPage() {
                   <MenuItem value="exchange">Đổi hàng</MenuItem>
                 </Select>
                 <FormHelperText>
-                  {returnType === "return" 
-                    ? "Trả hàng: Trừ số lượng khi phiếu được chuyển thành hoàn thành" 
+                  {returnType === "return"
+                    ? "Trả hàng: Trừ số lượng khi phiếu được chuyển thành hoàn thành"
                     : "Đổi hàng: Không trừ số lượng từ kho/quầy"}
                 </FormHelperText>
               </FormControl>
-              
               <TextField
                 fullWidth
                 margin="normal"
@@ -1358,7 +1481,6 @@ function ShelfInventoryPage() {
                 onChange={handleReturnDateChange}
                 InputLabelProps={{ shrink: true }}
               />
-              
               <TextField
                 fullWidth
                 margin="normal"
@@ -1367,9 +1489,14 @@ function ShelfInventoryPage() {
                 onChange={handleReturnQuantityChange}
                 error={!!returnError && returnError.includes("số lượng")}
               />
-              
-              <FormControl fullWidth margin="normal" error={!!returnError && returnError.includes("lý do")}>
-                <InputLabel id="return-reason-label">Lý do đổi/trả hàng</InputLabel>
+              <FormControl
+                fullWidth
+                margin="normal"
+                error={!!returnError && returnError.includes("lý do")}
+              >
+                <InputLabel id="return-reason-label">
+                  Lý do đổi/trả hàng
+                </InputLabel>
                 <Select
                   labelId="return-reason-label"
                   value={returnReason}
@@ -1379,9 +1506,13 @@ function ShelfInventoryPage() {
                   <MenuItem value="Sản phẩm hỏng">Sản phẩm hỏng</MenuItem>
                   <MenuItem value="Sản phẩm hết hạn">Sản phẩm hết hạn</MenuItem>
                   <MenuItem value="Sản phẩm bị lỗi">Sản phẩm bị lỗi</MenuItem>
-                  <MenuItem value="Chất lượng không đạt">Chất lượng không đạt</MenuItem>
+                  <MenuItem value="Chất lượng không đạt">
+                    Chất lượng không đạt
+                  </MenuItem>
                   <MenuItem value="Nhập sai/thừa">Nhập sai/thừa</MenuItem>
-                  <MenuItem value="Đổi trả theo thỏa thuận">Đổi trả theo thỏa thuận</MenuItem>
+                  <MenuItem value="Đổi trả theo thỏa thuận">
+                    Đổi trả theo thỏa thuận
+                  </MenuItem>
                   <MenuItem value="Lý do khác">Lý do khác</MenuItem>
                 </Select>
                 {returnReason === "Lý do khác" && (
@@ -1396,17 +1527,20 @@ function ShelfInventoryPage() {
                   <FormHelperText>{returnError}</FormHelperText>
                 )}
               </FormControl>
-              
               <Typography variant="body2" color="text.secondary" mt={2}>
-                <strong>Tổng số lượng có thể đổi/trả:</strong> {selectedReturnBatch ? 
-                  (selectedReturnBatch.remaining_quantity + selectedReturnBatch.quantity_on_shelf) : 0}
+                <strong>Tổng số lượng có thể đổi/trả:</strong>{" "}
+                {selectedReturnBatch
+                  ? selectedReturnBatch.remaining_quantity +
+                    selectedReturnBatch.quantity_on_shelf
+                  : 0}
               </Typography>
-              
-              {returnError && !returnError.includes("lý do") && !returnError.includes("số lượng") && (
-                <Alert severity="error" sx={{ mt: 2 }}>
-                  {returnError}
-                </Alert>
-              )}
+              {returnError &&
+                !returnError.includes("lý do") &&
+                !returnError.includes("số lượng") && (
+                  <Alert severity="error" sx={{ mt: 2 }}>
+                    {returnError}
+                  </Alert>
+                )}
             </Box>
           )}
         </DialogContent>
@@ -1424,7 +1558,6 @@ function ShelfInventoryPage() {
           </DialogActions>
         )}
       </Dialog>
-      
     </Container>
   );
 }

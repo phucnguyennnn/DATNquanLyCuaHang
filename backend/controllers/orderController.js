@@ -316,7 +316,7 @@ exports.handleInstoreOrder = async (req, res) => {
         if (batch) {
           // Tính giá chính xác dựa trên discount (nếu có)
           let batchPrice;
-          if (typeof batch.getDiscountedPrice === 'function') {
+          if (typeof batch.getDiscountedPrice === "function") {
             batchPrice = await batch.getDiscountedPrice();
           } else if (batch.discountInfo && batch.discountInfo.isDiscounted) {
             const discountValue = batch.discountInfo.discountValue || 0;
@@ -421,8 +421,20 @@ exports.getOrderById = async (req, res) => {
 
 exports.getAllOrders = async (req, res) => {
   try {
-    const { $or: orQuery, startDate, endDate, ...otherQueries } = req.query;
+    const {
+      searchQuery, // Lấy trực tiếp searchQuery từ req.query
+      startDate,
+      endDate,
+      paymentStatus,
+      ...otherQueries
+    } = req.query;
+
     const query = { ...otherQueries };
+
+    // Xử lý filter theo trạng thái thanh toán
+    if (paymentStatus && paymentStatus !== "") {
+      query.paymentStatus = paymentStatus;
+    }
 
     // Xử lý filter theo thời gian
     if (startDate && endDate) {
@@ -432,28 +444,33 @@ exports.getAllOrders = async (req, res) => {
       };
     }
 
+    // Lấy tất cả đơn hàng khớp với các điều kiện lọc ban đầu và populate dữ liệu liên quan
     let orders = await Order.find(query)
-      .populate("customerId", "fullName")
-      .populate("employeeId", "fullName")
+      .populate("customerId", "fullName") // Đảm bảo populate fullName của khách hàng
+      .populate("employeeId", "fullName") // Đảm bảo populate fullName của nhân viên
       .populate("products.productId", "name")
       .sort({ createdAt: -1 });
 
-    if (orQuery) {
-      const filteredOrders = orders.filter((order) => {
+    // *** Thêm logic lọc theo searchQuery TẠI BACKEND sau khi populate ***
+    if (searchQuery) {
+      const lowerCaseSearchQuery = searchQuery.toLowerCase();
+      orders = orders.filter((order) => {
         const customerName = order.customerId?.fullName || "";
         const employeeName = order.employeeId?.fullName || "";
+
+        // Kiểm tra xem searchQuery có khớp với mã đơn hàng, tên khách hàng hoặc tên nhân viên không
         const orderNumberMatch = order.orderNumber
           .toLowerCase()
-          .includes(orQuery.toLowerCase());
+          .includes(lowerCaseSearchQuery);
         const customerNameMatch = customerName
           .toLowerCase()
-          .includes(orQuery.toLowerCase());
+          .includes(lowerCaseSearchQuery);
         const employeeNameMatch = employeeName
           .toLowerCase()
-          .includes(orQuery.toLowerCase());
+          .includes(lowerCaseSearchQuery);
+
         return orderNumberMatch || customerNameMatch || employeeNameMatch;
       });
-      return res.status(200).json(filteredOrders);
     }
 
     res.status(200).json(orders);
@@ -635,12 +652,11 @@ exports.updateReservedQuantities = async (oldProducts, newProducts) => {
     }
   }
 };
-
 exports.completePreorderPayment = async (req, res) => {
   try {
     const { orderId } = req.params;
     const { amountPaid } = req.body;
-
+    const employeeId = req.user ? req.user._id : null;
     if (typeof amountPaid !== "number" || amountPaid <= 0) {
       return res
         .status(400)
@@ -662,14 +678,15 @@ exports.completePreorderPayment = async (req, res) => {
 
     order.paymentStatus = "paid";
     order.amountPaid = parseFloat(amountPaid.toFixed(2));
-
-    // Tính toán tiền thừa (nếu có)
+    if (employeeId) {
+      order.employeeId = employeeId;
+    } else {
+      console.warn("Không tìm thấy ID người dùng để gán vào 'employeeId'.");
+    }
     const changeAmount = parseFloat(
       (amountPaid - order.finalAmount).toFixed(2)
     );
     order.changeAmount = changeAmount >= 0 ? changeAmount : 0;
-
-    // Cập nhật số lượng tồn kho trong các batch
     for (const productInfo of order.products) {
       const product = await Product.findById(productInfo.productId);
       const baseUnit = product.units.find((u) => u.ratio === 1);
@@ -682,9 +699,9 @@ exports.completePreorderPayment = async (req, res) => {
           if (typeof batchInfo.quantity === "number") {
             await Batch.findByIdAndUpdate(batchInfo.batchId, {
               $inc: {
-                quantity_on_shelf: -(batchInfo.quantity / baseUnit.ratio),
+                remaining_quantity: -(batchInfo.quantity / baseUnit.ratio),
                 sold_quantity: batchInfo.quantity / baseUnit.ratio,
-                reserved_quantity: -(batchInfo.quantity / baseUnit.ratio), // Giảm số lượng đã đặt trước
+                reserved_quantity: -(batchInfo.quantity / baseUnit.ratio),
               },
             });
           }
@@ -760,12 +777,16 @@ exports.getProductPerformance = async (req, res) => {
 
     // Get least selling products
     const leastSellingPipeline = [...pipeline];
-    leastSellingPipeline[leastSellingPipeline.length - 2] = { $sort: { totalQuantity: 1 } };
+    leastSellingPipeline[leastSellingPipeline.length - 2] = {
+      $sort: { totalQuantity: 1 },
+    };
     const leastSellingProducts = await Order.aggregate(leastSellingPipeline);
 
     // Get top revenue products
     const topRevenuePipeline = [...pipeline];
-    topRevenuePipeline[topRevenuePipeline.length - 2] = { $sort: { totalRevenue: -1 } };
+    topRevenuePipeline[topRevenuePipeline.length - 2] = {
+      $sort: { totalRevenue: -1 },
+    };
     const topRevenueProducts = await Order.aggregate(topRevenuePipeline);
 
     res.status(200).json({
@@ -779,5 +800,128 @@ exports.getProductPerformance = async (req, res) => {
       message: "Lỗi khi lấy thống kê hiệu suất sản phẩm",
       error: error.message,
     });
+  }
+};
+exports.cancelBatch = async (req, res) => {
+  try {
+    const { batchId, reason } = req.body;
+    const employeeId = req.user ? req.user._id : null;
+
+    const batch = await Batch.findById(batchId).populate("product");
+    if (!batch) {
+      return res.status(404).json({ message: "Không tìm thấy lô hàng." });
+    }
+
+    // Lấy tổng số lượng còn lại của lô (cả trên quầy và chưa xuất)
+    const quantity_on_shelf =
+      typeof batch.quantity_on_shelf === "number" ? batch.quantity_on_shelf : 0;
+    const remaining_quantity =
+      typeof batch.remaining_quantity === "number"
+        ? batch.remaining_quantity
+        : 0;
+    const quantity = quantity_on_shelf + remaining_quantity;
+
+    if (quantity <= 0) {
+      return res
+        .status(400)
+        .json({ message: "Lô hàng không còn sản phẩm để hủy." });
+    }
+
+    // Kiểm tra các preorder đang giữ hàng trong lô này
+    const affectedOrders = await Order.find({
+      orderType: "preorder",
+      status: "pending",
+      "products.batchesUsed.batchId": batchId,
+    });
+
+    for (const order of affectedOrders) {
+      let needUpdate = false;
+      for (const product of order.products) {
+        const batchUsed = product.batchesUsed.find((b) =>
+          b.batchId.equals(batchId)
+        );
+        if (batchUsed) {
+          // Tìm batch khác cùng sản phẩm, còn đủ hàng để chuyển reserved
+          const otherBatches = await Batch.find({
+            _id: { $ne: batchId },
+            product: product.productId,
+            status: "hoạt động",
+            expiry_day: { $gte: new Date(Date.now() + 14 * 86400000) },
+            $expr: {
+              $gte: [
+                { $subtract: ["$remaining_quantity", "$reserved_quantity"] },
+                batchUsed.quantity,
+              ],
+            },
+          }).sort({ expiry_day: 1 });
+
+          if (otherBatches.length === 0) {
+            return res.status(400).json({
+              message: `Không thể hủy lô vì đơn đặt trước ${order.orderNumber} đang giữ hàng trong lô này và không còn lô thay thế.`,
+            });
+          }
+          const newBatch = otherBatches[0];
+          // Giảm reserved ở batch cũ
+          await Batch.findByIdAndUpdate(batchId, {
+            $inc: { reserved_quantity: -batchUsed.quantity },
+          });
+          // Tăng reserved ở batch mới
+          await Batch.findByIdAndUpdate(newBatch._id, {
+            $inc: { reserved_quantity: batchUsed.quantity },
+          });
+          // Cập nhật order
+          product.batchesUsed = product.batchesUsed
+            .filter((b) => !b.batchId.equals(batchId))
+            .concat([{ batchId: newBatch._id, quantity: batchUsed.quantity }]);
+          needUpdate = true;
+        }
+      }
+      if (needUpdate) await order.save();
+    }
+
+    // Tạo hóa đơn 0 đồng cho toàn bộ số lượng bị hủy
+    const order = new Order({
+      orderType: "instore",
+      products: [
+        {
+          productId: batch.product._id,
+          quantity: quantity,
+          selectedUnitName: batch.product.units.find((u) => u.ratio === 1).name,
+          unitPrice: 0,
+          originalUnitPrice: 0,
+          batchesUsed: [{ batchId: batch._id, quantity }],
+          itemTotal: 0,
+        },
+      ],
+      totalAmount: 0,
+      finalAmount: 0,
+      paymentStatus: "paid",
+      status: "completed",
+      employeeId,
+      note: `Hủy lô hàng: ${reason || ""}`,
+      orderNumber: uuidv4(),
+    });
+    await order.save();
+
+    // Trừ toàn bộ số lượng khỏi batch
+  await Batch.findByIdAndUpdate(batchId, {
+  $inc: {
+    quantity_on_shelf: -quantity_on_shelf,
+    remaining_quantity: -remaining_quantity,
+    lost_quantity: quantity_on_shelf + remaining_quantity,
+  },
+  $set: {
+    status: "hết hạn", // Đổi trạng thái lô
+  },
+});
+
+    res
+      .status(200)
+      .json({ message: "Đã hủy lô hàng và tạo hóa đơn 0 đồng.", order });
+  } catch (error) {
+    console.error("Lỗi khi hủy lô hàng:", error);
+    res
+      .status(500)
+      .json({ message: "Lỗi khi hủy lô hàng", error: error.message });
   }
 };
