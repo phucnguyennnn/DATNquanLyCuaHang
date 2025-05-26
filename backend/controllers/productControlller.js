@@ -901,13 +901,12 @@ exports.getProductsWithStockDetails = async (req, res) => {
       error: error.message,
     });
   }
-}; exports.getProductsWithBatches = async (req, res) => {
+};
+ exports.getProductsWithBatches = async (req, res) => {
   try {
     const query = {
       batches: { $exists: true, $not: { $size: 0 } }
     };
-
-    // Kiểm tra xem có tham số category trong query không
     if (req.query.category) {
       query.category = req.query.category;
     }

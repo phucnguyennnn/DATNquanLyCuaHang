@@ -316,7 +316,7 @@ exports.handleInstoreOrder = async (req, res) => {
         if (batch) {
           // Tính giá chính xác dựa trên discount (nếu có)
           let batchPrice;
-          if (typeof batch.getDiscountedPrice === 'function') {
+          if (typeof batch.getDiscountedPrice === "function") {
             batchPrice = await batch.getDiscountedPrice();
           } else if (batch.discountInfo && batch.discountInfo.isDiscounted) {
             const discountValue = batch.discountInfo.discountValue || 0;
@@ -421,8 +421,20 @@ exports.getOrderById = async (req, res) => {
 
 exports.getAllOrders = async (req, res) => {
   try {
-    const { $or: orQuery, startDate, endDate, ...otherQueries } = req.query;
+    const {
+      searchQuery, // Lấy trực tiếp searchQuery từ req.query
+      startDate,
+      endDate,
+      paymentStatus,
+      ...otherQueries
+    } = req.query;
+
     const query = { ...otherQueries };
+
+    // Xử lý filter theo trạng thái thanh toán
+    if (paymentStatus && paymentStatus !== "") {
+      query.paymentStatus = paymentStatus;
+    }
 
     // Xử lý filter theo thời gian
     if (startDate && endDate) {
@@ -432,28 +444,33 @@ exports.getAllOrders = async (req, res) => {
       };
     }
 
+    // Lấy tất cả đơn hàng khớp với các điều kiện lọc ban đầu và populate dữ liệu liên quan
     let orders = await Order.find(query)
-      .populate("customerId", "fullName")
-      .populate("employeeId", "fullName")
+      .populate("customerId", "fullName") // Đảm bảo populate fullName của khách hàng
+      .populate("employeeId", "fullName") // Đảm bảo populate fullName của nhân viên
       .populate("products.productId", "name")
       .sort({ createdAt: -1 });
 
-    if (orQuery) {
-      const filteredOrders = orders.filter((order) => {
+    // *** Thêm logic lọc theo searchQuery TẠI BACKEND sau khi populate ***
+    if (searchQuery) {
+      const lowerCaseSearchQuery = searchQuery.toLowerCase();
+      orders = orders.filter((order) => {
         const customerName = order.customerId?.fullName || "";
         const employeeName = order.employeeId?.fullName || "";
+        
+        // Kiểm tra xem searchQuery có khớp với mã đơn hàng, tên khách hàng hoặc tên nhân viên không
         const orderNumberMatch = order.orderNumber
           .toLowerCase()
-          .includes(orQuery.toLowerCase());
+          .includes(lowerCaseSearchQuery);
         const customerNameMatch = customerName
           .toLowerCase()
-          .includes(orQuery.toLowerCase());
+          .includes(lowerCaseSearchQuery);
         const employeeNameMatch = employeeName
           .toLowerCase()
-          .includes(orQuery.toLowerCase());
+          .includes(lowerCaseSearchQuery);
+        
         return orderNumberMatch || customerNameMatch || employeeNameMatch;
       });
-      return res.status(200).json(filteredOrders);
     }
 
     res.status(200).json(orders);
@@ -635,11 +652,14 @@ exports.updateReservedQuantities = async (oldProducts, newProducts) => {
     }
   }
 };
-
 exports.completePreorderPayment = async (req, res) => {
   try {
     const { orderId } = req.params;
     const { amountPaid } = req.body;
+
+    // Giả sử thông tin người dùng đang đăng nhập (nhân viên) được lưu trong req.user.
+    // Bạn cần đảm bảo middleware xác thực đã gắn req.user vào request và req.user._id là ID của nhân viên.
+    const employeeId = req.user ? req.user._id : null; 
 
     if (typeof amountPaid !== "number" || amountPaid <= 0) {
       return res
@@ -662,6 +682,14 @@ exports.completePreorderPayment = async (req, res) => {
 
     order.paymentStatus = "paid";
     order.amountPaid = parseFloat(amountPaid.toFixed(2));
+
+    // Thêm thông tin ID nhân viên hoàn thành thanh toán
+    if (employeeId) {
+      order.employeeId = employeeId; // Gán ID nhân viên vào trường 'employeeId'
+    } else {
+      // Tùy chọn: Xử lý trường hợp không có thông tin người dùng đăng nhập
+      console.warn("Không tìm thấy ID người dùng để gán vào 'employeeId'.");
+    }
 
     // Tính toán tiền thừa (nếu có)
     const changeAmount = parseFloat(
@@ -760,12 +788,16 @@ exports.getProductPerformance = async (req, res) => {
 
     // Get least selling products
     const leastSellingPipeline = [...pipeline];
-    leastSellingPipeline[leastSellingPipeline.length - 2] = { $sort: { totalQuantity: 1 } };
+    leastSellingPipeline[leastSellingPipeline.length - 2] = {
+      $sort: { totalQuantity: 1 },
+    };
     const leastSellingProducts = await Order.aggregate(leastSellingPipeline);
 
     // Get top revenue products
     const topRevenuePipeline = [...pipeline];
-    topRevenuePipeline[topRevenuePipeline.length - 2] = { $sort: { totalRevenue: -1 } };
+    topRevenuePipeline[topRevenuePipeline.length - 2] = {
+      $sort: { totalRevenue: -1 },
+    };
     const topRevenueProducts = await Order.aggregate(topRevenuePipeline);
 
     res.status(200).json({
