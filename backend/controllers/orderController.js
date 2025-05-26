@@ -804,25 +804,36 @@ exports.getProductPerformance = async (req, res) => {
 };
 exports.cancelBatch = async (req, res) => {
   try {
-    const { batchId, quantity, reason } = req.body;
+    const { batchId, reason } = req.body;
     const employeeId = req.user ? req.user._id : null;
 
     const batch = await Batch.findById(batchId).populate("product");
     if (!batch) {
       return res.status(404).json({ message: "Không tìm thấy lô hàng." });
     }
-    if (quantity <= 0 || quantity > batch.quantity_on_shelf) {
-      return res.status(400).json({ message: "Số lượng hủy không hợp lệ." });
+
+    // Lấy tổng số lượng còn lại của lô (cả trên quầy và chưa xuất)
+    const quantity_on_shelf =
+      typeof batch.quantity_on_shelf === "number" ? batch.quantity_on_shelf : 0;
+    const remaining_quantity =
+      typeof batch.remaining_quantity === "number"
+        ? batch.remaining_quantity
+        : 0;
+    const quantity = quantity_on_shelf + remaining_quantity;
+
+    if (quantity <= 0) {
+      return res
+        .status(400)
+        .json({ message: "Lô hàng không còn sản phẩm để hủy." });
     }
 
-    // 1. Tìm các preorder đang sử dụng batch này
+    // Kiểm tra các preorder đang giữ hàng trong lô này
     const affectedOrders = await Order.find({
       orderType: "preorder",
       status: "pending",
       "products.batchesUsed.batchId": batchId,
     });
 
-    // 2. Thử chuyển reserved sang batch khác
     for (const order of affectedOrders) {
       let needUpdate = false;
       for (const product of order.products) {
@@ -830,7 +841,7 @@ exports.cancelBatch = async (req, res) => {
           b.batchId.equals(batchId)
         );
         if (batchUsed) {
-          // Tìm batch khác cùng sản phẩm, còn đủ hàng
+          // Tìm batch khác cùng sản phẩm, còn đủ hàng để chuyển reserved
           const otherBatches = await Batch.find({
             _id: { $ne: batchId },
             product: product.productId,
@@ -849,8 +860,6 @@ exports.cancelBatch = async (req, res) => {
               message: `Không thể hủy lô vì đơn đặt trước ${order.orderNumber} đang giữ hàng trong lô này và không còn lô thay thế.`,
             });
           }
-
-          // Chuyển reserved sang batch khác
           const newBatch = otherBatches[0];
           // Giảm reserved ở batch cũ
           await Batch.findByIdAndUpdate(batchId, {
@@ -870,9 +879,9 @@ exports.cancelBatch = async (req, res) => {
       if (needUpdate) await order.save();
     }
 
-    // 3. Tạo hóa đơn 0 đồng như cũ
+    // Tạo hóa đơn 0 đồng cho toàn bộ số lượng bị hủy
     const order = new Order({
-      orderType: "cancel_batch",
+      orderType: "instore",
       products: [
         {
           productId: batch.product._id,
@@ -894,10 +903,17 @@ exports.cancelBatch = async (req, res) => {
     });
     await order.save();
 
-    // Cập nhật tồn kho
-    await Batch.findByIdAndUpdate(batchId, {
-      $inc: { quantity_on_shelf: -quantity },
-    });
+    // Trừ toàn bộ số lượng khỏi batch
+  await Batch.findByIdAndUpdate(batchId, {
+  $inc: {
+    quantity_on_shelf: -quantity_on_shelf,
+    remaining_quantity: -remaining_quantity,
+    lost_quantity: quantity_on_shelf + remaining_quantity,
+  },
+  $set: {
+    status: "hết hạn", // Đổi trạng thái lô
+  },
+});
 
     res
       .status(200)
