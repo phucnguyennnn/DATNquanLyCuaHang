@@ -16,8 +16,62 @@ exports.addToCart = async (req, res) => {
     let itemsToAdd = req.body;
 
     if (!Array.isArray(itemsToAdd)) {
-      // Nếu req.body không phải là mảng, coi nó là một sản phẩm duy nhất
       itemsToAdd = [req.body];
+    }
+
+    // Nếu không đăng nhập thì trả về giỏ hàng rỗng (FE sẽ dùng localCart)
+    if (!req.user || !req.user._id) {
+      return res.status(200).json({ items: [], total: 0 });
+    }
+
+    // Nếu có header x-sync-localcart=true thì luôn ghi đè giỏ hàng bằng localCart FE gửi lên
+    if (req.headers["x-sync-localcart"] === "true") {
+      let cart = await Cart.findOne({ user: req.user._id });
+      if (!cart) {
+        cart = new Cart({ user: req.user._id, items: [] });
+      } else {
+        cart.items = [];
+      }
+      
+      for (const itemData of itemsToAdd) {
+        const { productId, quantity, selectedUnitName } = itemData;
+        const quantityToAdd = parseInt(quantity, 10);
+
+        if (!isValidObjectId(productId)) {
+          continue; // Bỏ qua item không hợp lệ thay vì return error
+        }
+        if (!Number.isInteger(quantityToAdd) || quantityToAdd < 1) {
+          continue;
+        }
+        if (!selectedUnitName) {
+          continue;
+        }
+        
+        const product = await Product.findById(productId);
+        if (!product || !product.active) {
+          continue;
+        }
+        
+        const selectedUnit = product.units.find((u) => u.name === selectedUnitName);
+        if (!selectedUnit) {
+          continue;
+        }
+        
+        cart.items.push({
+          product: productId,
+          quantity: quantityToAdd,
+          selectedUnitName: selectedUnitName,
+          unitPrice: selectedUnit.salePrice,
+        });
+      }
+      
+      cart.total = cart.items.reduce(
+        (total, item) => total + item.quantity * item.unitPrice,
+        0
+      );
+      await cart.save();
+      await cart.populate("items.product", "name units images");
+      return res.status(200).json({ message: "Đã đồng bộ giỏ hàng từ local", cart });
     }
 
     const cart = await Cart.findOne({ user: req.user._id });

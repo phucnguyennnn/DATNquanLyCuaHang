@@ -214,6 +214,9 @@ const ProductListPage = () => {
     if (!authToken) {
       // Lưu vào localCart nếu chưa đăng nhập
       const localCart = getLocalCart();
+      const baseUnit = product.units.find((unit) => unit.ratio === 1);
+      const unitPrice = baseUnit ? baseUnit.salePrice : 0;
+      
       // Nếu đã có sản phẩm này với đơn vị này thì cộng dồn số lượng
       const idx = localCart.findIndex(
         (item) =>
@@ -228,6 +231,7 @@ const ProductListPage = () => {
           selectedUnitName,
           productName: product.name,
           productImage: product.images && product.images.length > 0 ? product.images[0] : "",
+          unitPrice: unitPrice,
         });
       }
       setLocalCart(localCart);

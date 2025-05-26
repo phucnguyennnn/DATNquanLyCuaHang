@@ -724,8 +724,8 @@ const CartPage = () => {
                           variant="h6"
                           sx={{ minWidth: 120, textAlign: "right" }}
                         >
-                          {/* Không có giá, chỉ hiển thị số lượng */}
-                          x{item.quantity}
+                          {/* Hiển thị giá nếu có */}
+                          {item.unitPrice ? formatCurrency(item.quantity * item.unitPrice) : `x${item.quantity}`}
                         </Typography>
                         <IconButton
                           onClick={() =>
@@ -762,8 +762,11 @@ const CartPage = () => {
               >
                 <Typography variant="body1">Tạm tính:</Typography>
                 <Typography variant="body1">
-                  {/* Không có giá, chỉ hiển thị số lượng */}
-                  {localCart.reduce((sum, item) => sum + item.quantity, 0)} sản phẩm
+                  {/* Hiển thị tổng giá nếu có, nếu không thì hiển thị số lượng */}
+                  {localCart.some(item => item.unitPrice) ? 
+                    formatCurrency(localCart.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0)) :
+                    `${localCart.reduce((sum, item) => sum + item.quantity, 0)} sản phẩm`
+                  }
                 </Typography>
               </Box>
               <Divider sx={{ my: 3 }} />
