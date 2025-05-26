@@ -14,7 +14,9 @@ const userRouter = require('./routers/userRouter');
 const cartRouter = require('./routers/cartRouter');
 const orderRouter = require('./routers/orderRouter');
 const returnRouter = require('./routers/returnRouter');
+const PriceHistory = require('./routers/priceHistoryRoutes');
 const session = require('express-session');
+
 
 dotenv.config();
 
@@ -70,3 +72,4 @@ app.use('/api/goodReceipt', goodReceiptRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/orders', orderRouter);
 app.use('/api/returns', returnRouter);
+app.use('/api/priceHistory', PriceHistory);

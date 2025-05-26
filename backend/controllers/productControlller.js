@@ -2,6 +2,7 @@ const Product = require("../models/Product");
 const Category = require("../models/Category");
 const Supplier = require("../models/Supplier");
 const Batch = require("../models/Batch");
+const PriceHistory = require("../models/PriceHistory");
 const { isValidObjectId } = require("mongoose");
 
 // Helper function to parse JSON fields
@@ -366,6 +367,9 @@ exports.updateProduct = async (req, res) => {
       });
     }
 
+    // Store original units for price history comparison
+    const originalUnits = JSON.parse(JSON.stringify(product.units));
+
     // Parse JSON fields
     if (typeof updates.expiryDiscountRules === "string") {
       updates.expiryDiscountRules = parseJsonField(updates.expiryDiscountRules);
@@ -479,6 +483,25 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
+    // Handle price changes in units and create price history
+    if (updates.units && Array.isArray(updates.units)) {
+      for (const newUnit of updates.units) {
+        const originalUnit = originalUnits.find(u => u.name === newUnit.name);
+
+        if (originalUnit && originalUnit.salePrice !== newUnit.salePrice) {
+          // Create price history for sale price change
+          await PriceHistory.createPriceHistory({
+            productId: id,
+            unitName: newUnit.name,
+            oldPrice: originalUnit.salePrice,
+            newPrice: newUnit.salePrice,
+            changedBy: req.user._id,
+            reason: req.body.priceChangeReason || "Cập nhật giá sản phẩm",
+          });
+        }
+      }
+    }
+
     // --- Chuẩn hóa cập nhật expiryThresholdDays và lowQuantityThreshold ---
     if (updates.expiryThresholdDays !== undefined) {
       if (
@@ -549,6 +572,54 @@ exports.updateProduct = async (req, res) => {
     });
   } catch (error) {
     console.error("Update product error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error.",
+      error: error.message,
+    });
+  }
+};
+
+// Add new endpoint to get price history
+exports.getProductPriceHistory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 20, unitName } = req.query;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID.",
+      });
+    }
+
+    const query = { productId: id };
+    if (unitName) {
+      query.unitName = unitName;
+    }
+
+    const priceHistory = await PriceHistory.find(query)
+      .populate('changedBy', 'fullName username')
+      .populate('batchId', 'batchCode')
+      .sort({ changeDate: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await PriceHistory.countDocuments(query);
+
+    return res.status(200).json({
+      success: true,
+      data: priceHistory,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalRecords: total,
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
+      },
+    });
+  } catch (error) {
+    console.error("Get price history error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error.",

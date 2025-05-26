@@ -31,6 +31,7 @@ import ReturnHistory from "../pages/ReturnHistory";
 import InventoryPage from "../pages/InventoryHistory";
 import InOutPage from "../pages/inoutpage";
 import ProductPerformance from "../pages/ProductPerformance";
+import PriceHistory from "../pages/PriceHistory";
 
 
 const useAuth = () => {
@@ -186,6 +187,15 @@ const AppRouter = () => {
               <ProtectedRoute
                 allowedRoles={["admin"]}
                 children={<ProductPerformance />}
+              />
+            }
+          />
+          <Route
+            path="price-history"
+            element={
+              <ProtectedRoute
+                allowedRoles={["admin"]}
+                children={<PriceHistory />}
               />
             }
           />

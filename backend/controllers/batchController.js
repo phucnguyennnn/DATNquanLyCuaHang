@@ -1,6 +1,7 @@
 const Batch = require("../models/Batch");
 const Supplier = require("../models/Supplier");
 const Product = require("../models/Product");
+const PriceHistory = require("../models/PriceHistory");
 const mongoose = require("mongoose");
 
 // Helper function để cập nhật trạng thái batch
@@ -144,16 +145,64 @@ exports.getAllBatches = async (req, res) => {
 };
 exports.updateBatch = async (req, res) => {
   try {
+    const batchId = req.params.id;
+    const updates = req.body;
+
+    // Get original batch for comparison
+    const originalBatch = await Batch.findById(batchId).populate('product');
+    if (!originalBatch) {
+      return res.status(404).json({ message: "Lô hàng không tồn tại" });
+    }
+
+    // Check for discount changes
+    if (updates.discountInfo && originalBatch.discountInfo) {
+      const oldDiscount = originalBatch.discountInfo;
+      const newDiscount = updates.discountInfo;
+
+      // If discount status or value changed, create price history
+      if (
+        oldDiscount.isDiscounted !== newDiscount.isDiscounted ||
+        oldDiscount.discountValue !== newDiscount.discountValue ||
+        oldDiscount.discountType !== newDiscount.discountType
+      ) {
+        const product = originalBatch.product;
+        const baseUnit = product.units.find(u => u.ratio === 1);
+
+        if (baseUnit) {
+          const oldPrice = oldDiscount.isDiscounted
+            ? (oldDiscount.discountType === 'percentage'
+              ? baseUnit.salePrice * (1 - oldDiscount.discountValue / 100)
+              : Math.max(0, baseUnit.salePrice - oldDiscount.discountValue))
+            : baseUnit.salePrice;
+
+          const newPrice = newDiscount.isDiscounted
+            ? (newDiscount.discountType === 'percentage'
+              ? baseUnit.salePrice * (1 - newDiscount.discountValue / 100)
+              : Math.max(0, baseUnit.salePrice - newDiscount.discountValue))
+            : baseUnit.salePrice;
+
+          await PriceHistory.createPriceHistory({
+            productId: product._id,
+            unitName: baseUnit.name,
+            oldPrice: oldPrice,
+            newPrice: newPrice,
+            changedBy: req.user._id,
+            reason: `Thay đổi giảm giá lô hàng: ${newDiscount.discountReason || 'Không rõ lý do'}`,
+            batchId: batchId,
+          });
+        }
+      }
+    }
+
     const updatedBatch = await Batch.findByIdAndUpdate(
-      req.params.id,
-      req.body,
+      batchId,
+      updates,
       { new: true }
     )
       .populate("product", "name SKU description createdAt updatedAt images ")
       .populate("supplier", "name")
       .populate("goodReceipt", "receiptNumber");
-    if (!updatedBatch)
-      return res.status(404).json({ message: "Lô hàng không tồn tại" });
+
     res.status(200).json(updatedBatch);
   } catch (error) {
     res.status(500).json({ message: error.message });
