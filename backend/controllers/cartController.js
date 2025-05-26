@@ -285,6 +285,11 @@ exports.createCart = async (req, res) => {
 };
 exports.getCart = async (req, res) => {
   try {
+    // Nếu không đăng nhập, trả về giỏ hàng rỗng để FE lấy từ localStorage
+    if (!req.user || !req.user.id) {
+      return res.status(200).json({ items: [], total: 0 });
+    }
+
     const cart = await Cart.findOne({ user: req.user.id }).populate({
       path: "items.product",
       select: "name units images",
