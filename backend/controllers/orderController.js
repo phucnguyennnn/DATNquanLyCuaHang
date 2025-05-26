@@ -457,7 +457,7 @@ exports.getAllOrders = async (req, res) => {
       orders = orders.filter((order) => {
         const customerName = order.customerId?.fullName || "";
         const employeeName = order.employeeId?.fullName || "";
-        
+
         // Kiểm tra xem searchQuery có khớp với mã đơn hàng, tên khách hàng hoặc tên nhân viên không
         const orderNumberMatch = order.orderNumber
           .toLowerCase()
@@ -468,7 +468,7 @@ exports.getAllOrders = async (req, res) => {
         const employeeNameMatch = employeeName
           .toLowerCase()
           .includes(lowerCaseSearchQuery);
-        
+
         return orderNumberMatch || customerNameMatch || employeeNameMatch;
       });
     }
@@ -656,11 +656,7 @@ exports.completePreorderPayment = async (req, res) => {
   try {
     const { orderId } = req.params;
     const { amountPaid } = req.body;
-
-    // Giả sử thông tin người dùng đang đăng nhập (nhân viên) được lưu trong req.user.
-    // Bạn cần đảm bảo middleware xác thực đã gắn req.user vào request và req.user._id là ID của nhân viên.
-    const employeeId = req.user ? req.user._id : null; 
-
+    const employeeId = req.user ? req.user._id : null;
     if (typeof amountPaid !== "number" || amountPaid <= 0) {
       return res
         .status(400)
@@ -682,22 +678,15 @@ exports.completePreorderPayment = async (req, res) => {
 
     order.paymentStatus = "paid";
     order.amountPaid = parseFloat(amountPaid.toFixed(2));
-
-    // Thêm thông tin ID nhân viên hoàn thành thanh toán
     if (employeeId) {
-      order.employeeId = employeeId; // Gán ID nhân viên vào trường 'employeeId'
+      order.employeeId = employeeId;
     } else {
-      // Tùy chọn: Xử lý trường hợp không có thông tin người dùng đăng nhập
       console.warn("Không tìm thấy ID người dùng để gán vào 'employeeId'.");
     }
-
-    // Tính toán tiền thừa (nếu có)
     const changeAmount = parseFloat(
       (amountPaid - order.finalAmount).toFixed(2)
     );
     order.changeAmount = changeAmount >= 0 ? changeAmount : 0;
-
-    // Cập nhật số lượng tồn kho trong các batch
     for (const productInfo of order.products) {
       const product = await Product.findById(productInfo.productId);
       const baseUnit = product.units.find((u) => u.ratio === 1);
@@ -710,9 +699,9 @@ exports.completePreorderPayment = async (req, res) => {
           if (typeof batchInfo.quantity === "number") {
             await Batch.findByIdAndUpdate(batchInfo.batchId, {
               $inc: {
-                quantity_on_shelf: -(batchInfo.quantity / baseUnit.ratio),
+                remaining_quantity: -(batchInfo.quantity / baseUnit.ratio),
                 sold_quantity: batchInfo.quantity / baseUnit.ratio,
-                reserved_quantity: -(batchInfo.quantity / baseUnit.ratio), // Giảm số lượng đã đặt trước
+                reserved_quantity: -(batchInfo.quantity / baseUnit.ratio),
               },
             });
           }
@@ -811,5 +800,112 @@ exports.getProductPerformance = async (req, res) => {
       message: "Lỗi khi lấy thống kê hiệu suất sản phẩm",
       error: error.message,
     });
+  }
+};
+exports.cancelBatch = async (req, res) => {
+  try {
+    const { batchId, quantity, reason } = req.body;
+    const employeeId = req.user ? req.user._id : null;
+
+    const batch = await Batch.findById(batchId).populate("product");
+    if (!batch) {
+      return res.status(404).json({ message: "Không tìm thấy lô hàng." });
+    }
+    if (quantity <= 0 || quantity > batch.quantity_on_shelf) {
+      return res.status(400).json({ message: "Số lượng hủy không hợp lệ." });
+    }
+
+    // 1. Tìm các preorder đang sử dụng batch này
+    const affectedOrders = await Order.find({
+      orderType: "preorder",
+      status: "pending",
+      "products.batchesUsed.batchId": batchId,
+    });
+
+    // 2. Thử chuyển reserved sang batch khác
+    for (const order of affectedOrders) {
+      let needUpdate = false;
+      for (const product of order.products) {
+        const batchUsed = product.batchesUsed.find((b) =>
+          b.batchId.equals(batchId)
+        );
+        if (batchUsed) {
+          // Tìm batch khác cùng sản phẩm, còn đủ hàng
+          const otherBatches = await Batch.find({
+            _id: { $ne: batchId },
+            product: product.productId,
+            status: "hoạt động",
+            expiry_day: { $gte: new Date(Date.now() + 14 * 86400000) },
+            $expr: {
+              $gte: [
+                { $subtract: ["$remaining_quantity", "$reserved_quantity"] },
+                batchUsed.quantity,
+              ],
+            },
+          }).sort({ expiry_day: 1 });
+
+          if (otherBatches.length === 0) {
+            return res.status(400).json({
+              message: `Không thể hủy lô vì đơn đặt trước ${order.orderNumber} đang giữ hàng trong lô này và không còn lô thay thế.`,
+            });
+          }
+
+          // Chuyển reserved sang batch khác
+          const newBatch = otherBatches[0];
+          // Giảm reserved ở batch cũ
+          await Batch.findByIdAndUpdate(batchId, {
+            $inc: { reserved_quantity: -batchUsed.quantity },
+          });
+          // Tăng reserved ở batch mới
+          await Batch.findByIdAndUpdate(newBatch._id, {
+            $inc: { reserved_quantity: batchUsed.quantity },
+          });
+          // Cập nhật order
+          product.batchesUsed = product.batchesUsed
+            .filter((b) => !b.batchId.equals(batchId))
+            .concat([{ batchId: newBatch._id, quantity: batchUsed.quantity }]);
+          needUpdate = true;
+        }
+      }
+      if (needUpdate) await order.save();
+    }
+
+    // 3. Tạo hóa đơn 0 đồng như cũ
+    const order = new Order({
+      orderType: "cancel_batch",
+      products: [
+        {
+          productId: batch.product._id,
+          quantity: quantity,
+          selectedUnitName: batch.product.units.find((u) => u.ratio === 1).name,
+          unitPrice: 0,
+          originalUnitPrice: 0,
+          batchesUsed: [{ batchId: batch._id, quantity }],
+          itemTotal: 0,
+        },
+      ],
+      totalAmount: 0,
+      finalAmount: 0,
+      paymentStatus: "paid",
+      status: "completed",
+      employeeId,
+      note: `Hủy lô hàng: ${reason || ""}`,
+      orderNumber: uuidv4(),
+    });
+    await order.save();
+
+    // Cập nhật tồn kho
+    await Batch.findByIdAndUpdate(batchId, {
+      $inc: { quantity_on_shelf: -quantity },
+    });
+
+    res
+      .status(200)
+      .json({ message: "Đã hủy lô hàng và tạo hóa đơn 0 đồng.", order });
+  } catch (error) {
+    console.error("Lỗi khi hủy lô hàng:", error);
+    res
+      .status(500)
+      .json({ message: "Lỗi khi hủy lô hàng", error: error.message });
   }
 };

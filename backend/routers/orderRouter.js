@@ -18,6 +18,7 @@ router.get("/:orderId", orderController.getOrderById);
 // Route để cập nhật thông tin phiếu đặt trước
 router.patch("/:orderId", orderController.updatePreorder);
 
+router.post("/cancel-batch", orderController.cancelBatch);
 // Route để hoàn thành thanh toán phiếu đặt trước
 router.post(
   "/:orderId/complete-payment",

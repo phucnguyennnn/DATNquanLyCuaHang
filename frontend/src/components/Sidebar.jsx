@@ -5,7 +5,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Divider,
   Collapse,
   Dialog,
   DialogTitle,
@@ -13,15 +12,12 @@ import {
   DialogActions,
   Button,
   Box,
-  Typography,
-  Avatar,
   useTheme,
   alpha,
   styled,
 } from "@mui/material";
 import {
   Home,
-  ShoppingCart,
   Settings,
   AccountCircle,
   Logout,
@@ -29,29 +25,24 @@ import {
   ExpandLess,
   ExpandMore,
   Description,
-  AddBox,
   Inventory,
   RecentActors,
-  BusinessCenter,
   PointOfSale,
   Category,
   Handshake,
-  Storefront,
   DashboardCustomize,
   Inventory2,
   MoveToInbox,
-  History as HistoryIcon,
-  BarChart, // Thêm icon cho thống kê
-  Receipt, // Thêm icon cho báo cáo thu chi
+  BarChart,
+  Receipt,
   ProductionQuantityLimits,
-  PriceChange, // Thêm icon cho lịch sử thay đổi giá
+  PriceChange,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
 const drawerWidth = 260;
 
-// Custom styled components for better UI
 const StyledListItemButton = styled(ListItemButton)(({ theme, active }) => ({
   margin: "4px 8px",
   borderRadius: "8px",
@@ -99,7 +90,7 @@ const Sidebar = () => {
   const [openDashboard, setOpenDashboard] = useState(false);
   const [openLogoutDialog, setOpenLogoutDialog] = useState(false);
   const [openStockManagement, setOpenStockManagement] = useState(false);
-  const [openStatistics, setOpenStatistics] = useState(false); // State cho mục Thống kê
+  const [openStatistics, setOpenStatistics] = useState(false);
   const [localRole, setLocalRole] = useState(localStorage.getItem("userRole"));
   const fullName = localStorage.getItem("fullName") || "Người dùng";
 
@@ -112,17 +103,13 @@ const Sidebar = () => {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  // Re-render Sidebar when the route changes to update the role-based menus
   useEffect(() => {
     setLocalRole(localStorage.getItem("userRole"));
-  }, [location.pathname]); // Theo dõi sự thay đổi của location.pathname
+  }, [location.pathname]);
 
   const role = localRole;
 
-  // Function to check if the current path matches
   const isActive = (path) => location.pathname === path;
-
-  // Function to check if the current path starts with a prefix
   const isActiveGroup = (prefix) => location.pathname.startsWith(prefix);
 
   const handleLogout = async () => {
@@ -130,10 +117,7 @@ const Sidebar = () => {
       const token = localStorage.getItem("authToken");
 
       if (token) {
-        console.log("Tìm thấy token:", token);
         navigate("/login");
-      } else {
-        console.log("Không tìm thấy Token.");
       }
 
       const response = await axios.post(
@@ -154,13 +138,9 @@ const Sidebar = () => {
         localStorage.removeItem("fullName");
         localStorage.removeItem("role");
         localStorage.removeItem("userName");
-        console.log("Đăng xuất thành công!");
         navigate("/login");
-      } else {
-        console.error("Đăng xuất thất bại:", response.status);
       }
     } catch (error) {
-      console.error("Lỗi đăng xuất:", error.response?.data || error.message);
       if (error.response?.status === 403) {
         localStorage.removeItem("authToken");
         localStorage.removeItem("userID");
@@ -183,9 +163,45 @@ const Sidebar = () => {
     handleLogout();
   };
 
-  // Nếu là customer, không hiển thị Sidebar
+  // Nếu là customer, chỉ hiển thị Trang chủ
   if (role === "customer") {
-    return null;
+    return (
+      <Drawer
+        sx={{
+          width: drawerWidth,
+          flexShrink: 0,
+          "& .MuiDrawer-paper": {
+            width: drawerWidth,
+            boxSizing: "border-box",
+            boxShadow: "0 4px 12px 0 rgba(0,0,0,0.05)",
+            border: "none",
+          },
+        }}
+        variant="permanent"
+        anchor="left"
+      >
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+            backgroundColor: theme.palette.background.paper,
+          }}
+        >
+          <List sx={{ p: 1 }}>
+            <StyledListItemButton
+              onClick={() => navigate("/homepage")}
+              active={isActive("/homepage") ? 1 : 0}
+            >
+              <ListItemIcon>
+                <Home />
+              </ListItemIcon>
+              <ListItemText primary="Trang chủ" />
+            </StyledListItemButton>
+          </List>
+        </Box>
+      </Drawer>
+    );
   }
 
   return (
@@ -212,73 +228,8 @@ const Sidebar = () => {
             backgroundColor: theme.palette.background.paper,
           }}
         >
-          {/* Logo and User Info Section
-          <Box
-            sx={{
-              p: 2,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              borderBottom: `1px solid ${theme.palette.divider}`,
-              mb: 1,
-              pt: 3,
-            }}
-          >
-            <Typography
-              variant="h5"
-              sx={{
-                fontWeight: 'bold',
-                color: theme.palette.primary.main,
-                mb: 3,
-              }}
-            >
-              STORE MANAGEMENT
-            </Typography>
-            <Avatar
-              sx={{
-                width: 60,
-                height: 60,
-                mb: 1,
-                bgcolor: theme.palette.primary.main
-              }}
-            >
-              {fullName.charAt(0)}
-            </Avatar>
-            <Typography
-              variant="subtitle1"
-              sx={{
-                fontWeight: 'medium',
-                color: theme.palette.text.primary,
-                mb: 0.5
-              }}
-            >
-              {fullName}
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: theme.palette.text.secondary,
-                textTransform: 'capitalize'
-              }}
-            >
-              {role || 'user'}
-            </Typography>
-          </Box> */}
-
-          {/* Main Navigation */}
           <List sx={{ p: 1 }}>
-            {/* Home - Hiển thị cho tất cả các role */}
-            <StyledListItemButton
-              onClick={() => navigate("/homepage")}
-              active={isActive("/homepage") ? 1 : 0}
-            >
-              <ListItemIcon>
-                <Home />
-              </ListItemIcon>
-              <ListItemText primary="Trang chủ" />
-            </StyledListItemButton>
-
-            {/* Bán hàng - Hiển thị cho tất cả các role */}
+            {/* Bán hàng - Hiển thị cho tất cả các role trừ customer */}
             <StyledListItemButton
               onClick={() => navigate("/Sales_page")}
               active={isActive("/Sales_page") ? 1 : 0}
@@ -315,13 +266,12 @@ const Sidebar = () => {
                       <ListItemText primary="Danh thu & chi phí" />
                     </StyledSubListItemButton>
                   </List>
-                </Collapse>
-
-                <Collapse in={openStatistics} timeout="auto" unmountOnExit>
                   <List component="div" disablePadding sx={{ pl: 2 }}>
                     <StyledSubListItemButton
                       onClick={() => navigate("/statistics/productperformance")}
-                      active={isActive("/statistics/productperformance") ? 1 : 0}
+                      active={
+                        isActive("/statistics/productperformance") ? 1 : 0
+                      }
                     >
                       <ListItemIcon>
                         <ProductionQuantityLimits />
@@ -329,9 +279,6 @@ const Sidebar = () => {
                       <ListItemText primary="Hiệu suất sản phẩm" />
                     </StyledSubListItemButton>
                   </List>
-                </Collapse>
-
-                <Collapse in={openStatistics} timeout="auto" unmountOnExit>
                   <List component="div" disablePadding sx={{ pl: 2 }}>
                     <StyledSubListItemButton
                       onClick={() => navigate("/price-history")}
@@ -482,7 +429,6 @@ const Sidebar = () => {
                       </ListItemIcon>
                       <ListItemText primary="Loại sản phẩm" />
                     </StyledSubListItemButton>
-
                     <StyledSubListItemButton
                       onClick={() => navigate("/suppliers")}
                       active={isActive("/suppliers") ? 1 : 0}
@@ -516,7 +462,6 @@ const Sidebar = () => {
             )}
           </List>
 
-          {/* Bottom Section */}
           <Box sx={{ flexGrow: 1 }} />
           <List sx={{ p: 1 }}>
             <StyledListItemButton
@@ -547,7 +492,6 @@ const Sidebar = () => {
         </Box>
       </Drawer>
 
-      {/* Hộp thoại xác nhận đăng xuất */}
       <Dialog open={openLogoutDialog} onClose={handleCloseLogoutDialog}>
         <DialogTitle sx={{ fontWeight: 600 }}>Xác nhận đăng xuất</DialogTitle>
         <DialogContent>Bạn có chắc chắn muốn đăng xuất không?</DialogContent>

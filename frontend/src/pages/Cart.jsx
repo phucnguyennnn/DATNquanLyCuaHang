@@ -821,8 +821,8 @@ const CartPage = () => {
               <Box
                 sx={{
                   flexGrow: 1,
-                  height: { md: "70vh" },      // chỉ set cho md trở lên
-                  overflowY: { md: "auto" },  // chỉ set cho md trở lên
+                  height: { md: "70vh" },
+                  overflowY: "auto", // Sửa: luôn có scroll dọc nếu tràn
                   mb: { xs: 2, md: 0 },
                 }}
               >
@@ -1083,8 +1083,8 @@ const CartPage = () => {
             <Box
               sx={{
                 flexGrow: 1,
-                height: { md: "70vh" },      // chỉ set cho md trở lên
-                overflowY: { md: "auto" },  // chỉ set cho md trở lên
+                height: { md: "70vh" },
+                overflowY: "auto", // Sửa: luôn có scroll dọc nếu tràn
                 mb: { xs: 2, md: 0 },
               }}
             >
