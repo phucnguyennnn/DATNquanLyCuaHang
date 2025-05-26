@@ -1,33 +1,31 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
+  Container,
   Typography,
   Paper,
   Grid,
-  Stack,
-  TextField,
+  FormControl,
+  InputLabel,
+  Select,
   MenuItem,
-  CircularProgress,
+  Button,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Divider,
-  useTheme,
-  Tabs,
-  Tab,
   Card,
   CardContent,
-  Avatar,
+  CircularProgress,
+  Alert,
   Chip,
-} from "@mui/material";
-import { alpha } from "@mui/material/styles";
-import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
-import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import { vi } from "date-fns/locale";
-import axios from "axios";
+} from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { vi } from 'date-fns/locale';
 import {
   BarChart,
   Bar,
@@ -40,826 +38,577 @@ import {
   Pie,
   Cell,
   Legend,
-} from "recharts";
-import { TrendingUp, TrendingDown } from "@mui/icons-material";
+} from 'recharts';
+import axios from 'axios';
+// import { formatCurrency } from '../utils/formatCurrency.js';
 
-const COLORS = ["#1976d2", "#43a047", "#e53935", "#fbc02d", "#8e24aa", "#0097a7", "#ff5722", "#607d8b", "#9c27b0"];
-
-const formatCurrency = (value) =>
-  value?.toLocaleString("vi-VN", { style: "currency", currency: "VND" }) || "0 ₫";
+// Local currency formatter function
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND'
+  }).format(amount);
+};
 
 const ProductPerformance = () => {
-  const theme = useTheme();
-  const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [filterType, setFilterType] = useState("month");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [filterType, setFilterType] = useState('month');
   const [filterDate, setFilterDate] = useState(new Date());
   const [filterStart, setFilterStart] = useState(null);
   const [filterEnd, setFilterEnd] = useState(null);
-  const [error, setError] = useState("");
-  const [tabValue, setTabValue] = useState(0);
+  const [topCount, setTopCount] = useState(10);
 
-  // Lấy token từ localStorage
-  const token = localStorage.getItem("authToken");
+  const authToken = localStorage.getItem('authToken');
 
-  // Fetch data
   useEffect(() => {
-    const fetchData = async () => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
       setLoading(true);
-      setError("");
-      try {
-        const config = token
-          ? { headers: { Authorization: `Bearer ${token}` } }
-          : {};
-
-        console.log("Fetching orders and products data...");
-        
-        // Lấy dữ liệu hóa đơn bán hàng
-        const orderRes = await axios.get("http://localhost:8000/api/orders", config);
-        console.log("Orders response:", orderRes.data);
-        
-        // Lấy danh sách sản phẩm từ API chính - bổ sung populate
-        const productsRes = await axios.get("http://localhost:8000/api/products?populate=category", config);
-        console.log("Products response:", productsRes.data);
-        
-        // Phương pháp dự phòng - lấy thông tin sản phẩm từ order
-        let productsFromOrders = [];
-        let ordersData = [];
-        
-        // Xử lý dữ liệu orders
-        if (Array.isArray(orderRes.data)) {
-          ordersData = orderRes.data;
-          // Trích xuất thông tin sản phẩm từ orders
-          orderRes.data.forEach(order => {
-            if (order.products && Array.isArray(order.products)) {
-              productsFromOrders.push(...order.products);
-            }
+      // console.log('Fetching orders from:', 'http://localhost:8000/api/order');
+      // console.log('Auth token:', authToken ? 'Present' : 'Missing');
+      
+      // Try multiple possible endpoints
+      let response;
+      const possibleEndpoints = [
+        'http://localhost:8000/api/order',
+        'http://localhost:8000/api/orders',
+        'http://localhost:8000/order',
+        'http://localhost:8000/orders'
+      ];
+      
+      for (const endpoint of possibleEndpoints) {
+        try {
+          // console.log(`Trying endpoint: ${endpoint}`);
+          response = await axios.get(endpoint, {
+            headers: { Authorization: `Bearer ${authToken}` },
           });
-        } else if (orderRes.data && typeof orderRes.data === 'object') {
-          // Thử lấy data từ nhiều cấu trúc phản hồi có thể có
-          if (Array.isArray(orderRes.data.data)) {
-            ordersData = orderRes.data.data;
-            // Trích xuất thông tin sản phẩm từ orders
-            orderRes.data.data.forEach(order => {
-              if (order.products && Array.isArray(order.products)) {
-                productsFromOrders.push(...order.products);
-              }
-            });
-          } else if (Array.isArray(orderRes.data.orders)) {
-            ordersData = orderRes.data.orders;
-            // Trích xuất thông tin sản phẩm từ orders
-            orderRes.data.orders.forEach(order => {
-              if (order.products && Array.isArray(order.products)) {
-                productsFromOrders.push(...order.products);
-              }
-            });
+          // console.log(`Success with endpoint: ${endpoint}`);
+          break;
+        } catch (endpointError) {
+          // console.log(`Failed with endpoint: ${endpoint}`, endpointError.response?.status);
+          if (endpoint === possibleEndpoints[possibleEndpoints.length - 1]) {
+            throw endpointError; // Throw the last error if all endpoints fail
           }
-        }
-        
-        console.log("Processed orders data:", ordersData);
-        setOrders(ordersData);
-        
-        // Xử lý dữ liệu sản phẩm
-        let productsData = [];
-        
-        // Thử lấy từ API products
-        if (productsRes.data && productsRes.data.data && Array.isArray(productsRes.data.data) && productsRes.data.data.length > 0) {
-          productsData = productsRes.data.data;
-        } 
-        // Không có dữ liệu từ API products, sử dụng dữ liệu từ orders
-        else if (productsFromOrders.length > 0) {
-          // Tạo map để loại bỏ trùng lặp
-          const productMap = {};
-          productsFromOrders.forEach(product => {
-            if (product && product._id) {
-              productMap[product._id] = {
-                ...product,
-                // Nếu product đã có trong map, cộng dồn quantity
-                quantity: (productMap[product._id]?.quantity || 0) + (product.quantity || 0)
-              };
-            }
-          });
-          
-          productsData = Object.values(productMap);
-        }
-        
-        console.log("Processed products data:", productsData);
-        setProducts(productsData);
-      } catch (e) {
-        console.error("Error fetching data:", e);
-        setOrders([]);
-        setProducts([]);
-        
-        if (e.response) {
-          console.log("Error response:", e.response);
-          if (e.response.status === 401) {
-            setError("Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.");
-          } else {
-            setError(`Không thể tải dữ liệu. Lỗi: ${e.response.status} - ${e.response.statusText}`);
-          }
-        } else if (e.request) {
-          setError("Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.");
-        } else {
-          setError(`Lỗi không xác định: ${e.message}`);
         }
       }
+      
+      // console.log('Response status:', response.status);
+      // console.log('Response data:', response.data);
+      
+      // Handle different response structures
+      const ordersData = response.data?.orders || response.data?.data || response.data || [];
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
+    } catch (error) {
+      // console.error('Lỗi khi lấy dữ liệu đơn hàng:', error);
+      // console.error('Error response:', error.response?.data);
+      // console.error('Error status:', error.response?.status);
+      
+      // For development, set some mock data to test the UI
+      // console.log('Setting mock data for development...');
+      setOrders([]);
+      setError(`API không khả dụng (${error.response?.status || error.message}). Hiển thị dữ liệu mẫu.`);
+    } finally {
       setLoading(false);
-    };
-    fetchData();
-  }, [token]);
-
-  // Filter by time
-  const filterByDate = (date) => {
-    if (!date) return true;
-    let d = new Date(date);
-    if (filterType === "month") {
-      return (
-        d.getMonth() === filterDate.getMonth() &&
-        d.getFullYear() === filterDate.getFullYear()
-      );
     }
-    if (filterType === "day") {
-      return (
-        d.getDate() === filterDate.getDate() &&
-        d.getMonth() === filterDate.getMonth() &&
-        d.getFullYear() === filterDate.getFullYear()
-      );
-    }
-    if (filterType === "custom" && filterStart && filterEnd) {
-      return d >= filterStart && d <= filterEnd;
-    }
-    if (filterType === "all") {
-      return true;
-    }
-    return true;
   };
 
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-  };
-
-  // Tạo mapping giữa product ID và thông tin sản phẩm để dễ tra cứu
-  const productMap = useMemo(() => {
-    const map = {};
-    products.forEach(product => {
-      if (product) {
-        const productId = product._id || product.id;
-        if (productId) {
-          map[productId] = product;
-        }
-      }
-    });
-    console.log("Product mapping created:", map);
-    return map;
-  }, [products]);
-
-  // Tính toán dữ liệu thống kê sản phẩm
-  const productStats = useMemo(() => {
-    if (!orders.length) {
-      console.log("No orders data available");
-      return null;
-    }
-
-    // Lọc đơn hàng theo thời gian và chỉ lấy đơn đã thanh toán
-    const filteredOrders = orders.filter(order => {
-      const isValidStatus = order.paymentStatus === "paid";
-      const isValidDate = filterByDate(order.createdAt);
-      return isValidStatus && isValidDate;
-    });
+  const filteredOrders = useMemo(() => {
+    // console.log('All orders:', orders);
+    // console.log('Orders length:', orders.length);
     
-    console.log("Filtered orders:", filteredOrders);
+    // Filter orders - since the data shows orders are already 'paid', we'll focus on that
+    let filtered = orders.filter(order => {
+      // Log each order to see its structure
+      // console.log('Order status:', order.status, 'Payment status:', order.paymentStatus);
+      
+      // Check for paid orders (since that's what we see in the data)
+      const isPaid = order.paymentStatus === 'paid';
+      
+      // If there's no status field or it's undefined, assume completed if paid
+      const isCompleted = !order.status || order.status === 'completed' || order.status === 'instore';
+      
+      return isPaid && isCompleted;
+    });
 
-    // Thống kê dữ liệu theo sản phẩm
-    const productSales = {};
-    let totalProductsSold = 0;
+    console.log('Filtered orders after status filter:', filtered.length);
+
+    const now = new Date();
+    
+    switch (filterType) {
+      case 'day':
+        if (filterDate) {
+          const selectedDate = new Date(filterDate);
+          filtered = filtered.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return (
+              orderDate.getDate() === selectedDate.getDate() &&
+              orderDate.getMonth() === selectedDate.getMonth() &&
+              orderDate.getFullYear() === selectedDate.getFullYear()
+            );
+          });
+        }
+        break;
+      case 'month':
+        if (filterDate) {
+          const selectedDate = new Date(filterDate);
+          filtered = filtered.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return (
+              orderDate.getMonth() === selectedDate.getMonth() &&
+              orderDate.getFullYear() === selectedDate.getFullYear()
+            );
+          });
+        }
+        break;
+      case 'custom':
+        if (filterStart && filterEnd) {
+          const start = new Date(filterStart);
+          const end = new Date(filterEnd);
+          end.setHours(23, 59, 59, 999);
+          filtered = filtered.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return orderDate >= start && orderDate <= end;
+          });
+        }
+        break;
+      default:
+        break;
+    }
+
+    // console.log('Final filtered orders:', filtered.length);
+    return filtered;
+  }, [orders, filterType, filterDate, filterStart, filterEnd]);
+
+  const productStats = useMemo(() => {
+    const stats = {};
+    
+    // console.log('Processing product stats from orders:', filteredOrders.length);
 
     filteredOrders.forEach(order => {
-      // Kiểm tra cả products hoặc items
-      const orderItems = order.products || order.items;
-      if (!orderItems || !Array.isArray(orderItems)) {
-        console.log("Order without products/items:", order);
-        return;
-      }
+      // console.log('Processing order:', order._id, 'Products:', order.products?.length);
       
-      orderItems.forEach(item => {
-        // Nhiều định dạng item khác nhau có thể có trong API
-        const productId = typeof item.product === 'object' ? 
-          item.product?._id || item.product?.id : 
-          item._id || item.productId || item.product;
+      if (order.products && order.products.length > 0) {
+        order.products.forEach(item => {
+          // console.log('Processing product item:', item);
           
-        if (!productId) {
-          console.log("Item without product ID:", item);
-          return;
-        }
-
-        // Khởi tạo hoặc cập nhật thông tin sản phẩm
-        if (!productSales[productId]) {
-          // Ưu tiên lấy thông tin từ productMap trước
-          const product = productMap[productId] || {};
+          const productId = item.productId?._id || item.productId;
+          const productName = item.productId?.name || 'Sản phẩm không xác định';
+          const quantity = item.quantity || 0;
           
-          // Nếu không có, dùng chính item làm nguồn dữ liệu
-          const fallbackProduct = typeof item.product === 'object' ? item.product : item;
+          // Calculate actual quantity sold = quantity * unitRatio
+          const unitRatio = item.productId?.unitRatio || 1;
+          const quantitySold = quantity * unitRatio;
           
-          let categoryName = "Không phân loại";
-          
-          // Thử lấy thông tin category từ nhiều nguồn
-          if (product.category) {
-            if (typeof product.category === 'object') {
-              categoryName = product.category.name || categoryName;
-            } else if (typeof product.category === 'string') {
-              categoryName = product.category;
-            }
-          } else if (fallbackProduct.category) {
-            if (typeof fallbackProduct.category === 'object') {
-              categoryName = fallbackProduct.category.name || categoryName;
-            } else if (typeof fallbackProduct.category === 'string') {
-              categoryName = fallbackProduct.category;
-            }
+          // Calculate actual price (use finalUnitPrice if available, otherwise originalUnitPrice)
+          let actualPrice = 0;
+          if (item.finalUnitPrice) {
+            actualPrice = item.finalUnitPrice * quantity;
+          } else if (item.batchesUsed && item.batchesUsed.length > 0) {
+            actualPrice = item.batchesUsed.reduce((sum, batch) => {
+              let discountPercent = 0;
+              if (
+                batch.batchId &&
+                batch.batchId.discountInfo &&
+                typeof batch.batchId.discountInfo.discountValue === 'number'
+              ) {
+                discountPercent = batch.batchId.discountInfo.discountValue;
+              }
+              const originalPrice = (item.originalUnitPrice || 0) * quantity;
+              const discountAmount = (originalPrice * discountPercent) / 100;
+              return sum + (originalPrice - discountAmount);
+            }, 0);
+          } else {
+            actualPrice = (item.originalUnitPrice || 0) * quantity;
           }
-          
-          productSales[productId] = {
-            id: productId,
-            name: product.name || fallbackProduct.name || item.name || 'Sản phẩm không xác định',
-            price: product.price || 
-                   fallbackProduct.price ||
-                   (product.units && product.units.length && product.units[0].salePrice) || 
-                   item.price || 
-                   item.unitPrice || 
-                   0,
-            quantity: 0,
-            revenue: 0,
-            image: product.images?.[0] || fallbackProduct.images?.[0] || '',
-            category: categoryName,
-          };
-          
-          console.log(`Created product stat for ${productSales[productId].name}:`, productSales[productId]);
-        }
 
-        // Cập nhật số liệu
-        const quantity = item.quantity || 0;
-        // Xử lý nhiều định dạng giá khác nhau
-        const price = item.price || 
-                      item.unitPrice || 
-                      (item.product && typeof item.product === 'object' && item.product.price) || 
-                      productSales[productId].price;
-                      
-        const subtotal = price * quantity;
+          if (!stats[productId]) {
+            stats[productId] = {
+              productId,
+              productName,
+              totalQuantity: 0,
+              totalRevenue: 0,
+              orderCount: 0,
+            };
+          }
 
-        productSales[productId].quantity += quantity;
-        productSales[productId].revenue += subtotal;
-        totalProductsSold += quantity;
-      });
-    });
-
-    // Chuyển object thành array để sắp xếp
-    const productList = Object.values(productSales);
-    console.log("Product statistics generated:", productList);
-
-    // Tính toán thống kê theo danh mục (category)
-    const categoryStats = {};
-    
-    productList.forEach(product => {
-      const category = product.category || 'Không phân loại';
-      
-      if (!categoryStats[category]) {
-        categoryStats[category] = {
-          name: category,
-          quantity: 0, 
-          revenue: 0
-        };
+          stats[productId].totalQuantity += quantitySold;
+          stats[productId].totalRevenue += actualPrice;
+          stats[productId].orderCount += 1;
+        });
       }
-      
-      categoryStats[category].quantity += product.quantity;
-      categoryStats[category].revenue += product.revenue;
     });
-    
-    console.log("Category statistics:", categoryStats);
 
-    return {
-      totalProductsSold,
-      totalRevenue: productList.reduce((sum, product) => sum + product.revenue, 0),
-      productCount: productList.length,
-      topSellingByQuantity: [...productList].sort((a, b) => b.quantity - a.quantity).slice(0, 10),
-      worstSellingByQuantity: [...productList].sort((a, b) => a.quantity - b.quantity).slice(0, 10),
-      topSellingByRevenue: [...productList].sort((a, b) => b.revenue - a.revenue).slice(0, 10),
-      worstSellingByRevenue: [...productList].sort((a, b) => a.revenue - b.revenue).slice(0, 10),
-      allProducts: productList,
-      categoryStats
-    };
-  }, [orders, productMap, filterType, filterDate, filterStart, filterEnd]);
+    // console.log('Product stats:', Object.values(stats));
+    return Object.values(stats);
+  }, [filteredOrders]);
 
-  // Dữ liệu cho biểu đồ phân loại
-  const categoryChartData = useMemo(() => {
-    if (!productStats || !productStats.categoryStats) return [];
-    return Object.values(productStats.categoryStats).map((cat, index) => ({
-      ...cat,
-      fill: COLORS[index % COLORS.length]
+  const topSellingProducts = useMemo(() => {
+    return [...productStats]
+      .sort((a, b) => b.totalQuantity - a.totalQuantity)
+      .slice(0, topCount);
+  }, [productStats, topCount]);
+
+  const leastSellingProducts = useMemo(() => {
+    return [...productStats]
+      .sort((a, b) => a.totalQuantity - b.totalQuantity)
+      .slice(0, topCount);
+  }, [productStats, topCount]);
+
+  const topRevenueProducts = useMemo(() => {
+    return [...productStats]
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, topCount);
+  }, [productStats, topCount]);
+
+  const chartData = useMemo(() => {
+    return topSellingProducts.map(product => ({
+      name: product.productName.length > 20 
+        ? `${product.productName.substring(0, 20)}...` 
+        : product.productName,
+      quantity: product.totalQuantity,
+      revenue: product.totalRevenue,
     }));
-  }, [productStats]);
+  }, [topSellingProducts]);
+
+  const pieData = useMemo(() => {
+    return topSellingProducts.slice(0, 5).map((product, index) => ({
+      name: product.productName,
+      value: product.totalQuantity,
+      color: `hsl(${index * 72}, 70%, 50%)`,
+    }));
+  }, [topSellingProducts]);
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+
+  if (loading) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Alert severity="error">{error}</Alert>
+      </Container>
+    );
+  }
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={vi}>
-      <Box sx={{ p: 3 }}>
-        <Typography variant="h4" fontWeight="bold" gutterBottom>
-          Phân tích hiệu suất sản phẩm
-        </Typography>
+      <Box sx={{ height: '100vh', overflow: 'auto' }}>
+        <Container maxWidth="lg">
+          <Typography variant="h4" component="h1" gutterBottom>
+            Thống kê hiệu suất sản phẩm
+          </Typography>
 
-        {error && (
-          <Paper sx={{ p: 2, mb: 2, bgcolor: "#ffebee" }}>
-            <Typography color="error">{error}</Typography>
-          </Paper>
-        )}
-
-        {/* Bộ lọc thời gian */}
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="center">
-            <TextField
-              select
-              label="Khoảng thời gian"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              sx={{ minWidth: 150 }}
-            >
-              <MenuItem value="all">Tất cả thời gian</MenuItem>
-              <MenuItem value="month">Theo tháng</MenuItem>
-              <MenuItem value="day">Theo ngày</MenuItem>
-              <MenuItem value="custom">Tùy chỉnh</MenuItem>
-            </TextField>
-
-            {filterType === "month" && (
-              <DatePicker
-                label="Chọn tháng"
-                views={["year", "month"]}
-                value={filterDate}
-                onChange={setFilterDate}
-                format="MM/yyyy"
-              />
-            )}
-
-            {filterType === "day" && (
-              <DatePicker
-                label="Chọn ngày"
-                value={filterDate}
-                onChange={setFilterDate}
-                format="dd/MM/yyyy"
-              />
-            )}
-
-            {filterType === "custom" && (
-              <>
-                <DatePicker
-                  label="Từ ngày"
-                  value={filterStart}
-                  onChange={setFilterStart}
-                  format="dd/MM/yyyy"
-                />
-                <DatePicker
-                  label="Đến ngày"
-                  value={filterEnd}
-                  onChange={setFilterEnd}
-                  format="dd/MM/yyyy"
-                  minDate={filterStart}
-                />
-              </>
-            )}
-          </Stack>
-        </Paper>
-
-        {loading ? (
-          <Box display="flex" justifyContent="center" my={4}>
-            <CircularProgress />
-          </Box>
-        ) : productStats ? (
-          <>
-            {/* Thống kê tổng quan */}
-            <Grid container spacing={3} mb={4}>
+          {/* Bộ lọc */}
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} sm={6} md={3}>
-                <Card sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Tổng số sản phẩm đã bán
-                    </Typography>
-                    <Typography variant="h4" color="primary" sx={{ mt: 1 }}>
-                      {productStats.totalProductsSold.toLocaleString()}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                <FormControl fullWidth>
+                  <InputLabel>Lọc theo thời gian</InputLabel>
+                  <Select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    label="Lọc theo thời gian"
+                  >
+                    <MenuItem value="day">Ngày</MenuItem>
+                    <MenuItem value="month">Tháng</MenuItem>
+                    <MenuItem value="custom">Khoảng thời gian</MenuItem>
+                  </Select>
+                </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Card sx={{ bgcolor: alpha(theme.palette.success.main, 0.1) }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Tổng doanh thu
-                    </Typography>
-                    <Typography variant="h4" color="success.main" sx={{ mt: 1 }}>
-                      {formatCurrency(productStats.totalRevenue)}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Card sx={{ bgcolor: alpha(theme.palette.info.main, 0.1) }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Số lượng sản phẩm có doanh thu
-                    </Typography>
-                    <Typography variant="h4" color="info.main" sx={{ mt: 1 }}>
-                      {productStats.productCount.toLocaleString()}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Card sx={{ bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
-                  <CardContent>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      Doanh thu trung bình mỗi sản phẩm
-                    </Typography>
-                    <Typography variant="h4" color="warning.main" sx={{ mt: 1 }}>
-                      {productStats.productCount 
-                        ? formatCurrency(productStats.totalRevenue / productStats.productCount) 
-                        : formatCurrency(0)}
-                    </Typography>
-                  </CardContent>
-                </Card>
+
+              {filterType === 'day' && (
+                <Grid item xs={12} sm={6} md={3}>
+                  <DatePicker
+                    label="Chọn ngày"
+                    value={filterDate}
+                    onChange={(newValue) => setFilterDate(newValue)}
+                    format="dd/MM/yyyy"
+                  />
+                </Grid>
+              )}
+
+              {filterType === 'month' && (
+                <Grid item xs={12} sm={6} md={3}>
+                  <DatePicker
+                    label="Chọn tháng"
+                    value={filterDate}
+                    onChange={(newValue) => setFilterDate(newValue)}
+                    views={['year', 'month']}
+                    openTo="month"
+                    format="MM/yyyy"
+                  />
+                </Grid>
+              )}
+
+              {filterType === 'custom' && (
+                <>
+                  <Grid item xs={12} sm={6} md={2}>
+                    <DatePicker
+                      label="Từ ngày"
+                      value={filterStart}
+                      onChange={(newValue) => setFilterStart(newValue)}
+                      format="dd/MM/yyyy"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={2}>
+                    <DatePicker
+                      label="Đến ngày"
+                      value={filterEnd}
+                      onChange={(newValue) => setFilterEnd(newValue)}
+                      format="dd/MM/yyyy"
+                    />
+                  </Grid>
+                </>
+              )}
+
+              <Grid item xs={12} sm={6} md={2}>
+                <FormControl fullWidth>
+                  <InputLabel>Số lượng hiển thị</InputLabel>
+                  <Select
+                    value={topCount}
+                    onChange={(e) => setTopCount(e.target.value)}
+                    label="Số lượng hiển thị"
+                  >
+                    <MenuItem value={5}>Top 5</MenuItem>
+                    <MenuItem value={10}>Top 10</MenuItem>
+                    <MenuItem value={20}>Top 20</MenuItem>
+                  </Select>
+                </FormControl>
               </Grid>
             </Grid>
+          </Paper>
 
-            {/* Tabs phân tích */}
-            <Box sx={{ mb: 3 }}>
-              <Tabs 
-                value={tabValue} 
-                onChange={handleTabChange} 
-                variant="scrollable"
-                scrollButtons="auto"
-              >
-                <Tab label="Top sản phẩm bán chạy" />
-                <Tab label="Top doanh thu cao" />
-                <Tab label="Sản phẩm bán chậm" />
-                <Tab label="Phân tích danh mục" />
-              </Tabs>
-            </Box>
+          {/* Tổng quan */}
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography color="textSecondary" gutterBottom>
+                    Tổng sản phẩm đã bán
+                  </Typography>
+                  <Typography variant="h5">
+                    {productStats.reduce((sum, p) => sum + p.totalQuantity, 0)}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography color="textSecondary" gutterBottom>
+                    Tổng doanh thu
+                  </Typography>
+                  <Typography variant="h5">
+                    {formatCurrency(productStats.reduce((sum, p) => sum + p.totalRevenue, 0))}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography color="textSecondary" gutterBottom>
+                    Số loại sản phẩm
+                  </Typography>
+                  <Typography variant="h5">
+                    {productStats.length}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card>
+                <CardContent>
+                  <Typography color="textSecondary" gutterBottom>
+                    Đơn hàng đã xử lý
+                  </Typography>
+                  <Typography variant="h5">
+                    {filteredOrders.length}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
 
-            {/* Tab 0: Top bán chạy về số lượng */}
-            {tabValue === 0 && (
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={7}>
-                  <Paper sx={{ p: 2, height: '100%' }}>
-                    <Typography variant="h6" gutterBottom>
-                      Top 10 sản phẩm bán chạy nhất (số lượng)
-                    </Typography>
-                    <ResponsiveContainer width="100%" height={350}>
-                      <BarChart
-                        data={productStats.topSellingByQuantity.map(product => ({
-                          name: product.name.length > 20 ? product.name.substring(0, 20) + '...' : product.name,
-                          quantity: product.quantity,
-                          revenue: product.revenue
-                        }))}
-                        margin={{ top: 10, right: 30, left: 20, bottom: 70 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={70} />
-                        <YAxis />
-                        <Tooltip 
-                          formatter={(value, name) => [
-                            name === 'revenue' ? formatCurrency(value) : value.toLocaleString(),
-                            name === 'revenue' ? 'Doanh thu' : 'Số lượng'
-                          ]}
-                        />
-                        <Legend />
-                        <Bar dataKey="quantity" fill={theme.palette.primary.main} name="Số lượng" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Paper>
-                </Grid>
+          {/* Biểu đồ */}
+          <Grid container spacing={3} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={8}>
+              <Paper sx={{ p: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  Top sản phẩm bán nhiều nhất (Số lượng)
+                </Typography>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="quantity" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper sx={{ p: 3 }}>
+                <Typography variant="h6" gutterBottom>
+                  Tỷ lệ bán hàng (Top 5)
+                </Typography>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Paper>
+            </Grid>
+          </Grid>
 
-                <Grid item xs={12} md={5}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Chi tiết sản phẩm bán chạy
-                    </Typography>
-                    <TableContainer sx={{ maxHeight: 350 }}>
-                      <Table stickyHeader size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>STT</TableCell>
-                            <TableCell>Sản phẩm</TableCell>
-                            <TableCell align="right">Số lượng</TableCell>
-                            <TableCell align="right">Doanh thu</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {productStats.topSellingByQuantity.map((product, idx) => (
-                            <TableRow key={product.id}>
-                              <TableCell>{idx + 1}</TableCell>
-                              <TableCell>
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                  {product.image && (
-                                    <Avatar 
-                                      src={product.image} 
-                                      variant="rounded" 
-                                      sx={{ width: 30, height: 30, mr: 1 }}
-                                    />
-                                  )}
-                                  <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>
-                                    {product.name}
-                                  </Typography>
-                                </Box>
-                              </TableCell>
-                              <TableCell align="right">{product.quantity.toLocaleString()}</TableCell>
-                              <TableCell align="right">{formatCurrency(product.revenue)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-                </Grid>
-              </Grid>
-            )}
+          {/* Bảng thống kê */}
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="h6" gutterBottom color="success.main">
+                  Top sản phẩm bán nhiều nhất
+                </Typography>
+                <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
+                  <Table stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Hạng</TableCell>
+                        <TableCell>Tên sản phẩm</TableCell>
+                        <TableCell align="right">Số lượng</TableCell>
+                        <TableCell align="right">Doanh thu</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {topSellingProducts.map((product, index) => (
+                        <TableRow key={product.productId}>
+                          <TableCell>
+                            <Chip 
+                              label={index + 1} 
+                              color={index < 3 ? "primary" : "default"}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell sx={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {product.productName}
+                          </TableCell>
+                          <TableCell align="right">{product.totalQuantity}</TableCell>
+                          <TableCell align="right">{formatCurrency(product.totalRevenue)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </Grid>
 
-            {/* Tab 1: Top sản phẩm doanh thu cao */}
-            {tabValue === 1 && (
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={7}>
-                  <Paper sx={{ p: 2, height: '100%' }}>
-                    <Typography variant="h6" gutterBottom>
-                      Top 10 sản phẩm doanh thu cao nhất
-                    </Typography>
-                    <ResponsiveContainer width="100%" height={350}>
-                      <BarChart
-                        data={productStats.topSellingByRevenue.map(product => ({
-                          name: product.name.length > 20 ? product.name.substring(0, 20) + '...' : product.name,
-                          revenue: product.revenue
-                        }))}
-                        margin={{ top: 10, right: 30, left: 20, bottom: 70 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="name" angle={-45} textAnchor="end" height={70} />
-                        <YAxis />
-                        <Tooltip formatter={(value) => formatCurrency(value)} />
-                        <Legend />
-                        <Bar dataKey="revenue" fill={theme.palette.success.main} name="Doanh thu" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </Paper>
-                </Grid>
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: '400px', display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="h6" gutterBottom color="warning.main">
+                  Top sản phẩm bán ít nhất
+                </Typography>
+                <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
+                  <Table stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Hạng</TableCell>
+                        <TableCell>Tên sản phẩm</TableCell>
+                        <TableCell align="right">Số lượng</TableCell>
+                        <TableCell align="right">Doanh thu</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {leastSellingProducts.map((product, index) => (
+                        <TableRow key={product.productId}>
+                          <TableCell>
+                            <Chip 
+                              label={index + 1} 
+                              color="warning"
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell sx={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {product.productName}
+                          </TableCell>
+                          <TableCell align="right">{product.totalQuantity}</TableCell>
+                          <TableCell align="right">{formatCurrency(product.totalRevenue)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </Grid>
+          </Grid>
 
-                <Grid item xs={12} md={5}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Chi tiết sản phẩm doanh thu cao
-                    </Typography>
-                    <TableContainer sx={{ maxHeight: 350 }}>
-                      <Table stickyHeader size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>STT</TableCell>
-                            <TableCell>Sản phẩm</TableCell>
-                            <TableCell align="right">Doanh thu</TableCell>
-                            <TableCell align="right">Số lượng</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {productStats.topSellingByRevenue.map((product, idx) => (
-                            <TableRow key={product.id}>
-                              <TableCell>{idx + 1}</TableCell>
-                              <TableCell>
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                  {product.image && (
-                                    <Avatar 
-                                      src={product.image} 
-                                      variant="rounded" 
-                                      sx={{ width: 30, height: 30, mr: 1 }}
-                                    />
-                                  )}
-                                  <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>
-                                    {product.name}
-                                  </Typography>
-                                </Box>
-                              </TableCell>
-                              <TableCell align="right">{formatCurrency(product.revenue)}</TableCell>
-                              <TableCell align="right">{product.quantity.toLocaleString()}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-                </Grid>
-              </Grid>
-            )}
-
-            {/* Tab 2: Sản phẩm bán chậm */}
-            {tabValue === 2 && (
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Sản phẩm bán chậm nhất (số lượng)
-                    </Typography>
-                    <TableContainer sx={{ maxHeight: 350 }}>
-                      <Table stickyHeader size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>STT</TableCell>
-                            <TableCell>Sản phẩm</TableCell>
-                            <TableCell align="right">Số lượng</TableCell>
-                            <TableCell align="right">Doanh thu</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {productStats.worstSellingByQuantity.map((product, idx) => (
-                            <TableRow key={product.id}>
-                              <TableCell>{idx + 1}</TableCell>
-                              <TableCell>
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                  {product.image && (
-                                    <Avatar 
-                                      src={product.image} 
-                                      variant="rounded" 
-                                      sx={{ width: 30, height: 30, mr: 1 }}
-                                    />
-                                  )}
-                                  <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>
-                                    {product.name}
-                                  </Typography>
-                                </Box>
-                              </TableCell>
-                              <TableCell align="right">
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                  <TrendingDown color="error" fontSize="small" sx={{ mr: 0.5 }} />
-                                  {product.quantity.toLocaleString()}
-                                </Box>
-                              </TableCell>
-                              <TableCell align="right">{formatCurrency(product.revenue)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Sản phẩm doanh thu thấp nhất
-                    </Typography>
-                    <TableContainer sx={{ maxHeight: 350 }}>
-                      <Table stickyHeader size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>STT</TableCell>
-                            <TableCell>Sản phẩm</TableCell>
-                            <TableCell align="right">Doanh thu</TableCell>
-                            <TableCell align="right">Số lượng</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {productStats.worstSellingByRevenue.map((product, idx) => (
-                            <TableRow key={product.id}>
-                              <TableCell>{idx + 1}</TableCell>
-                              <TableCell>
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                  {product.image && (
-                                    <Avatar 
-                                      src={product.image} 
-                                      variant="rounded" 
-                                      sx={{ width: 30, height: 30, mr: 1 }}
-                                    />
-                                  )}
-                                  <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>
-                                    {product.name}
-                                  </Typography>
-                                </Box>
-                              </TableCell>
-                              <TableCell align="right">
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                  <TrendingDown color="error" fontSize="small" sx={{ mr: 0.5 }} />
-                                  {formatCurrency(product.revenue)}
-                                </Box>
-                              </TableCell>
-                              <TableCell align="right">{product.quantity.toLocaleString()}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-                </Grid>
-              </Grid>
-            )}
-
-            {/* Tab 3: Phân tích theo danh mục */}
-            {tabValue === 3 && (
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2, height: 400 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Doanh thu theo danh mục
-                    </Typography>
-                    <ResponsiveContainer width="100%" height={320}>
-                      <PieChart>
-                        <Pie
-                          data={categoryChartData}
-                          dataKey="revenue"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={120}
-                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                        >
-                          {categoryChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Legend layout="vertical" verticalAlign="middle" align="right" />
-                        <Tooltip formatter={(value) => formatCurrency(value)} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2, height: 400 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Số lượng bán theo danh mục
-                    </Typography>
-                    <ResponsiveContainer width="100%" height={320}>
-                      <PieChart>
-                        <Pie
-                          data={categoryChartData}
-                          dataKey="quantity"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={120}
-                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                        >
-                          {categoryChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Legend layout="vertical" verticalAlign="middle" align="right" />
-                        <Tooltip formatter={(value) => value.toLocaleString()} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="h6" gutterBottom>
-                      Chi tiết theo danh mục
-                    </Typography>
-                    <TableContainer sx={{ maxHeight: 300 }}>
-                      <Table stickyHeader size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>STT</TableCell>
-                            <TableCell>Danh mục</TableCell>
-                            <TableCell align="right">Số lượng bán</TableCell>
-                            <TableCell align="right">Doanh thu</TableCell>
-                            <TableCell align="right">Tỉ lệ doanh thu</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {Object.values(productStats.categoryStats)
-                            .sort((a, b) => b.revenue - a.revenue)
-                            .map((category, idx) => (
-                              <TableRow key={category.name}>
-                                <TableCell>{idx + 1}</TableCell>
-                                <TableCell>
-                                  <Chip 
-                                    size="small" 
-                                    label={category.name} 
-                                    sx={{ bgcolor: COLORS[idx % COLORS.length], color: 'white' }} 
-                                  />
-                                </TableCell>
-                                <TableCell align="right">{category.quantity.toLocaleString()}</TableCell>
-                                <TableCell align="right">{formatCurrency(category.revenue)}</TableCell>
-                                <TableCell align="right">
-                                  {((category.revenue / productStats.totalRevenue) * 100).toFixed(1)}%
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-                </Grid>
-              </Grid>
-            )}
-          </>
-        ) : (
-          <Box textAlign="center" py={4}>
-            <Typography variant="h6" color="textSecondary">
-              Không có dữ liệu sản phẩm để hiển thị
+          {/* Bảng top doanh thu */}
+          <Paper sx={{ p: 3, mt: 3, maxHeight: '500px', display: 'flex', flexDirection: 'column' }}>
+            <Typography variant="h6" gutterBottom color="primary.main">
+              Top sản phẩm có doanh thu cao nhất
             </Typography>
-          </Box>
-        )}
+            <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
+              <Table stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Hạng</TableCell>
+                    <TableCell>Tên sản phẩm</TableCell>
+                    <TableCell align="right">Số lượng bán</TableCell>
+                    <TableCell align="right">Doanh thu</TableCell>
+                    <TableCell align="right">Số đơn hàng</TableCell>
+                    <TableCell align="right">Trung bình/đơn</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {topRevenueProducts.map((product, index) => (
+                    <TableRow key={product.productId}>
+                      <TableCell>
+                        <Chip 
+                          label={index + 1} 
+                          color={index < 3 ? "primary" : "default"}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {product.productName}
+                      </TableCell>
+                      <TableCell align="right">{product.totalQuantity}</TableCell>
+                      <TableCell align="right">{formatCurrency(product.totalRevenue)}</TableCell>
+                      <TableCell align="right">{product.orderCount}</TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(product.totalRevenue / product.orderCount)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </Container>
       </Box>
     </LocalizationProvider>
   );

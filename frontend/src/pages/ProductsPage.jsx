@@ -145,23 +145,103 @@ const ProductListPage = () => {
     setRemainingQuantity(calculateTotalRemainingQuantity(product));
   };
 
+  // Thêm hàm lấy localCart từ localStorage
+  const getLocalCart = () => {
+    try {
+      const cart = JSON.parse(localStorage.getItem("localCart") || "[]");
+      return Array.isArray(cart) ? cart : [];
+    } catch {
+      return [];
+    }
+  };
+
+  // Thêm hàm lưu localCart vào localStorage
+  const setLocalCart = (cart) => {
+    localStorage.setItem("localCart", JSON.stringify(cart));
+  };
+
+  // Đếm số loại sản phẩm trong localCart
+  const getLocalCartCount = () => {
+    const cart = getLocalCart();
+    return cart.length;
+  };
+
+  // Khi đăng nhập, đồng bộ localCart lên server (chỉ gửi các trường cần thiết)
+  useEffect(() => {
+    if (authToken) {
+      const localCart = getLocalCart();
+      if (localCart.length > 0) {
+        // Chỉ gửi các trường cần thiết lên server
+        const payload = localCart.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          selectedUnitName: item.selectedUnitName,
+        }));
+        axios
+          .post("http://localhost:8000/api/cart/add", payload, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          })
+          .then(() => {
+            setLocalCart([]); // Xóa localCart sau khi đồng bộ
+            fetchCartInfo();
+          })
+          .catch(() => {});
+      }
+    }
+    // eslint-disable-next-line
+  }, [authToken]);
+
   const fetchCartInfo = async () => {
+    if (!authToken) {
+      setCartItemCount(getLocalCartCount());
+      return;
+    }
     try {
       const response = await axios.get("http://localhost:8000/api/cart", {
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (response.data && response.data.items) {
-        setCartItemCount(response.data.items.length); // Đếm số lượng *loại* sản phẩm
+        setCartItemCount(response.data.items.length);
       } else {
         setCartItemCount(0);
       }
     } catch (error) {
-      console.error("Lỗi khi lấy thông tin giỏ hàng:", error);
       setCartItemCount(0);
     }
   };
 
   const handleAddToCartToApi = async (product, quantity, selectedUnitName) => {
+    if (!authToken) {
+      // Lưu vào localCart nếu chưa đăng nhập
+      const localCart = getLocalCart();
+      const baseUnit = product.units.find((unit) => unit.ratio === 1);
+      const unitPrice = baseUnit ? baseUnit.salePrice : 0;
+      
+      // Nếu đã có sản phẩm này với đơn vị này thì cộng dồn số lượng
+      const idx = localCart.findIndex(
+        (item) =>
+          item.productId === product._id && item.selectedUnitName === selectedUnitName
+      );
+      if (idx !== -1) {
+        localCart[idx].quantity += quantity;
+      } else {
+        localCart.push({
+          productId: product._id,
+          quantity,
+          selectedUnitName,
+          productName: product.name,
+          productImage: product.images && product.images.length > 0 ? product.images[0] : "",
+          unitPrice: unitPrice,
+        });
+      }
+      setLocalCart(localCart);
+      setSnackbarMessage("Đã thêm vào giỏ hàng (chưa đăng nhập)");
+      setSnackbarOpen(true);
+      handleCloseQuantityPopover();
+      setCartItemCount(localCart.length);
+      return;
+    }
+
     try {
       const response = await axios.post(
         "http://localhost:8000/api/cart/add",
@@ -180,11 +260,9 @@ const ProductListPage = () => {
         setSnackbarMessage(response.data.message);
         setSnackbarOpen(true);
         handleCloseQuantityPopover();
-        fetchCartInfo(); // Cập nhật số lượng giỏ hàng
+        fetchCartInfo();
       }
-      console.log("Đã thêm vào giỏ hàng:", response.data);
     } catch (error) {
-      console.error("Lỗi khi thêm vào giỏ hàng:", error);
       setSnackbarMessage("Có lỗi khi thêm sản phẩm vào giỏ hàng.");
       setSnackbarOpen(true);
     }
@@ -249,7 +327,7 @@ const ProductListPage = () => {
   useEffect(() => {
     fetchCategories();
     fetchProductsWithBatches();
-    fetchCartInfo(); // Gọi hàm này khi component mount
+    fetchCartInfo();
   }, []);
 
   const getBaseUnitPrice = (product) => {

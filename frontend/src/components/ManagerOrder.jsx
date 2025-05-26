@@ -23,6 +23,9 @@ import {
   Stack,
   Snackbar,
   Alert,
+  Card,
+  CardContent,
+  Grid,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import VisibilityIcon from "@mui/icons-material/Visibility";
@@ -58,6 +61,8 @@ function ManagerOrder() {
     message: "",
     severity: "success",
   });
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [totalInvoices, setTotalInvoices] = useState(0);
 
   useEffect(() => {
     fetchOrders();
@@ -119,6 +124,35 @@ function ManagerOrder() {
         }
       );
       setOrders(response.data);
+      
+      // Calculate revenue and invoice count
+      let revenue = 0;
+      const invoiceCount = response.data.length;
+      
+      response.data.forEach(order => {
+        if (order.products && order.products.length > 0) {
+          const orderRevenue = order.products.reduce((sum, item) => {
+            const discountPercent =
+              item.batchesUsed &&
+              item.batchesUsed[0] &&
+              item.batchesUsed[0].batchId &&
+              item.batchesUsed[0].batchId.discountInfo &&
+              typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+                ? item.batchesUsed[0].batchId.discountInfo.discountValue
+                : 0;
+            const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+            const discountAmount = (originalPrice * discountPercent) / 100;
+            const finalPrice = originalPrice - discountAmount;
+            return sum + finalPrice;
+          }, 0);
+          revenue += orderRevenue;
+        } else {
+          revenue += order.finalAmount || 0;
+        }
+      });
+      
+      setTotalRevenue(revenue);
+      setTotalInvoices(invoiceCount);
     } catch (error) {
       console.error("Lỗi khi tải đơn hàng:", error);
       showSnackbar("Lỗi khi tải danh sách đơn hàng", "error");
@@ -213,6 +247,54 @@ function ManagerOrder() {
       }}
     >
       <Box sx={{ width: "100%", p: 2 }}>
+        {/* Revenue and Invoice Summary */}
+        <Grid container spacing={2} mb={3}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Tổng doanh thu
+                </Typography>
+                <Typography variant="h5" component="div" color="primary">
+                  {totalRevenue.toLocaleString("vi-VN", {
+                    style: "currency",
+                    currency: "VND",
+                  })}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Tổng số hóa đơn
+                </Typography>
+                <Typography variant="h5" component="div" color="secondary">
+                  {totalInvoices}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Trung bình/hóa đơn
+                </Typography>
+                <Typography variant="h6" component="div">
+                  {totalInvoices > 0
+                    ? (totalRevenue / totalInvoices).toLocaleString("vi-VN", {
+                        style: "currency",
+                        currency: "VND",
+                      })
+                    : "0 ₫"}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
         <Stack direction="row" alignItems="center" spacing={2} mb={2}>
           <TextField
             label="Tìm kiếm theo mã đơn, tên KH/NV"

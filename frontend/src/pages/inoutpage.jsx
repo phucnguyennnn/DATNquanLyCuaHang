@@ -320,7 +320,7 @@ const InOutPage = () => {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={vi}>
-      <Box>
+      <Box sx={{ height: '100vh', overflow: 'auto' }}>
         {/* <Typography variant="h4" fontWeight="bold" gutterBottom>
           Báo cáo thu chi (Phiếu nhập kho & Hóa đơn bán hàng)
         </Typography> */}

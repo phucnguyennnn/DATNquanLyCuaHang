@@ -36,10 +36,12 @@ import axios from "axios";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import { useSettings } from "../contexts/SettingsContext";
+import { useNavigate } from "react-router-dom";
 
 function ShelfInventoryPage() {
   // Use settings from context instead of constants
   const { settings } = useSettings();
+  const navigate = useNavigate();
   const [shelfData, setShelfData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -47,6 +49,10 @@ function ShelfInventoryPage() {
   const [statusFilter, setStatusFilter] = useState("");
   // Thêm state cho warning filter
   const [warningFilter, setWarningFilter] = useState("");
+  // Thêm state cho supplier filter và danh sách suppliers
+  const [supplierFilter, setSupplierFilter] = useState("");
+  const [suppliers, setSuppliers] = useState([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
 
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState("asc");
@@ -227,6 +233,23 @@ function ShelfInventoryPage() {
     }
   };
 
+  // Thêm function để fetch suppliers
+  const fetchSuppliers = async () => {
+    setLoadingSuppliers(true);
+    try {
+      const response = await axios.get("http://localhost:8000/api/suppliers",{
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+        },
+      });
+      setSuppliers(response.data);
+    } catch (err) {
+      console.error("Lỗi khi tải danh sách nhà cung cấp:", err);
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     setError(null);
@@ -246,7 +269,8 @@ function ShelfInventoryPage() {
 
   useEffect(() => {
     fetchData();
-  }, [searchTerm, statusFilter /* warningFilter không ảnh hưởng fetchData */]);
+    fetchSuppliers(); // Fetch suppliers when component mounts
+  }, [searchTerm, statusFilter]);
 
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
@@ -259,6 +283,11 @@ function ShelfInventoryPage() {
   // Thêm handler cho warning filter
   const handleWarningFilterChange = (event) => {
     setWarningFilter(event.target.value);
+  };
+
+  // Thêm handler cho supplier filter
+  const handleSupplierFilterChange = (event) => {
+    setSupplierFilter(event.target.value);
   };
 
   const handleSort = (column) => {
@@ -616,13 +645,29 @@ function ShelfInventoryPage() {
     setOpenRows({});
   };
 
-  // Áp dụng warning filter vào dữ liệu đã sort
+  // Áp dụng warning filter và supplier filter vào dữ liệu đã sort
   const filteredGroupedByProduct = useMemo(() => {
-    if (!warningFilter) return groupedByProduct;
-    return groupedByProduct.filter(group =>
-      Array.from(group.warnings).includes(warningFilter)
-    );
-  }, [groupedByProduct, warningFilter]);
+    let filtered = groupedByProduct;
+    
+    // Apply warning filter
+    if (warningFilter) {
+      filtered = filtered.filter(group =>
+        Array.from(group.warnings).includes(warningFilter)
+      );
+    }
+    
+    // Apply supplier filter
+    if (supplierFilter) {
+      filtered = filtered.filter(group => {
+        // Check if any batch in the group has the selected supplier
+        return group.batches.some(batch => 
+          batch.supplier && batch.supplier._id === supplierFilter
+        );
+      });
+    }
+    
+    return filtered;
+  }, [groupedByProduct, warningFilter, supplierFilter]);
 
   // Calculate paginated data for the current page
   const paginatedGroupedByProduct = useMemo(() => {
@@ -636,6 +681,13 @@ function ShelfInventoryPage() {
     return Math.ceil(filteredGroupedByProduct.length / itemsPerPage);
   }, [filteredGroupedByProduct, itemsPerPage]);
 
+  // Handler để chuyển đến trang nhập hàng với sản phẩm được chọn
+  const handleNavigateToGoodReceipt = (productId, productName) => {
+    // Mở trang purchase order trong tab mới với query params để pre-select sản phẩm
+    const url = `/inventory/purchase-order?preselected-product=${productId}&product-name=${encodeURIComponent(productName)}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <Container
       maxWidth="xl"
@@ -645,7 +697,7 @@ function ShelfInventoryPage() {
         Quản lý hàng tồn kho và trên quầy
       </Typography>
       <Box mb={2}>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
           <TextField
             label="Tìm kiếm (Tên/Mã Lô hàng)"
             value={searchTerm}
@@ -696,6 +748,36 @@ function ShelfInventoryPage() {
               <MenuItem value="Sắp hết hạn">Sắp hết hạn</MenuItem>
               <MenuItem value="Ít trên quầy">Ít trên quầy</MenuItem>
               <MenuItem value="Ít trong kho">Ít trong kho</MenuItem>
+            </Select>
+          </FormControl>
+          {/* Thêm bộ lọc nhà cung cấp */}
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel id="supplier-filter-label" shrink>
+              Nhà cung cấp
+            </InputLabel>
+            <Select
+              labelId="supplier-filter-label"
+              id="supplier-filter"
+              value={supplierFilter}
+              label="Nhà cung cấp"
+              onChange={handleSupplierFilterChange}
+              displayEmpty
+              renderValue={(value) => {
+                if (value === "") return "Tất cả";
+                const selectedSupplier = suppliers.find(s => s._id === value);
+                return selectedSupplier ? selectedSupplier.name : "Không xác định";
+              }}
+              inputProps={{
+                "aria-label": "Nhà cung cấp",
+              }}
+              disabled={loadingSuppliers}
+            >
+              <MenuItem value="">Tất cả</MenuItem>
+              {suppliers.map((supplier) => (
+                <MenuItem key={supplier._id} value={supplier._id}>
+                  {supplier.name}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Stack>
@@ -778,6 +860,7 @@ function ShelfInventoryPage() {
                       (sortDirection === "asc" ? "▲" : "▼")}
                   </TableCell>
                   <TableCell>Cảnh báo</TableCell>
+                  <TableCell>Thao tác</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -845,6 +928,21 @@ function ShelfInventoryPage() {
                             sx={{ mr: 0.5 }}
                           />
                         ))}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          sx={{
+                            fontSize: "0.7rem",
+                            padding: "4px 8px",
+                            textTransform: "none",
+                          }}
+                          onClick={() => handleNavigateToGoodReceipt(group.productId, group.productName)}
+                        >
+                          Nhập hàng
+                        </Button>
                       </TableCell>
                     </TableRow>
                     <TableRow>
