@@ -392,25 +392,26 @@ const CreateOrder = () => {
   return (
     <>
       <Container
-        maxWidth="lg"
+        maxWidth="xl"
         sx={{
-          mt: 4,
-          height: "calc(100vh - 100px)",
+          mt: 2,
+          height: "calc(100vh - 80px)",
           display: "flex",
           flexDirection: "column",
+          px: 1,
         }}
       >
         <Paper
           sx={{
-            p: 3,
-            mb: 2,
+            p: 2,
+            mb: 1,
             flex: 1,
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
           }}
         >
-          <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
+          <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
             <Autocomplete
               sx={{ flex: 1 }}
               options={customers}
@@ -418,10 +419,12 @@ const CreateOrder = () => {
               loading={loadingCustomers}
               value={selectedCustomer}
               onChange={(_, newValue) => setSelectedCustomer(newValue)}
+              size="small"
               renderInput={(params) => (
                 <TextField
                   {...params}
                   label="Chọn khách hàng"
+                  size="small"
                   InputProps={{
                     ...params.InputProps,
                     endAdornment: (
@@ -440,18 +443,21 @@ const CreateOrder = () => {
               label="Tìm kiếm sản phẩm hoặc mã lô"
               value={searchTerm}
               onChange={handleSearch}
+              size="small"
               InputProps={{ endAdornment: <SearchIcon /> }}
             />
           </Box>
 
-          <Grid container spacing={2} sx={{ flex: 1, overflow: "hidden" }}>
-            <Grid item xs={6} sx={{ height: "100%", overflow: "hidden" }}>
-              <Typography variant="h6">Danh sách sản phẩm</Typography>
+          <Grid container spacing={1} sx={{ flex: 1, overflow: "hidden" }}>
+            <Grid item xs={5} sx={{ height: "100%", overflow: "hidden" }}>
+              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
+                Danh sách sản phẩm
+              </Typography>
               <Box
                 sx={{
-                  height: "calc(100% - 40px)",
+                  height: "calc(100% - 32px)",
                   overflow: "auto",
-                  pr: 1,
+                  pr: 0.5,
                 }}
               >
                 {filteredProducts.length > 0 ? (
@@ -459,21 +465,25 @@ const CreateOrder = () => {
                     <Paper
                       key={product._id}
                       sx={{
-                        p: 2,
-                        mb: 1,
+                        p: 1.5,
+                        mb: 0.5,
                         cursor: "pointer",
                         "&:hover": { bgcolor: "action.hover" },
+                        border: "1px solid",
+                        borderColor: "divider",
                       }}
                       onClick={() => handleProductClick(product)}
                     >
-                      <Typography variant="subtitle1">{product.name}</Typography>
-                      <Typography variant="body2" color="textSecondary">
+                      <Typography variant="body2" sx={{ fontWeight: 500, lineHeight: 1.2 }}>
+                        {product.name}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary" sx={{ display: "block", mt: 0.5 }}>
                         {product.category?.name || product.category}
                         {product.warehouse !== undefined &&
                           ` | Kho: ${product.warehouse} | Quầy: ${product.shelf}`}
                       </Typography>
                       {product.units?.[0]?.salePrice && (
-                        <Typography variant="body2" color="primary">
+                        <Typography variant="caption" color="primary" sx={{ display: "block", fontWeight: 500 }}>
                           {product.units[0].salePrice.toLocaleString()}đ/
                           {product.units[0].name}
                         </Typography>
@@ -482,7 +492,7 @@ const CreateOrder = () => {
                   ))
                 ) : (
                   <Typography
-                    variant="body1"
+                    variant="body2"
                     color="textSecondary"
                     sx={{ p: 2, textAlign: "center", fontStyle: "italic" }}
                   >
@@ -493,7 +503,7 @@ const CreateOrder = () => {
             </Grid>
             <Grid
               item
-              xs={6}
+              xs={7}
               sx={{
                 height: "100%",
                 display: "flex",
@@ -501,144 +511,156 @@ const CreateOrder = () => {
                 overflow: "hidden",
               }}
             >
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Đơn hàng
+              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>
+                Đơn hàng ({orderItems.length} sản phẩm)
               </Typography>
 
-              <List
+              <Box
                 sx={{
                   flex: 1,
                   overflow: "auto",
-                  border: "1px solid rgba(0, 0, 0, 0.12)",
+                  border: "1px solid",
+                  borderColor: "divider",
                   borderRadius: 1,
-                  mb: 2,
-                  pr: 1,
+                  mb: 1,
                 }}
               >
                 {orderItems.map((item, itemIndex) => (
-                  <ListItem key={itemIndex} divider>
-                    <ListItemText
-                      primary={
-                        <>
+                  <Box
+                    key={itemIndex}
+                    sx={{
+                      p: 1.5,
+                      borderBottom: "1px solid",
+                      borderColor: "divider",
+                      "&:last-child": { borderBottom: "none" },
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                      <Box sx={{ flex: 1, mr: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, lineHeight: 1.2 }}>
                           {item.product.name}
                           {item.discountRate > 0 && (
                             <Typography
                               component="span"
-                              variant="body2"
+                              variant="caption"
                               color="success.main"
-                              sx={{ ml: 1 }}
+                              sx={{ ml: 1, fontWeight: 600 }}
                             >
-                              (Giảm {item.discountRate}%)
+                              (-{item.discountRate}%)
                             </Typography>
                           )}
-                        </>
-                      }
-                      secondary={
-                        <>
-                          <Typography variant="body2">
-                            Đơn vị: {item.selectedUnit.name} 
-                            {/* (1
-                            {item.selectedUnit.name} = {item.selectedUnit.ratio}
-                            {item.product.units.find((u) => u.ratio === 1)?.name}) */}
-                          </Typography>
-                          {item.batches.map((batch, batchIndex) => {
-                            const currentQty =
-                              batch.quantity / item.selectedUnit.ratio;
-                            const maxQty = Math.floor(
-                              batch.quantity_on_shelf / item.selectedUnit.ratio
-                            );
-                            const truncateString = (str, maxLength = 10) => {
-                              return str.length > maxLength
-                                ? str.substring(0, maxLength - 3) + "..."
-                                : str;
-                            };
-                            return (
-                              <Box
-                                key={batch._id}
-                                sx={{
-                                  mt: 1,
-                                  display: "flex",
-                                  alignItems: "center",
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary" sx={{ display: "block", mt: 0.5 }}>
+                          Đơn vị: {item.selectedUnit.name}
+                        </Typography>
+                        {item.batches.map((batch, batchIndex) => {
+                          const currentQty = batch.quantity / item.selectedUnit.ratio;
+                          const maxQty = Math.floor(batch.quantity_on_shelf / item.selectedUnit.ratio);
+                          const truncateString = (str, maxLength = 8) => {
+                            return str.length > maxLength
+                              ? str.substring(0, maxLength - 3) + "..."
+                              : str;
+                          };
+                          return (
+                            <Box
+                              key={batch._id}
+                              sx={{
+                                mt: 0.5,
+                                display: "flex",
+                                alignItems: "center",
+                                flexWrap: "wrap",
+                                gap: 0.5,
+                              }}
+                            >
+                              <Chip
+                                label={`${truncateString(batch.batchCode)} - ${batch.unitPrice.toLocaleString()}đ`}
+                                size="small"
+                                variant="outlined"
+                                sx={{ 
+                                  height: 24,
+                                  fontSize: "0.7rem",
+                                  "& .MuiChip-label": { px: 1 }
                                 }}
-                              >
-                                <Chip
-                                  label={`${truncateString(
-                                    batch.batchCode
-                                  )} - ${currentQty.toFixed(0)}${
-                                    item.selectedUnit.name
-                                  } × ${batch.unitPrice.toLocaleString()}đ`}
-                                  size="small"
-                                  sx={{ mr: 1, maxWidth: 150 }}
-                                />
-                                <TextField
-                                  type="number"
-                                  value={currentQty}
-                                  onChange={(e) =>
-                                    handleUpdateQuantity(
-                                      itemIndex,
-                                      batchIndex,
-                                      e.target.value
-                                    )
-                                  }
-                                  inputProps={{
-                                    min: 0,
-                                    max: maxQty,
-                                    style: {
-                                      textAlign: "center",
-                                      padding: "6px 10px",
-                                    },
-                                  }}
-                                  sx={{
-                                    width: 80,
-                                    mr: 1,
-                                    "& input[type=number]": {
-                                      MozAppearance: "textfield",
-                                    },
-                                    "& input[type=number]::-webkit-outer-spin-button":
-                                      {
-                                        WebkitAppearance: "none",
-                                        margin: 0,
-                                      },
-                                    "& input[type=number]::-webkit-inner-spin-button":
-                                      {
-                                        WebkitAppearance: "none",
-                                        margin: 0,
-                                      },
-                                  }}
-                                  error={currentQty > maxQty || currentQty < 0}
-                                  helperText={
-                                    (currentQty > maxQty &&
-                                      `Tối đa: ${maxQty}`) ||
-                                    (currentQty < 0 && "Không hợp lệ")
-                                  }
-                                />
-                              </Box>
-                            );
-                          })}
-                        </>
-                      }
-                    />
-                    <Typography sx={{ minWidth: 100, textAlign: "right" }}>
-                      {item.total.toLocaleString()}đ
-                    </Typography>
-                    <IconButton onClick={() => handleRemoveItem(itemIndex)}>
-                      <DeleteIcon color="error" />
-                    </IconButton>
-                  </ListItem>
+                              />
+                              <TextField
+                                type="number"
+                                value={currentQty}
+                                onChange={(e) =>
+                                  handleUpdateQuantity(
+                                    itemIndex,
+                                    batchIndex,
+                                    e.target.value
+                                  )
+                                }
+                                inputProps={{
+                                  min: 0,
+                                  max: maxQty,
+                                  style: {
+                                    textAlign: "center",
+                                    padding: "4px 6px",
+                                    fontSize: "0.75rem",
+                                  },
+                                }}
+                                sx={{
+                                  width: 60,
+                                  "& .MuiOutlinedInput-root": {
+                                    height: 28,
+                                  },
+                                  "& input[type=number]": {
+                                    MozAppearance: "textfield",
+                                  },
+                                  "& input[type=number]::-webkit-outer-spin-button": {
+                                    WebkitAppearance: "none",
+                                    margin: 0,
+                                  },
+                                  "& input[type=number]::-webkit-inner-spin-button": {
+                                    WebkitAppearance: "none",
+                                    margin: 0,
+                                  },
+                                }}
+                                error={currentQty > maxQty || currentQty < 0}
+                              />
+                              <Typography variant="caption" color="textSecondary">
+                                {item.selectedUnit.name}
+                              </Typography>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, minWidth: 80, textAlign: "right" }}>
+                          {item.total.toLocaleString()}đ
+                        </Typography>
+                        <IconButton 
+                          onClick={() => handleRemoveItem(itemIndex)}
+                          size="small"
+                          sx={{ p: 0.5 }}
+                        >
+                          <DeleteIcon fontSize="small" color="error" />
+                        </IconButton>
+                      </Box>
+                    </Box>
+                  </Box>
                 ))}
-              </List>
+                {orderItems.length === 0 && (
+                  <Box sx={{ p: 3, textAlign: "center" }}>
+                    <Typography variant="body2" color="textSecondary" sx={{ fontStyle: "italic" }}>
+                      Chưa có sản phẩm nào trong đơn hàng
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
 
               <Box
                 sx={{
-                  p: 2,
+                  p: 1.5,
                   bgcolor: "background.paper",
                   boxShadow: 1,
                   borderRadius: 1,
                   flexShrink: 0,
                 }}
               >
-                <Grid container spacing={2}>
-                  {/* Chỉ hiển thị input tiền mặt khi không phải thanh toán online */}
+                <Grid container spacing={1}>
                   {paymentMethod !== 'momo' && (
                     <Grid item xs={6}>
                       <TextField
@@ -662,17 +684,17 @@ const CreateOrder = () => {
                         error={!!cashReceivedError}
                         helperText={cashReceivedError}
                         required
+                        size="small"
                       />
                     </Grid>
                   )}
                   <Grid item xs={paymentMethod === 'momo' ? 12 : 6}>
-                    <FormControl fullWidth>
+                    <FormControl fullWidth size="small">
                       <InputLabel>Phương thức TT</InputLabel>
                       <Select
                         value={paymentMethod}
                         onChange={(e) => {
                           setPaymentMethod(e.target.value);
-                          // Reset cash received khi chuyển sang thanh toán online
                           if (e.target.value === 'momo') {
                             setCashReceived("");
                             setCashReceivedError("");
@@ -680,47 +702,39 @@ const CreateOrder = () => {
                         }}
                       >
                         <MenuItem value="cash">Tiền mặt</MenuItem>
-                        <MenuItem value="momo">chuyển khoản</MenuItem>
+                        <MenuItem value="momo">Chuyển khoản</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
                   <Grid item xs={12}>
-                    <Box
-                      sx={{ display: "flex", justifyContent: "space-between" }}
-                    >
-                      <Typography variant="h6">Tổng cộng:</Typography>
-                      <Typography variant="h6" color="primary">
+                    <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Tổng cộng:</Typography>
+                      <Typography variant="subtitle1" color="primary" sx={{ fontWeight: 600 }}>
                         {subtotal.toLocaleString()}đ
                       </Typography>
                     </Box>
-                    {/* Chỉ hiển thị tiền thừa khi không phải thanh toán online */}
                     {paymentMethod !== 'momo' && cashReceived && !cashReceivedError && (
-                      <Box
-                        sx={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          mt: 1,
-                        }}
-                      >
-                        <Typography>Tiền thừa:</Typography>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+                        <Typography variant="body2">Tiền thừa:</Typography>
                         <Typography
+                          variant="body2"
                           color={change >= 0 ? "success.main" : "error"}
+                          sx={{ fontWeight: 500 }}
                         >
                           {Math.abs(change).toLocaleString()}đ
                         </Typography>
                       </Box>
                     )}
-                    {/* Hiển thị thông tin thanh toán online */}
                     {paymentMethod === 'momo' && (
                       <Box
                         sx={{
-                          mt: 1,
+                          mb: 1,
                           p: 1,
                           bgcolor: 'info.light',
                           borderRadius: 1,
                         }}
                       >
-                        <Typography variant="body2" color="info.contrastText">
+                        <Typography variant="caption" color="info.contrastText">
                           Thanh toán qua MoMo: {subtotal.toLocaleString()}đ
                         </Typography>
                       </Box>
@@ -730,14 +744,14 @@ const CreateOrder = () => {
                     <Button
                       fullWidth
                       variant="contained"
-                      size="large"
                       onClick={handleSubmitOrder}
                       disabled={
                         orderItems.length === 0 ||
                         (paymentMethod !== 'momo' && (!!cashReceivedError || !cashReceived)) ||
                         submittingOrder
                       }
-                      startIcon={submittingOrder ? <CircularProgress size={22} /> : null}
+                      startIcon={submittingOrder ? <CircularProgress size={18} /> : null}
+                      sx={{ py: 1 }}
                     >
                       {submittingOrder 
                         ? "Đang tạo đơn..." 
@@ -753,33 +767,35 @@ const CreateOrder = () => {
           </Grid>
         </Paper>
 
-        <Dialog open={!!selectedProduct} fullWidth maxWidth="md">
-          <DialogTitle>
-            Chọn lô hàng - {selectedProduct?.name}
-            <FormControl sx={{ minWidth: 120, ml: 2 }}>
-              <InputLabel>Đơn vị</InputLabel>
-              <Select
-                value={selectedUnit?.name || ""}
-                onChange={(e) => {
-                  const unit = selectedProduct.units.find(
-                    (u) => u.name === e.target.value
-                  );
-                  setSelectedUnit(unit);
-                  setSelectedBatches({});
-                  setHasUserSelectedBatch(false);
-                }}
-              >
-                {selectedProduct?.units?.map((unit) => (
-                  <MenuItem key={unit.name} value={unit.name}>
-                    {/* {unit.name} (1{unit.name} = {unit.ratio}{" "}
-                    {selectedProduct.units.find((u) => u.ratio === 1)?.name}) */}
-                    {unit.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+        <Dialog open={!!selectedProduct} fullWidth maxWidth="lg">
+          <DialogTitle sx={{ pb: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Typography variant="h6">
+                Chọn lô hàng - {selectedProduct?.name}
+              </Typography>
+              <FormControl sx={{ minWidth: 120 }} size="small">
+                <InputLabel>Đơn vị</InputLabel>
+                <Select
+                  value={selectedUnit?.name || ""}
+                  onChange={(e) => {
+                    const unit = selectedProduct.units.find(
+                      (u) => u.name === e.target.value
+                    );
+                    setSelectedUnit(unit);
+                    setSelectedBatches({});
+                    setHasUserSelectedBatch(false);
+                  }}
+                >
+                  {selectedProduct?.units?.map((unit) => (
+                    <MenuItem key={unit.name} value={unit.name}>
+                      {unit.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
           </DialogTitle>
-          <DialogContent>
+          <DialogContent sx={{ pt: 1 }}>
             {batches.length === 0 ? (
               <Typography
                 variant="body1"
@@ -793,17 +809,17 @@ const CreateOrder = () => {
                 Hiện không có lô hàng nào trên quầy
               </Typography>
             ) : (
-              <TableContainer>
-                <Table>
+              <TableContainer sx={{ maxHeight: 400 }}>
+                <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Mã lô</TableCell>
-                      <TableCell>HSD</TableCell>
-                      <TableCell>Giá gốc</TableCell>
-                      <TableCell>Giảm giá</TableCell>
-                      <TableCell>Kho</TableCell>
-                      <TableCell>Quầy</TableCell>
-                      <TableCell>Số lượng</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Mã lô</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>HSD</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Giá gốc</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Giảm giá</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Kho</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Quầy</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Số lượng</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -816,34 +832,47 @@ const CreateOrder = () => {
 
                       return (
                         <TableRow key={batch._id}>
-                          <TableCell>{batch.batchCode}</TableCell>
                           <TableCell>
-                            {format(new Date(batch.expiry_day), "dd/MM/yyyy", {
-                              locale: vi,
-                            })}
+                            <Typography variant="body2">
+                              {batch.batchCode}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {format(new Date(batch.expiry_day), "dd/MM/yyyy", {
+                                locale: vi,
+                              })}
+                            </Typography>
                             <Typography variant="caption" color="textSecondary">
                               ({daysRemaining} ngày)
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {(
-                              (baseUnit?.salePrice || 0) *
-                              (selectedUnit?.ratio || 1)
-                            ).toLocaleString()}
-                            đ
+                            <Typography variant="body2">
+                              {(
+                                (baseUnit?.salePrice || 0) *
+                                (selectedUnit?.ratio || 1)
+                              ).toLocaleString()}
+                              đ
+                            </Typography>
                           </TableCell>
                           <TableCell sx={{ color: "success.main" }}>
                             {discount.isDiscounted && (
-                              <>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                 {discount.discountValue}%
-                                {/* <Typography variant="caption">
-                                  {discount.discountReason}
-                                </Typography> */}
-                              </>
+                              </Typography>
                             )}
                           </TableCell>
-                          <TableCell>{batch.remaining_quantity}</TableCell>
-                          <TableCell>{batch.quantity_on_shelf}</TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {batch.remaining_quantity}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {batch.quantity_on_shelf}
+                            </Typography>
+                          </TableCell>
                           <TableCell>
                             <TextField
                               type="number"
@@ -852,6 +881,8 @@ const CreateOrder = () => {
                                 handleBatchQtyChange(batch._id, e.target.value)
                               }
                               inputProps={{ min: 1 }}
+                              size="small"
+                              sx={{ width: 80 }}
                             />
                           </TableCell>
                         </TableRow>
@@ -862,7 +893,7 @@ const CreateOrder = () => {
               </TableContainer>
             )}
           </DialogContent>
-          <DialogActions>
+          <DialogActions sx={{ pt: 1 }}>
             <Button onClick={() => setSelectedProduct(null)}>Hủy</Button>
             <Button
               variant="contained"
