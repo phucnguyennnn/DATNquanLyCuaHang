@@ -150,7 +150,12 @@ exports.selectGoodBatchesForPreorder = async (productId, requiredBaseQty) => {
     expiry_day: { $gte: new Date(Date.now() + 14 * 86400000) },
     $expr: {
       $gte: [
-        { $subtract: ["$remaining_quantity", "$reserved_quantity"] },
+        {
+          $subtract: [
+            { $subtract: ["$initial_quantity", "$sold_quantity"] },
+            "$reserved_quantity"
+          ]
+        },
         requiredBaseQty,
       ],
     },
@@ -163,12 +168,10 @@ exports.selectGoodBatchesForPreorder = async (productId, requiredBaseQty) => {
 
   for (const batch of batches) {
     const available =
-      (typeof batch.remaining_quantity === "number"
-        ? batch.remaining_quantity
-        : 0) -
-      (typeof batch.reserved_quantity === "number"
-        ? batch.reserved_quantity
-        : 0);
+      (typeof batch.initial_quantity === "number" ? batch.initial_quantity : 0) -
+      (typeof batch.sold_quantity === "number" ? batch.sold_quantity : 0) -
+      (typeof batch.reserved_quantity === "number" ? batch.reserved_quantity : 0);
+
     const take = Math.min(available, remaining);
     if (take > 0) {
       let unitPrice = typeof batch.unitPrice === "number" ? batch.unitPrice : 0;
@@ -694,6 +697,8 @@ exports.completePreorderPayment = async (req, res) => {
       (amountPaid - order.finalAmount).toFixed(2)
     );
     order.changeAmount = changeAmount >= 0 ? changeAmount : 0;
+
+    // Xử lý trừ kho: ưu tiên kho trước, sau đó mới trừ trên quầy
     for (const productInfo of order.products) {
       const product = await Product.findById(productInfo.productId);
       const baseUnit = product.units.find((u) => u.ratio === 1);
@@ -704,11 +709,34 @@ exports.completePreorderPayment = async (req, res) => {
       ) {
         for (const batchInfo of productInfo.batchesUsed) {
           if (typeof batchInfo.quantity === "number") {
+            const batch = await Batch.findById(batchInfo.batchId);
+            if (!batch) continue;
+
+            const quantityToDeduct = batchInfo.quantity / baseUnit.ratio;
+
+            // Trừ từ kho trước (remaining_quantity)
+            const availableInWarehouse = Math.max(0, batch.remaining_quantity || 0);
+            const deductFromWarehouse = Math.min(quantityToDeduct, availableInWarehouse);
+            const remainingToDeduct = quantityToDeduct - deductFromWarehouse;
+
+            // Nếu còn thiếu, trừ từ quầy (quantity_on_shelf)
+            const availableOnShelf = Math.max(0, batch.quantity_on_shelf || 0);
+            const deductFromShelf = Math.min(remainingToDeduct, availableOnShelf);
+
+            // Kiểm tra xem có đủ hàng không
+            if (deductFromWarehouse + deductFromShelf < quantityToDeduct) {
+              return res.status(400).json({
+                message: `Không đủ hàng trong lô ${batch._id} để hoàn thành đơn hàng. Cần: ${quantityToDeduct}, có: ${deductFromWarehouse + deductFromShelf}`
+              });
+            }
+
+            // Cập nhật batch
             await Batch.findByIdAndUpdate(batchInfo.batchId, {
               $inc: {
-                remaining_quantity: -(batchInfo.quantity / baseUnit.ratio),
-                sold_quantity: batchInfo.quantity / baseUnit.ratio,
-                reserved_quantity: -(batchInfo.quantity / baseUnit.ratio),
+                remaining_quantity: -deductFromWarehouse,
+                quantity_on_shelf: -deductFromShelf,
+                sold_quantity: quantityToDeduct,
+                reserved_quantity: -quantityToDeduct,
               },
             });
           }
@@ -911,16 +939,16 @@ exports.cancelBatch = async (req, res) => {
     await order.save();
 
     // Trừ toàn bộ số lượng khỏi batch
-  await Batch.findByIdAndUpdate(batchId, {
-  $inc: {
-    quantity_on_shelf: -quantity_on_shelf,
-    remaining_quantity: -remaining_quantity,
-    lost_quantity: quantity_on_shelf + remaining_quantity,
-  },
-  $set: {
-    status: "hết hạn", // Đổi trạng thái lô
-  },
-});
+    await Batch.findByIdAndUpdate(batchId, {
+      $inc: {
+        quantity_on_shelf: -quantity_on_shelf,
+        remaining_quantity: -remaining_quantity,
+        lost_quantity: quantity_on_shelf + remaining_quantity,
+      },
+      $set: {
+        status: "hết hạn", // Đổi trạng thái lô
+      },
+    });
 
     res
       .status(200)

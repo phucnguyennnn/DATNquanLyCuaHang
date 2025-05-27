@@ -186,7 +186,7 @@ const ProductListPage = () => {
           product.batches &&
           product.batches.some(
             batch =>
-              (batch.initial_quantity || 0) - (batch.reserved_quantity || 0) > 0
+              (batch.initial_quantity || 0) - (batch.sold_quantity || 0) > 0
           )
         );
         setProductsWithBatches(filtered);
@@ -209,7 +209,7 @@ const ProductListPage = () => {
           product.batches &&
           product.batches.some(
             batch =>
-              (batch.remaining_quantity || 0) - (batch.reserved_quantity || 0) > 0
+              (batch.initial_quantity || 0) - (batch.sold_quantity || 0) > 0
           )
         );
         setProductsWithBatches(filtered);
@@ -265,7 +265,8 @@ const ProductListPage = () => {
     }
     return product.batches.reduce(
       (total, batch) =>
-        total + ((batch.initial_quantity || 0) - (batch.sold_quantity || 0)),
+        total +
+        Math.max(0, (batch.initial_quantity || 0) - (batch.sold_quantity|| 0)),
       0
     );
   };
@@ -275,7 +276,8 @@ const ProductListPage = () => {
     setAnchorEl(event.currentTarget);
     setCurrentProduct(product);
     setSelectedQuantity(1);
-    setRemainingQuantity(calculateTotalRemainingQuantity(product));
+    const availableQuantity = calculateTotalRemainingQuantity(product);
+    setRemainingQuantity(availableQuantity);
   };
 
   // Local cart helpers
@@ -409,9 +411,10 @@ const ProductListPage = () => {
       setSnackbarOpen(true);
       return;
     }
-    if (selectedQuantity > remainingQuantity) {
+    const availableQuantity = calculateTotalRemainingQuantity(currentProduct);
+    if ( availableQuantity <= selectedQuantity) {
       setSnackbarMessage(
-        `Số lượng bạn chọn (${selectedQuantity}) vượt quá số lượng còn lại (${remainingQuantity})`
+        `Số lượng bạn chọn (${selectedQuantity}) vượt quá số lượng còn lại (${availableQuantity})`
       );
       setSnackbarOpen(true);
       return;
@@ -426,7 +429,8 @@ const ProductListPage = () => {
   };
 
   const handleIncrementQuantity = () => {
-    if (selectedQuantity < remainingQuantity) {
+    const availableQuantity = calculateTotalRemainingQuantity(currentProduct);
+    if (selectedQuantity < availableQuantity) {
       setSelectedQuantity((prev) => prev + 1);
     }
   };
@@ -437,11 +441,12 @@ const ProductListPage = () => {
 
   const handleQuantityChange = (event) => {
     const value = parseInt(event.target.value);
-    if (!isNaN(value) && value >= 1 && value <= remainingQuantity) {
+    const availableQuantity = calculateTotalRemainingQuantity(currentProduct);
+    if (!isNaN(value) && value >= 1 && value <= availableQuantity) {
       setSelectedQuantity(value);
-    } else if (value > remainingQuantity) {
-      setSelectedQuantity(remainingQuantity);
-      setSnackbarMessage(`Số lượng tối đa có thể thêm là ${remainingQuantity}`);
+    } else if (value > availableQuantity) {
+      setSelectedQuantity(availableQuantity);
+      setSnackbarMessage(`Số lượng tối đa có thể thêm là ${availableQuantity}`);
       setSnackbarOpen(true);
     } else {
       setSelectedQuantity(1);
