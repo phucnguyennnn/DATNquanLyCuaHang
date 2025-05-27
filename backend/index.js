@@ -16,6 +16,7 @@ const orderRouter = require('./routers/orderRouter');
 const returnRouter = require('./routers/returnRouter');
 const PriceHistory = require('./routers/priceHistoryRoutes');
 const session = require('express-session');
+const paymentRoutes = require('./routers/paymentRouter');
 
 
 dotenv.config();
@@ -73,3 +74,4 @@ app.use('/api/cart', cartRouter);
 app.use('/api/orders', orderRouter);
 app.use('/api/returns', returnRouter);
 app.use('/api/priceHistory', PriceHistory);
+app.use('/api/payment', paymentRoutes);

@@ -300,24 +300,27 @@ const CreateOrder = () => {
   };
 
   const handleSubmitOrder = async () => {
-    if (!cashReceived) {
-      setCashReceivedError("Vui lòng nhập số tiền khách đưa.");
-      return;
-    }
+    // Đối với thanh toán online (momo), không cần kiểm tra tiền mặt
+    if (paymentMethod === 'cash' || paymentMethod === 'card' || paymentMethod === 'transfer') {
+      if (!cashReceived) {
+        setCashReceivedError("Vui lòng nhập số tiền khách đưa.");
+        return;
+      }
 
-    const paidAmount = parseFloat(cashReceived);
-    if (isNaN(paidAmount) || paidAmount < 0) {
-      setCashReceivedError("Số tiền không hợp lệ.");
-      return;
-    }
+      const paidAmount = parseFloat(cashReceived);
+      if (isNaN(paidAmount) || paidAmount < 0) {
+        setCashReceivedError("Số tiền không hợp lệ.");
+        return;
+      }
 
-    if (paidAmount < subtotal) {
-      setCashReceivedError("Số tiền khách đưa không đủ.");
-      return;
+      if (paidAmount < subtotal) {
+        setCashReceivedError("Số tiền khách đưa không đủ.");
+        return;
+      }
     }
 
     setCashReceivedError("");
-    setSubmittingOrder(true); // Bắt đầu loading
+    setSubmittingOrder(true);
 
     const orderData = {
       items: orderItems.map((item) => ({
@@ -337,7 +340,7 @@ const CreateOrder = () => {
         })),
       })),
       paymentMethod,
-      amountPaid: paidAmount,
+      amountPaid: paymentMethod === 'momo' ? subtotal : parseFloat(cashReceived),
       customerId: selectedCustomer?.id || null,
       orderType: "instore",
     };
@@ -351,13 +354,21 @@ const CreateOrder = () => {
         }
       );
       
-      if (paymentMethod === 'vnpay' || paymentMethod === 'momo') {
-        setCreatedOrder(res.data);
+      if (paymentMethod === 'momo') {
+        // Tạo object order với thông tin cần thiết cho QR Payment
+        const orderWithPaymentInfo = {
+          ...res.data,
+          finalAmount: subtotal,
+          orderNumber: res.data.orderNumber,
+          _id: res.data._id
+        };
+        setCreatedOrder(orderWithPaymentInfo);
         setShowQRPayment(true);
       } else {
         alert(`Đơn hàng ${res.data.orderNumber} tạo thành công!`);
         setOrderItems([]);
         setCashReceived("");
+        setSelectedCustomer(null);
       }
     } catch (error) {
       console.error(error);
@@ -370,6 +381,7 @@ const CreateOrder = () => {
     alert(`Đơn hàng ${createdOrder.orderNumber} thanh toán thành công!`);
     setOrderItems([]);
     setCashReceived("");
+    setSelectedCustomer(null);
     setShowQRPayment(false);
     setCreatedOrder(null);
   };
@@ -626,42 +638,49 @@ const CreateOrder = () => {
                 }}
               >
                 <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <TextField
-                      fullWidth
-                      label="Tiền khách đưa"
-                      value={cashReceived}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, "");
-                        setCashReceived(value);
-                        if (!value) {
-                          setCashReceivedError(
-                            "Vui lòng nhập số tiền khách đưa."
-                          );
-                        } else if (parseFloat(value) < subtotal) {
-                          setCashReceivedError("Số tiền khách đưa không đủ.");
-                        } else {
-                          setCashReceivedError("");
-                        }
-                      }}
-                      InputProps={{ endAdornment: "đ" }}
-                      error={!!cashReceivedError}
-                      helperText={cashReceivedError}
-                      required
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
+                  {/* Chỉ hiển thị input tiền mặt khi không phải thanh toán online */}
+                  {paymentMethod !== 'momo' && (
+                    <Grid item xs={6}>
+                      <TextField
+                        fullWidth
+                        label="Tiền khách đưa"
+                        value={cashReceived}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, "");
+                          setCashReceived(value);
+                          if (!value) {
+                            setCashReceivedError(
+                              "Vui lòng nhập số tiền khách đưa."
+                            );
+                          } else if (parseFloat(value) < subtotal) {
+                            setCashReceivedError("Số tiền khách đưa không đủ.");
+                          } else {
+                            setCashReceivedError("");
+                          }
+                        }}
+                        InputProps={{ endAdornment: "đ" }}
+                        error={!!cashReceivedError}
+                        helperText={cashReceivedError}
+                        required
+                      />
+                    </Grid>
+                  )}
+                  <Grid item xs={paymentMethod === 'momo' ? 12 : 6}>
                     <FormControl fullWidth>
                       <InputLabel>Phương thức TT</InputLabel>
                       <Select
                         value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        onChange={(e) => {
+                          setPaymentMethod(e.target.value);
+                          // Reset cash received khi chuyển sang thanh toán online
+                          if (e.target.value === 'momo') {
+                            setCashReceived("");
+                            setCashReceivedError("");
+                          }
+                        }}
                       >
                         <MenuItem value="cash">Tiền mặt</MenuItem>
-                        <MenuItem value="card">Thẻ</MenuItem>
-                        <MenuItem value="transfer">Chuyển khoản</MenuItem>
-                        <MenuItem value="vnpay">VNPay</MenuItem>
-                        <MenuItem value="momo">MoMo</MenuItem>
+                        <MenuItem value="momo">chuyển khoản</MenuItem>
                       </Select>
                     </FormControl>
                   </Grid>
@@ -674,7 +693,8 @@ const CreateOrder = () => {
                         {subtotal.toLocaleString()}đ
                       </Typography>
                     </Box>
-                    {cashReceived && !cashReceivedError && (
+                    {/* Chỉ hiển thị tiền thừa khi không phải thanh toán online */}
+                    {paymentMethod !== 'momo' && cashReceived && !cashReceivedError && (
                       <Box
                         sx={{
                           display: "flex",
@@ -690,6 +710,21 @@ const CreateOrder = () => {
                         </Typography>
                       </Box>
                     )}
+                    {/* Hiển thị thông tin thanh toán online */}
+                    {paymentMethod === 'momo' && (
+                      <Box
+                        sx={{
+                          mt: 1,
+                          p: 1,
+                          bgcolor: 'info.light',
+                          borderRadius: 1,
+                        }}
+                      >
+                        <Typography variant="body2" color="info.contrastText">
+                          Thanh toán qua MoMo: {subtotal.toLocaleString()}đ
+                        </Typography>
+                      </Box>
+                    )}
                   </Grid>
                   <Grid item xs={12}>
                     <Button
@@ -699,13 +734,17 @@ const CreateOrder = () => {
                       onClick={handleSubmitOrder}
                       disabled={
                         orderItems.length === 0 ||
-                        !!cashReceivedError ||
-                        !cashReceived ||
+                        (paymentMethod !== 'momo' && (!!cashReceivedError || !cashReceived)) ||
                         submittingOrder
                       }
                       startIcon={submittingOrder ? <CircularProgress size={22} /> : null}
                     >
-                      {submittingOrder ? "Đang tạo đơn..." : `Tạo đơn hàng (${orderItems.length})`}
+                      {submittingOrder 
+                        ? "Đang tạo đơn..." 
+                        : paymentMethod === 'momo'
+                          ? `Tạo đơn & thanh toán (${orderItems.length})`
+                          : `Tạo đơn hàng (${orderItems.length})`
+                      }
                     </Button>
                   </Grid>
                 </Grid>
