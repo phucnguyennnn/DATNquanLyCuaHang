@@ -16,6 +16,11 @@ import {
   TableRow,
   Divider,
   useTheme,
+  Dialog, // Import Dialog
+  DialogTitle, // Import DialogTitle
+  DialogContent, // Import DialogContent
+  DialogActions, // Import DialogActions
+  Button, // Import Button
 } from "@mui/material";
 import { DatePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
@@ -35,12 +40,20 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import { startOfWeek, endOfWeek, getWeek, getMonth, getYear, format as formatDateFns } from "date-fns";
+import {
+  startOfWeek,
+  endOfWeek,
+  getWeek,
+  getMonth,
+  getYear,
+  format as formatDateFns,
+} from "date-fns";
 
 const COLORS = ["#1976d2", "#43a047", "#e53935", "#fbc02d", "#8e24aa"];
 
 const formatCurrency = (value) =>
-  value?.toLocaleString("vi-VN", { style: "currency", currency: "VND" }) || "0 ₫";
+  value?.toLocaleString("vi-VN", { style: "currency", currency: "VND" }) ||
+  "0 ₫";
 
 const InOutPage = () => {
   const theme = useTheme();
@@ -52,6 +65,18 @@ const InOutPage = () => {
   const [filterStart, setFilterStart] = useState(null);
   const [filterEnd, setFilterEnd] = useState(null);
   const [error, setError] = useState(""); // Thêm state cho lỗi
+  const [receivedByUser, setReceivedByUser] = useState(null);
+
+  // States for Good Receipt Detail Dialog
+  const [openGoodReceiptDialog, setOpenGoodReceiptDialog] = useState(false);
+  const [selectedGoodReceipt, setSelectedGoodReceipt] = useState(null);
+  const [loadingGoodReceiptDetail, setLoadingGoodReceiptDetail] =
+    useState(false);
+
+  // States for Order Detail Dialog
+  const [openOrderDetailDialog, setOpenOrderDetailDialog] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [loadingOrderDetail, setLoadingOrderDetail] = useState(false);
 
   // Lấy token từ localStorage
   const token = localStorage.getItem("authToken");
@@ -65,38 +90,50 @@ const InOutPage = () => {
         const config = token
           ? { headers: { Authorization: `Bearer ${token}` } }
           : {};
-        
+
         // Phiếu nhập kho (chi)
-        const grRes = await axios.get("http://localhost:8000/api/goodreceipt", config);
- 
+        const grRes = await axios.get(
+          "http://localhost:8000/api/goodreceipt",
+          config
+        );
+
         // Hóa đơn bán hàng (thu)
-        const orderRes = await axios.get("http://localhost:8000/api/orders", config);
+        const orderRes = await axios.get(
+          "http://localhost:8000/api/orders",
+          config
+        );
 
         // Xử lý dữ liệu phiếu nhập kho (goodReceipts)
         let receiptsData = [];
         if (Array.isArray(grRes.data)) {
           receiptsData = grRes.data;
-        } else if (grRes.data && typeof grRes.data === 'object') {
+        } else if (grRes.data && typeof grRes.data === "object") {
           if (Array.isArray(grRes.data.data)) {
             receiptsData = grRes.data.data;
           } else if (Array.isArray(grRes.data.results)) {
             receiptsData = grRes.data.results;
-          } else if (grRes.data.receipts && Array.isArray(grRes.data.receipts)) {
+          } else if (
+            grRes.data.receipts &&
+            Array.isArray(grRes.data.receipts)
+          ) {
             receiptsData = grRes.data.receipts;
           }
         }
         setGoodReceipts(receiptsData);
-        
+
         // Xử lý dữ liệu orders
         let ordersData = [];
         if (Array.isArray(orderRes.data)) {
           ordersData = orderRes.data;
-        } else if (orderRes.data && typeof orderRes.data === 'object') {
+        } else if (orderRes.data && typeof orderRes.data === "object") {
           if (Array.isArray(orderRes.data.data)) {
             ordersData = orderRes.data.data;
           } else if (Array.isArray(orderRes.data.results)) {
             ordersData = orderRes.data.results;
-          } else if (orderRes.data.orders && Array.isArray(orderRes.data.orders)) {
+          } else if (
+            orderRes.data.orders &&
+            Array.isArray(orderRes.data.orders)
+          ) {
             ordersData = orderRes.data.orders;
           }
         }
@@ -105,16 +142,20 @@ const InOutPage = () => {
         console.error("Error fetching data:", e);
         setGoodReceipts([]);
         setOrders([]);
-        
+
         if (e.response) {
           console.log("Error response:", e.response);
           if (e.response.status === 401) {
             setError("Bạn chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.");
           } else {
-            setError(`Không thể tải dữ liệu thu chi. Lỗi: ${e.response.status} - ${e.response.statusText}`);
+            setError(
+              `Không thể tải dữ liệu thu chi. Lỗi: ${e.response.status} - ${e.response.statusText}`
+            );
           }
         } else if (e.request) {
-          setError("Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.");
+          setError(
+            "Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng."
+          );
         } else {
           setError(`Lỗi không xác định: ${e.message}`);
         }
@@ -123,6 +164,81 @@ const InOutPage = () => {
     };
     fetchData();
   }, [token]);
+
+  const fetchGoodReceiptDetail = async (id) => {
+    setLoadingGoodReceiptDetail(true);
+    try {
+      const config = token
+        ? { headers: { Authorization: `Bearer ${token}` } }
+        : {};
+      const res = await axios.get(
+        `http://localhost:8000/api/goodreceipt/${id}`,
+        config
+      );
+      const receipt = res.data.data || res.data;
+
+      // Fetch thông tin người nhận
+      if (receipt.receivedBy) {
+        const userRes = await axios.get(
+          `http://localhost:8000/api/user/${receipt.receivedBy}`,
+          config
+        );
+        setReceivedByUser(userRes.data);
+      }
+
+      setSelectedGoodReceipt(receipt);
+      setOpenGoodReceiptDialog(true);
+    } catch (error) {
+      console.error("Error fetching good receipt detail:", error);
+      setError("Không thể tải chi tiết phiếu nhập kho.");
+    } finally {
+      setLoadingGoodReceiptDetail(false);
+    }
+  };
+  const translateStatus = (status) => {
+    switch (status) {
+      case "received":
+        return "Đã nhập kho";
+      case "pending":
+        return "Đang chờ";
+      case "cancelled":
+        return "Đã hủy";
+      default:
+        return status;
+    }
+  };
+  const translatePaymentStatus = (status) => {
+    switch (status) {
+      case "paid":
+        return "Đã thanh toán";
+      case "pending":
+        return "Đang chờ thanh toán";
+      case "cancelled":
+        return "Đã hủy";
+      default:
+        return status;
+    }
+  };
+  // Function to fetch Order detail
+  const fetchOrderDetail = async (id) => {
+    setLoadingOrderDetail(true);
+    try {
+      const config = token
+        ? { headers: { Authorization: `Bearer ${token}` } }
+        : {};
+      const res = await axios.get(
+        `http://localhost:8000/api/orders/${id}`,
+        config
+      );
+      setSelectedOrder(res.data.data || res.data); // Adjust based on your API response structure
+      setOpenOrderDetailDialog(true);
+    } catch (error) {
+      console.error("Error fetching order detail:", error);
+      setError("Không thể tải chi tiết hóa đơn bán hàng.");
+    } finally {
+      setLoadingOrderDetail(false);
+    }
+  };
 
   // Filter by time
   const filterByDate = (date, type) => {
@@ -148,15 +264,23 @@ const InOutPage = () => {
   };
 
   // Tổng hợp dữ liệu thu/chi
-  const { totalIn, totalOut, chartData, pieData, tableIn, tableOut, chartType } = useMemo(() => {
+  const {
+    totalIn,
+    totalOut,
+    chartData,
+    pieData,
+    tableIn,
+    tableOut,
+    chartType,
+  } = useMemo(() => {
     // Thu: hóa đơn bán hàng đã thanh toán
-    const filteredOrders = orders.filter(
-      (o) => filterByDate(o.createdAt, "in")
+    const filteredOrders = orders.filter((o) =>
+      filterByDate(o.createdAt, "in")
     );
 
     // Chi: phiếu nhập kho - không lọc theo trạng thái
-    const filteredReceipts = goodReceipts.filter(
-      (r) => filterByDate(r.receiptDate || r.createdAt, "out")
+    const filteredReceipts = goodReceipts.filter((r) =>
+      filterByDate(r.receiptDate || r.createdAt, "out")
     );
 
     // Tổng giá trị thu/chi
@@ -171,11 +295,14 @@ const InOutPage = () => {
             item.batchesUsed[0] &&
             item.batchesUsed[0].batchId &&
             item.batchesUsed[0].batchId.discountInfo &&
-            typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+            typeof item.batchesUsed[0].batchId.discountInfo.discountValue ===
+              "number"
           ) {
-            discountPercent = item.batchesUsed[0].batchId.discountInfo.discountValue;
+            discountPercent =
+              item.batchesUsed[0].batchId.discountInfo.discountValue;
           }
-          const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+          const originalPrice =
+            (item.originalUnitPrice || 0) * (item.quantity || 0);
           const discountAmount = (originalPrice * discountPercent) / 100;
           const finalPrice = originalPrice - discountAmount;
           return s + finalPrice;
@@ -186,7 +313,10 @@ const InOutPage = () => {
       return sum + calculatedFinalAmount;
     }, 0);
 
-    const totalOut = filteredReceipts.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
+    const totalOut = filteredReceipts.reduce(
+      (sum, r) => sum + (r.totalAmount || 0),
+      0
+    );
 
     // Dữ liệu biểu đồ theo ngày/tháng
     let chartMap = {};
@@ -233,11 +363,14 @@ const InOutPage = () => {
               item.batchesUsed[0] &&
               item.batchesUsed[0].batchId &&
               item.batchesUsed[0].batchId.discountInfo &&
-              typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+              typeof item.batchesUsed[0].batchId.discountInfo.discountValue ===
+                "number"
             ) {
-              discountPercent = item.batchesUsed[0].batchId.discountInfo.discountValue;
+              discountPercent =
+                item.batchesUsed[0].batchId.discountInfo.discountValue;
             }
-            const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+            const originalPrice =
+              (item.originalUnitPrice || 0) * (item.quantity || 0);
             const discountAmount = (originalPrice * discountPercent) / 100;
             const finalPrice = originalPrice - discountAmount;
             return s + finalPrice;
@@ -255,7 +388,8 @@ const InOutPage = () => {
       });
       // Sắp xếp tuần theo thứ tự tuần 1, 2, 3, 4, 5
       chartData = Object.values(chartMap).sort((a, b) => {
-        const getNum = (name) => parseInt((name || "").replace(/[^0-9]/g, ""), 10) || 0;
+        const getNum = (name) =>
+          parseInt((name || "").replace(/[^0-9]/g, ""), 10) || 0;
         return getNum(a.name) - getNum(b.name);
       });
     } else {
@@ -282,11 +416,14 @@ const InOutPage = () => {
               item.batchesUsed[0] &&
               item.batchesUsed[0].batchId &&
               item.batchesUsed[0].batchId.discountInfo &&
-              typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
+              typeof item.batchesUsed[0].batchId.discountInfo.discountValue ===
+                "number"
             ) {
-              discountPercent = item.batchesUsed[0].batchId.discountInfo.discountValue;
+              discountPercent =
+                item.batchesUsed[0].batchId.discountInfo.discountValue;
             }
-            const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+            const originalPrice =
+              (item.originalUnitPrice || 0) * (item.quantity || 0);
             const discountAmount = (originalPrice * discountPercent) / 100;
             const finalPrice = originalPrice - discountAmount;
             return s + finalPrice;
@@ -302,7 +439,9 @@ const InOutPage = () => {
         chartMap[key] = chartMap[key] || { name: key, Thu: 0, Chi: 0 };
         chartMap[key].Chi += r.totalAmount || 0;
       });
-      chartData = Object.values(chartMap).sort((a, b) => a.name.localeCompare(b.name));
+      chartData = Object.values(chartMap).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
     }
 
     // Pie chart
@@ -315,12 +454,20 @@ const InOutPage = () => {
     const tableIn = filteredOrders;
     const tableOut = filteredReceipts;
 
-    return { totalIn, totalOut, chartData, pieData, tableIn, tableOut, chartType };
+    return {
+      totalIn,
+      totalOut,
+      chartData,
+      pieData,
+      tableIn,
+      tableOut,
+      chartType,
+    };
   }, [orders, goodReceipts, filterType, filterDate, filterStart, filterEnd]);
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={vi}>
-      <Box sx={{ height: '100vh', overflow: 'auto' }}>
+      <Box sx={{ height: "100vh", overflow: "auto" }}>
         {/* <Typography variant="h4" fontWeight="bold" gutterBottom>
           Báo cáo thu chi (Phiếu nhập kho & Hóa đơn bán hàng)
         </Typography> */}
@@ -331,7 +478,11 @@ const InOutPage = () => {
           </Paper>
         )}
         <Paper sx={{ p: 2, mb: 3 }}>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="center">
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={2}
+            alignItems="center"
+          >
             <TextField
               select
               label="Lọc theo"
@@ -395,7 +546,9 @@ const InOutPage = () => {
                 </Typography>
                 <Typography
                   variant="h6"
-                  color={totalIn - totalOut >= 0 ? "success.main" : "error.main"}
+                  color={
+                    totalIn - totalOut >= 0 ? "success.main" : "error.main"
+                  }
                 >
                   {formatCurrency(totalIn - totalOut)}
                 </Typography>
@@ -455,7 +608,10 @@ const InOutPage = () => {
                       }
                     >
                       {pieData.map((entry, idx) => (
-                        <Cell key={entry.name} fill={COLORS[idx % COLORS.length]} />
+                        <Cell
+                          key={entry.name}
+                          fill={COLORS[idx % COLORS.length]}
+                        />
                       ))}
                     </Pie>
                     <Legend />
@@ -483,20 +639,38 @@ const InOutPage = () => {
                       {tableOut.map((r, index) => (
                         <TableRow key={r._id || r.id}>
                           <TableCell>{index + 1}</TableCell>
-                          <TableCell>
-                            <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
+                          <TableCell
+                            onClick={() =>
+                              fetchGoodReceiptDetail(r._id || r.id)
+                            }
+                            sx={{
+                              cursor: "pointer",
+                              color: theme.palette.primary.main,
+                            }}
+                          >
+                            <Typography
+                              variant="body2"
+                              noWrap
+                              sx={{ maxWidth: 120 }}
+                            >
                               {r._id || r.id || "N/A"}
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {(r.receiptDate || r.createdAt)
-                              ? new Date(r.receiptDate || r.createdAt).toLocaleDateString("vi-VN")
+                            {r.receiptDate || r.createdAt
+                              ? new Date(
+                                  r.receiptDate || r.createdAt
+                                ).toLocaleDateString("vi-VN")
                               : ""}
                           </TableCell>
                           <TableCell>
-                            {r.supplier?.name || 
-                             (typeof r.supplier === 'object' && r.supplier !== null ? 
-                              r.supplier.name || r.supplier.companyName || "N/A" : "N/A")}
+                            {r.supplier?.name ||
+                              (typeof r.supplier === "object" &&
+                              r.supplier !== null
+                                ? r.supplier.name ||
+                                  r.supplier.companyName ||
+                                  "N/A"
+                                : "N/A")}
                           </TableCell>
                           <TableCell align="right">
                             {formatCurrency(r.totalAmount)}
@@ -505,7 +679,7 @@ const InOutPage = () => {
                       ))}
                       {tableOut.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={4} align="center">
+                          <TableCell colSpan={5} align="center">
                             Không có dữ liệu
                           </TableCell>
                         </TableRow>
@@ -536,37 +710,58 @@ const InOutPage = () => {
                         // Tính lại tổng thành tiền giống chi tiết phiếu mua
                         let calculatedFinalAmount = 0;
                         if (o.products && o.products.length > 0) {
-                          calculatedFinalAmount = o.products.reduce((sum, item) => {
-                            // Nếu có discountPercent từ batch, lấy discountPercent, nếu không thì 0
-                            let discountPercent = 0;
-                            if (
-                              item.batchesUsed &&
-                              item.batchesUsed[0] &&
-                              item.batchesUsed[0].batchId &&
-                              item.batchesUsed[0].batchId.discountInfo &&
-                              typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
-                            ) {
-                              discountPercent = item.batchesUsed[0].batchId.discountInfo.discountValue;
-                            }
-                            const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
-                            const discountAmount = (originalPrice * discountPercent) / 100;
-                            const finalPrice = originalPrice - discountAmount;
-                            return sum + finalPrice;
-                          }, 0);
+                          calculatedFinalAmount = o.products.reduce(
+                            (sum, item) => {
+                              // Nếu có discountPercent từ batch, lấy discountPercent, nếu không thì 0
+                              let discountPercent = 0;
+                              if (
+                                item.batchesUsed &&
+                                item.batchesUsed[0] &&
+                                item.batchesUsed[0].batchId &&
+                                item.batchesUsed[0].batchId.discountInfo &&
+                                typeof item.batchesUsed[0].batchId.discountInfo
+                                  .discountValue === "number"
+                              ) {
+                                discountPercent =
+                                  item.batchesUsed[0].batchId.discountInfo
+                                    .discountValue;
+                              }
+                              const originalPrice =
+                                (item.originalUnitPrice || 0) *
+                                (item.quantity || 0);
+                              const discountAmount =
+                                (originalPrice * discountPercent) / 100;
+                              const finalPrice = originalPrice - discountAmount;
+                              return sum + finalPrice;
+                            },
+                            0
+                          );
                         } else {
                           calculatedFinalAmount = o.finalAmount || 0;
                         }
                         return (
                           <TableRow key={o._id}>
                             <TableCell>{index + 1}</TableCell>
-                            <TableCell>
-                              <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>
+                            <TableCell
+                              onClick={() => fetchOrderDetail(o._id)}
+                              sx={{
+                                cursor: "pointer",
+                                color: theme.palette.primary.main,
+                              }}
+                            >
+                              <Typography
+                                variant="body2"
+                                noWrap
+                                sx={{ maxWidth: 120 }}
+                              >
                                 {o._id || "N/A"}
                               </Typography>
                             </TableCell>
                             <TableCell>
                               {o.createdAt
-                                ? new Date(o.createdAt).toLocaleDateString("vi-VN")
+                                ? new Date(o.createdAt).toLocaleDateString(
+                                    "vi-VN"
+                                  )
                                 : ""}
                             </TableCell>
                             <TableCell>
@@ -580,7 +775,7 @@ const InOutPage = () => {
                       })}
                       {tableIn.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={4} align="center">
+                          <TableCell colSpan={5} align="center">
                             Không có dữ liệu
                           </TableCell>
                         </TableRow>
@@ -593,6 +788,311 @@ const InOutPage = () => {
           </Grid>
         )}
       </Box>
+      {/* Good Receipt Detail Dialog */}
+      <Dialog
+        open={openGoodReceiptDialog}
+        onClose={() => setOpenGoodReceiptDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Chi tiết Phiếu nhập kho: {selectedGoodReceipt?._id}
+        </DialogTitle>
+        <DialogContent dividers>
+          {loadingGoodReceiptDetail ? (
+            <Box display="flex" justifyContent="center" py={4}>
+              <CircularProgress />
+            </Box>
+          ) : selectedGoodReceipt ? (
+            <Grid container spacing={2}>
+              {/* Phần thông tin cơ bản */}
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>ID Phiếu:</strong> {selectedGoodReceipt._id}
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Ngày nhập:</strong>{" "}
+                  {selectedGoodReceipt.receiptDate
+                    ? new Date(
+                        selectedGoodReceipt.receiptDate
+                      ).toLocaleDateString("vi-VN")
+                    : "N/A"}
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Nhà cung cấp:</strong>{" "}
+                  {selectedGoodReceipt.supplier?.name ||
+                    selectedGoodReceipt.supplier?.companyName ||
+                    "N/A"}
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Người nhận:</strong>{" "}
+                  {receivedByUser?.fullName || "Đang tải..."}
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Tổng tiền:</strong>{" "}
+                  {formatCurrency(selectedGoodReceipt.totalAmount)}
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Trạng thái:</strong>{" "}
+                  {translateStatus(selectedGoodReceipt.status) || "N/A"}
+                </Typography>
+              </Grid>
+
+              {/* Phần danh sách sản phẩm */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ mt: 2 }}>
+                  <strong>Danh sách sản phẩm:</strong>
+                </Typography>
+                <TableContainer component={Paper} sx={{ mt: 1 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>STT</TableCell>
+                        <TableCell>Sản phẩm</TableCell>
+                        <TableCell>Số lượng</TableCell>
+                        <TableCell>Giá nhập</TableCell>
+                        <TableCell>Ngày SX</TableCell>
+                        <TableCell>Ngày HH</TableCell>
+                        <TableCell align="right">Thành tiền</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {selectedGoodReceipt.items?.map((item, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell>{idx + 1}</TableCell>
+                          <TableCell>{item.product?.name || "N/A"}</TableCell>
+                          <TableCell>{item.quantity}</TableCell>
+                          <TableCell>{formatCurrency(item.price)}</TableCell>
+                          <TableCell>
+                            {item.manufactureDate
+                              ? new Date(
+                                  item.manufactureDate
+                                ).toLocaleDateString("vi-VN")
+                              : "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            {item.expiryDate
+                              ? new Date(item.expiryDate).toLocaleDateString(
+                                  "vi-VN"
+                                )
+                              : "N/A"}
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(item.totalPrice)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Grid>
+
+              {/* Phần ghi chú */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ mt: 2 }}>
+                  <strong>Ghi chú:</strong>{" "}
+                  {selectedGoodReceipt.notes || "Không có"}
+                </Typography>
+              </Grid>
+            </Grid>
+          ) : (
+            <Typography>Không có dữ liệu chi tiết.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenGoodReceiptDialog(false)}>Đóng</Button>
+        </DialogActions>
+      </Dialog>
+      {/* Order Detail Dialog */}
+      <Dialog
+        open={openOrderDetailDialog}
+        onClose={() => setOpenOrderDetailDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Chi tiết Hóa đơn bán hàng: {selectedOrder?._id}
+        </DialogTitle>
+        <DialogContent dividers>
+          {loadingOrderDetail ? (
+            <Box display="flex" justifyContent="center" py={4}>
+              <CircularProgress />
+            </Box>
+          ) : selectedOrder ? (
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>ID Hóa đơn:</strong> {selectedOrder._id}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Ngày bán:</strong>{" "}
+                  {selectedOrder.createdAt
+                    ? new Date(selectedOrder.createdAt).toLocaleDateString(
+                        "vi-VN"
+                      )
+                    : "N/A"}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Khách hàng:</strong>{" "}
+                  {selectedOrder.customerId?.fullName || "Khách vãng lai"}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Loại đơn hàng:</strong>{" "}
+                  {selectedOrder.orderType || "N/A"}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Trạng thái thanh toán:</strong>{" "}
+                  {translatePaymentStatus(selectedOrder.paymentStatus)}
+                </Typography>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Phương thức thanh toán:</strong>{" "}
+                  {selectedOrder.paymentMethod === "cash"
+                    ? "Tiền mặt"
+                    : "Chuyển khoản"}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Typography variant="subtitle1">
+                  <strong>Tổng tiền:</strong>{" "}
+                  {formatCurrency(
+                    selectedOrder.finalAmount ||
+                      selectedOrder.products?.reduce((sum, item) => {
+                        let discountPercent = 0;
+                        if (
+                          item.batchesUsed &&
+                          item.batchesUsed[0] &&
+                          item.batchesUsed[0].batchId &&
+                          item.batchesUsed[0].batchId.discountInfo &&
+                          typeof item.batchesUsed[0].batchId.discountInfo
+                            .discountValue === "number"
+                        ) {
+                          discountPercent =
+                            item.batchesUsed[0].batchId.discountInfo
+                              .discountValue;
+                        }
+                        const originalPrice =
+                          (item.originalUnitPrice || 0) * (item.quantity || 0);
+                        const discountAmount =
+                          (originalPrice * discountPercent) / 100;
+                        const finalPrice = originalPrice - discountAmount;
+                        return sum + finalPrice;
+                      }, 0) ||
+                      0
+                  )}
+                </Typography>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ mt: 2 }}>
+                  <strong>Danh sách sản phẩm:</strong>
+                </Typography>
+                <TableContainer component={Paper} sx={{ mt: 1 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>STT</TableCell>
+                        <TableCell>Sản phẩm</TableCell>
+                        <TableCell>Số lượng</TableCell>
+                        <TableCell>Đơn giá</TableCell>
+                        <TableCell>Chiết khấu (%)</TableCell>
+                        <TableCell align="right">Thành tiền</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {selectedOrder.products &&
+                      selectedOrder.products.length > 0 ? (
+                        selectedOrder.products.map((item, idx) => {
+                          const originalPrice =
+                            (item.originalUnitPrice || 0) *
+                            (item.quantity || 0);
+                          let discountPercent = 0;
+                          if (
+                            item.batchesUsed &&
+                            item.batchesUsed[0] &&
+                            item.batchesUsed[0].batchId &&
+                            item.batchesUsed[0].batchId.discountInfo &&
+                            typeof item.batchesUsed[0].batchId.discountInfo
+                              .discountValue === "number"
+                          ) {
+                            discountPercent =
+                              item.batchesUsed[0].batchId.discountInfo
+                                .discountValue;
+                          }
+                          const discountAmount =
+                            (originalPrice * discountPercent) / 100;
+                          const finalPrice = originalPrice - discountAmount;
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell>{idx + 1}</TableCell>
+                              <TableCell>
+                                {item.productId?.name || "N/A"}{" "}
+                                {/* Sửa từ product sang productId */}
+                              </TableCell>
+                              <TableCell>{item.quantity}</TableCell>
+                              <TableCell>
+                                {formatCurrency(item.originalUnitPrice)}
+                              </TableCell>
+                              <TableCell>
+                                {(item.batchesUsed?.[0]?.batchId?.discountInfo
+                                  ?.discountValue || 0) + "%"}{" "}
+                                {/* Thêm xử lý mặc định 0% */}
+                              </TableCell>
+                              <TableCell align="right">
+                                {formatCurrency(finalPrice)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} align="center">
+                            Không có sản phẩm nào
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ mt: 2 }}>
+                  <strong>Ghi chú:</strong> {selectedOrder.notes || "Không có"}
+                </Typography>
+              </Grid>
+            </Grid>
+          ) : (
+            <Typography>Không có dữ liệu chi tiết.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenOrderDetailDialog(false)}>Đóng</Button>
+        </DialogActions>
+      </Dialog>
     </LocalizationProvider>
   );
 };

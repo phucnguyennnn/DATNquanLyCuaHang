@@ -93,7 +93,7 @@ function ManagerOrder() {
   const fetchOrders = async () => {
     try {
       const params = new URLSearchParams();
-      if (searchQuery) params.append("$or", searchQuery);
+      if (searchQuery) params.append("searchQuery", searchQuery);
       if (filterPaymentStatus)
         params.append("paymentStatus", filterPaymentStatus);
 
@@ -138,7 +138,7 @@ function ManagerOrder() {
         }
       );
       setOrders(response.data);
-      
+
       // Calculate revenue and invoice count
       let revenue = 0;
       const invoiceCount = response.data.length;
@@ -146,7 +146,7 @@ function ManagerOrder() {
       response.data.forEach(order => {
         revenue += calculateOrderTotal(order);
       });
-      
+
       setTotalRevenue(revenue);
       setTotalInvoices(invoiceCount);
     } catch (error) {
@@ -306,7 +306,7 @@ function ManagerOrder() {
               label="TT Thanh toán"
             >
               <MenuItem value="">Tất cả</MenuItem>
-              <MenuItem value="pending">Chưa thanh toán</MenuItem>
+              <MenuItem value="unpaid">Chưa thanh toán</MenuItem>
               <MenuItem value="partial">Thanh toán một phần</MenuItem>
               <MenuItem value="paid">Đã thanh toán</MenuItem>
             </Select>

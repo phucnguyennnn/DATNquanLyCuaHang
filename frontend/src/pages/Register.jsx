@@ -97,7 +97,7 @@ const RegisterPage = () => {
 
                 <Box component="form" onSubmit={handleRegister} width="100%">
                     <TextField
-                        label="Username"
+                        label="Tên tài khoản"
                         variant="outlined"
                         fullWidth
                         margin="normal"
