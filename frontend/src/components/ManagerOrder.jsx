@@ -403,7 +403,7 @@ function ManagerOrder() {
                 </TableCell>
                 <TableCell
                   onClick={() => handleSort("finalAmount")}
-                  style={{ cursor: "pointer" }}
+                  style={{ cursor: "pointer", fontWeight: "bold" }}
                 >
                   Tổng thành tiền {renderSortIcon("finalAmount")}
                 </TableCell>
@@ -432,10 +432,12 @@ function ManagerOrder() {
                     </TableCell>
                     <TableCell>{order.employeeId?.fullName || "N/A"}</TableCell>
                     <TableCell>
-                      {calculatedFinalAmount.toLocaleString("vi-VN", {
-                        style: "currency",
-                        currency: "VND",
-                      })}
+                      <strong>
+                        {calculatedFinalAmount.toLocaleString("vi-VN", {
+                          style: "currency",
+                          currency: "VND",
+                        })}
+                      </strong>
                     </TableCell>
                     <TableCell sx={{ width: "150px" }}>
                       {renderPaymentStatus(order.paymentStatus)}
@@ -751,11 +753,11 @@ function OrderDetailDialog({
                 {/* Tổng giảm giá */}
                 <TableRow>
                   <TableCell colSpan={6} align="right">
-                    <strong style={{ color: "#d32f2f" }}>Tổng giảm giá:</strong>
+                    <strong >Tổng giảm giá:</strong>
                   </TableCell>
                   <TableCell>
-                    <strong style={{ color: "#d32f2f" }}>
-                      -{order.products
+                    <strong>
+                      {order.products
                         .reduce((sum, item) => {
                           const { discountAmount } = calculateItemPrice(item, batchDetails);
                           return sum + discountAmount;
@@ -868,6 +870,7 @@ function OrderDetailDialog({
 
 const renderPaymentStatus = (paymentStatus) => {
   switch (paymentStatus) {
+    case "unpaid":
     case "pending":
       return "Chưa thanh toán";
     case "partial":

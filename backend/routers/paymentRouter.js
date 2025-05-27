@@ -1,21 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const paymentController = require('../controllers/paymentController');
-const { authenticateToken } = require('../middleware/authMiddleware');
-
-// Tạo thanh toán VNPay
-router.post('/vnpay/create', authenticateToken, paymentController.createVNPayPayment);
 
 // Tạo thanh toán MoMo
-router.post('/momo/create', authenticateToken, paymentController.createMoMoPayment);
+router.post('/momo/create', paymentController.createMoMoPayment);
 
-// Callback VNPay
-router.get('/vnpay-return', paymentController.handleVNPayReturn);
-
-// Callback MoMo
-router.post('/momo-ipn', paymentController.handleMoMoReturn);
+// Xác nhận thanh toán thủ công (cho MoMo cá nhân)
+router.post('/confirm-manual', paymentController.confirmManualPayment);
 
 // Kiểm tra trạng thái thanh toán
-router.get('/status/:orderId', authenticateToken, paymentController.checkPaymentStatus);
+router.get('/status/:orderId', paymentController.checkPaymentStatus);
 
 module.exports = router;

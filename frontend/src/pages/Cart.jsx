@@ -382,7 +382,7 @@ const CartPage = () => {
           (item) =>
             !(
               item.productId === productId &&
-              item.selectedUnitName === selectedUnitName
+              item.selectedUnitName === selectedUnitName  
             )
         );
         setLocalCart(updated);
@@ -456,7 +456,8 @@ const CartPage = () => {
     }
   };
 
-  const handlePayOnline = (order) => {
+  const handlePayOnline = async (order) => {
+    // Nếu là đơn hàng preorder chưa thanh toán thì cập nhật trạng thái sang paid khi xác nhận
     setSelectedOrderForPayment(order);
     setOpenQRPayment(true);
   };
