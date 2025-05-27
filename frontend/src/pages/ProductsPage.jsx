@@ -186,7 +186,7 @@ const ProductListPage = () => {
           product.batches &&
           product.batches.some(
             batch =>
-              (batch.remaining_quantity || 0) - (batch.reserved_quantity || 0) > 0
+              (batch.initial_quantity || 0) - (batch.reserved_quantity || 0) > 0
           )
         );
         setProductsWithBatches(filtered);
@@ -265,8 +265,7 @@ const ProductListPage = () => {
     }
     return product.batches.reduce(
       (total, batch) =>
-        total +
-        ((batch.remaining_quantity || 0) - (batch.reserved_quantity || 0)),
+        total + ((batch.initial_quantity || 0) - (batch.sold_quantity || 0)),
       0
     );
   };
