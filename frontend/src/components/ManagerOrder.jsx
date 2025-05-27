@@ -76,6 +76,20 @@ function ManagerOrder() {
     authToken,
   ]);
 
+  // Add helper function for consistent price calculation
+  const calculateOrderTotal = (order) => {
+    if (order.products && order.products.length > 0) {
+      return order.products.reduce((sum, item) => {
+        const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+        // For list view, use discount from batchesUsed if available
+        const discountPercent = item.batchesUsed?.[0]?.batchId?.discountInfo?.discountValue || 0;
+        const discountAmount = (originalPrice * discountPercent) / 100;
+        return sum + (originalPrice - discountAmount);
+      }, 0);
+    }
+    return order.finalAmount || 0;
+  };
+
   const fetchOrders = async () => {
     try {
       const params = new URLSearchParams();
@@ -130,25 +144,7 @@ function ManagerOrder() {
       const invoiceCount = response.data.length;
       
       response.data.forEach(order => {
-        if (order.products && order.products.length > 0) {
-          const orderRevenue = order.products.reduce((sum, item) => {
-            const discountPercent =
-              item.batchesUsed &&
-              item.batchesUsed[0] &&
-              item.batchesUsed[0].batchId &&
-              item.batchesUsed[0].batchId.discountInfo &&
-              typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
-                ? item.batchesUsed[0].batchId.discountInfo.discountValue
-                : 0;
-            const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
-            const discountAmount = (originalPrice * discountPercent) / 100;
-            const finalPrice = originalPrice - discountAmount;
-            return sum + finalPrice;
-          }, 0);
-          revenue += orderRevenue;
-        } else {
-          revenue += order.finalAmount || 0;
-        }
+        revenue += calculateOrderTotal(order);
       });
       
       setTotalRevenue(revenue);
@@ -204,7 +200,7 @@ function ManagerOrder() {
       case "employeeName":
         return order.employeeId?.fullName?.toLowerCase() || "";
       case "finalAmount":
-        return order.finalAmount || 0;
+        return calculateOrderTotal(order);
       case "paymentStatus":
         return order.paymentStatus;
       default:
@@ -422,28 +418,7 @@ function ManagerOrder() {
             </TableHead>
             <TableBody>
               {sortedOrders.map((order) => {
-                // Tính lại tổng thành tiền giống như trong chi tiết phiếu mua hàng
-                let calculatedFinalAmount = 0;
-                if (order.products && order.products.length > 0) {
-                  calculatedFinalAmount = order.products.reduce((sum, item) => {
-                    // Lấy discountPercent từ batchDetails nếu có, nếu không thì 0
-                    // Ở danh sách không có batchDetails nên chỉ lấy discountPercent từ batch đầu tiên nếu có
-                    const discountPercent =
-                      item.batchesUsed &&
-                      item.batchesUsed[0] &&
-                      item.batchesUsed[0].batchId &&
-                      item.batchesUsed[0].batchId.discountInfo &&
-                      typeof item.batchesUsed[0].batchId.discountInfo.discountValue === "number"
-                        ? item.batchesUsed[0].batchId.discountInfo.discountValue
-                        : 0;
-                    const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
-                    const discountAmount = (originalPrice * discountPercent) / 100;
-                    const finalPrice = originalPrice - discountAmount;
-                    return sum + finalPrice;
-                  }, 0);
-                } else {
-                  calculatedFinalAmount = order.finalAmount || 0;
-                }
+                const calculatedFinalAmount = calculateOrderTotal(order);
                 return (
                   <TableRow key={order._id}>
                     <TableCell>{order.orderNumber}</TableCell>
@@ -526,13 +501,18 @@ function OrderDetailDialog({
       const uniqueBatchIds = new Set();
       order.products.forEach((product) => {
         if (product.batchesUsed?.length > 0) {
-          product.batchesUsed.forEach((batch) =>
-            uniqueBatchIds.add(batch.batchId)
-          );
+          product.batchesUsed.forEach((batch) => {
+            if (batch.batchId) {
+              // Handle both string IDs and object IDs
+              const batchId = typeof batch.batchId === 'string' ? batch.batchId : batch.batchId._id;
+              uniqueBatchIds.add(batchId);
+            }
+          });
         }
       });
-      if (uniqueBatchIds.size > 0)
+      if (uniqueBatchIds.size > 0) {
         fetchBatchDetails(Array.from(uniqueBatchIds));
+      }
     }
   }, [order, authToken]);
 
@@ -555,6 +535,50 @@ function OrderDetailDialog({
     } finally {
       setLoadingBatches(false);
     }
+  };
+
+  // Add helper function for calculating item price with batch discount
+  const calculateItemPrice = (item, batchDetails) => {
+    const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
+    
+    // Get discount from batch details or from the populated batchId
+    let discountPercent = 0;
+    
+    if (item.batchesUsed?.length > 0) {
+      const firstBatch = item.batchesUsed[0];
+      
+      // Check if batchId is populated with discount info
+      if (firstBatch.batchId?.discountInfo?.discountValue) {
+        discountPercent = firstBatch.batchId.discountInfo.discountValue;
+      }
+      // Otherwise check in our fetched batch details
+      else if (firstBatch.batchId) {
+        const batchId = typeof firstBatch.batchId === 'string' ? firstBatch.batchId : firstBatch.batchId._id;
+        const batchDetail = batchDetails[batchId];
+        if (batchDetail?.discountInfo?.isDiscounted) {
+          discountPercent = batchDetail.discountInfo.discountValue || 0;
+        }
+      }
+    }
+    
+    const discountAmount = (originalPrice * discountPercent) / 100;
+    return {
+      originalPrice,
+      discountPercent,
+      discountAmount,
+      finalPrice: originalPrice - discountAmount
+    };
+  };
+
+  // Calculate total for payment dialog
+  const calculateOrderTotalForPayment = () => {
+    if (order.products && order.products.length > 0) {
+      return order.products.reduce((sum, item) => {
+        const { finalPrice } = calculateItemPrice(item, batchDetails);
+        return sum + finalPrice;
+      }, 0);
+    }
+    return order.finalAmount || 0;
   };
 
   const handleCompletePayment = async () => {
@@ -653,14 +677,9 @@ function OrderDetailDialog({
               </TableHead>
               <TableBody>
                 {order.products.map((item, idx) => {
-                  const discountPercent =
-                    batchDetails[item.batchesUsed?.[0]?.batchId]?.discountInfo
-                      ?.discountValue || 0;
-                  const originalPrice = (item.originalUnitPrice || 0) * (item.quantity || 0);
-                  const discountAmount = (originalPrice * discountPercent) / 100;
-                  const finalPrice = originalPrice - discountAmount;
+                  const { originalPrice, discountPercent, discountAmount, finalPrice } = calculateItemPrice(item, batchDetails);
                   return (
-                    <TableRow key={item._id}>
+                    <TableRow key={item._id || idx}>
                       <TableCell>{idx + 1}</TableCell>
                       <TableCell>
                         {item.productId?.name || "Đang tải..."}
@@ -674,42 +693,72 @@ function OrderDetailDialog({
                         })}
                       </TableCell>
                       <TableCell>
-                        {discountPercent}%{" "}
-                        {discountPercent > 0 && (
-                          <span style={{ color: "#2e7d32" }}>
-                            (
-                            {discountAmount.toLocaleString("vi-VN", {
-                              style: "currency",
-                              currency: "VND",
-                            })}
-                            )
-                          </span>
+                        {discountPercent > 0 ? (
+                          <>
+                            <span style={{ color: "#d32f2f", fontWeight: "bold" }}>
+                              {discountPercent}%
+                            </span>
+                            <br />
+                            <span style={{ color: "#2e7d32", fontSize: "0.875rem" }}>
+                              (-{discountAmount.toLocaleString("vi-VN", {
+                                style: "currency",
+                                currency: "VND",
+                              })})
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ color: "#666" }}>0%</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        {finalPrice.toLocaleString("vi-VN", {
-                          style: "currency",
-                          currency: "VND",
-                        })}
+                        <span style={{ fontWeight: "bold" }}>
+                          {finalPrice.toLocaleString("vi-VN", {
+                            style: "currency",
+                            currency: "VND",
+                          })}
+                        </span>
+                        {discountPercent > 0 && (
+                          <div style={{ fontSize: "0.75rem", color: "#666", textDecoration: "line-through" }}>
+                            {originalPrice.toLocaleString("vi-VN", {
+                              style: "currency",
+                              currency: "VND",
+                            })}
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
                 })}
-                {/* Tổng giảm giá */}
+                {/* Tổng giá gốc */}
                 <TableRow>
                   <TableCell colSpan={6} align="right">
-                    <strong>Tổng giảm giá:</strong>
+                    <strong>Tổng giá gốc:</strong>
                   </TableCell>
                   <TableCell>
                     <strong>
                       {order.products
                         .reduce((sum, item) => {
-                          const discountPercent =
-                            batchDetails[item.batchesUsed?.[0]?.batchId]?.discountInfo
-                              ?.discountValue || 0;
-                          const originalPrice =
-                            (item.originalUnitPrice || 0) * (item.quantity || 0);
-                          return sum + (originalPrice * discountPercent) / 100;
+                          const { originalPrice } = calculateItemPrice(item, batchDetails);
+                          return sum + originalPrice;
+                        }, 0)
+                        .toLocaleString("vi-VN", {
+                          style: "currency",
+                          currency: "VND",
+                        })}
+                    </strong>
+                  </TableCell>
+                </TableRow>
+                {/* Tổng giảm giá */}
+                <TableRow>
+                  <TableCell colSpan={6} align="right">
+                    <strong style={{ color: "#d32f2f" }}>Tổng giảm giá:</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong style={{ color: "#d32f2f" }}>
+                      -{order.products
+                        .reduce((sum, item) => {
+                          const { discountAmount } = calculateItemPrice(item, batchDetails);
+                          return sum + discountAmount;
                         }, 0)
                         .toLocaleString("vi-VN", {
                           style: "currency",
@@ -719,21 +768,15 @@ function OrderDetailDialog({
                   </TableCell>
                 </TableRow>
                 {/* Tổng thành tiền */}
-                <TableRow>
+                <TableRow style={{ backgroundColor: "#f5f5f5" }}>
                   <TableCell colSpan={6} align="right">
-                    <strong>Tổng thành tiền:</strong>
+                    <strong style={{ fontSize: "1.1rem" }}>Tổng thành tiền:</strong>
                   </TableCell>
                   <TableCell>
-                    <strong>
+                    <strong style={{ fontSize: "1.1rem", color: "#1976d2" }}>
                       {order.products
                         .reduce((sum, item) => {
-                          const discountPercent =
-                            batchDetails[item.batchesUsed?.[0]?.batchId]?.discountInfo
-                              ?.discountValue || 0;
-                          const originalPrice =
-                            (item.originalUnitPrice || 0) * (item.quantity || 0);
-                          const discountAmount = (originalPrice * discountPercent) / 100;
-                          const finalPrice = originalPrice - discountAmount;
+                          const { finalPrice } = calculateItemPrice(item, batchDetails);
                           return sum + finalPrice;
                         }, 0)
                         .toLocaleString("vi-VN", {
@@ -782,21 +825,26 @@ function OrderDetailDialog({
           />
           <Typography variant="subtitle1">
             Tổng tiền cần thanh toán:{" "}
-            {order.finalAmount?.toLocaleString("vi-VN")} VNĐ
+            {calculateOrderTotalForPayment().toLocaleString("vi-VN", {
+              style: "currency",
+              currency: "VND",
+            })}
           </Typography>
           {amountPaid && (
             <Typography
               variant="subtitle1"
               color={
-                parseFloat(amountPaid) < order.finalAmount ? "error" : "inherit"
+                parseFloat(amountPaid) < calculateOrderTotalForPayment() ? "error" : "inherit"
               }
             >
               Tiền thừa:{" "}
               {Math.max(
-                parseFloat(amountPaid) - order.finalAmount,
+                parseFloat(amountPaid) - calculateOrderTotalForPayment(),
                 0
-              ).toLocaleString("vi-VN")}{" "}
-              VNĐ
+              ).toLocaleString("vi-VN", {
+                style: "currency",
+                currency: "VND",
+              })}
             </Typography>
           )}
         </DialogContent>

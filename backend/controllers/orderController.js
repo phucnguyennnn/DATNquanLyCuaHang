@@ -406,7 +406,10 @@ exports.getOrderById = async (req, res) => {
       .populate("customerId")
       .populate("employeeId")
       .populate("products.productId")
-      .populate("products.batchesUsed.batchId");
+      .populate({
+        path: "products.batchesUsed.batchId",
+        select: "discountInfo unitPrice"
+      });
     if (!order)
       return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
     res.status(200).json(order);
@@ -436,6 +439,10 @@ exports.getAllOrders = async (req, res) => {
       .populate("customerId", "fullName")
       .populate("employeeId", "fullName")
       .populate("products.productId", "name")
+      .populate({
+        path: "products.batchesUsed.batchId",
+        select: "discountInfo unitPrice"
+      })
       .sort({ createdAt: -1 });
 
     if (orQuery) {
